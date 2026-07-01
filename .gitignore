@@ -8,3 +8,4 @@
 *.env
 dp1-backend/data/output
 data/output/
+*/deploy.sh

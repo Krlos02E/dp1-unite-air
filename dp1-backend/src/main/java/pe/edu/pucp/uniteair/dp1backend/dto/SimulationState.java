@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -27,6 +28,7 @@ public class SimulationState {
     private int progreso;
     private boolean colapsada;
     private String motivoColapso;
+    private Long elapsedRealtimeSeconds;
     private List<LogEntry> logs;
     private List<EnvioSimulacionDTO> envios;
     private List<MaletaSimulacionDTO> maletas;

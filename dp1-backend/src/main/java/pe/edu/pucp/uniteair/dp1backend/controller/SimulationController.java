@@ -10,6 +10,7 @@ import pe.edu.pucp.uniteair.dp1backend.service.CargaArchivosService;
 import pe.edu.pucp.uniteair.dp1backend.service.SimulationService;
 import pe.edu.pucp.uniteair.dp1backend.service.SimulationContextService;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -43,12 +44,16 @@ public class SimulationController {
         if (state == null) {
             return ResponseEntity.ok(Map.of("activa", false));
         }
+        long elapsed = state.getStartedAt() != null
+                ? Duration.between(state.getStartedAt(), LocalDateTime.now()).getSeconds()
+                : 0;
         return ResponseEntity.ok(Map.of(
                 "activa", true,
                 "sessionId", sessionId,
                 "status", state.getStatus(),
                 "progreso", state.getProgreso(),
-                "startedAt", state.getStartedAt()
+                "startedAt", state.getStartedAt(),
+                "elapsedRealtimeSeconds", Math.max(0, elapsed)
         ));
     }
 

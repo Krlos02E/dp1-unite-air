@@ -12,6 +12,7 @@ import pe.edu.pucp.uniteair.dp1backend.repository.SimulationSessionRepository;
 import tasf.config.Config_Simulacion;
 import tasf.core.Dataset;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -106,6 +107,7 @@ public class SimulationService {
                     .vuelosCancelados(0)
                     .progreso(0)
                     .colapsada(false)
+                    .elapsedRealtimeSeconds(0L)
                     .logs(List.of(LogEntry.builder()
                             .timestamp(LocalDateTime.now())
                             .tipo("ERROR")
@@ -113,7 +115,7 @@ public class SimulationService {
                             .build()))
                     .maletas(new ArrayList<>())
                     .build();
-        }
+            }
 
         SimulationSession session = SimulationSession.builder()
                 .sessionId(sessionId)
@@ -150,6 +152,7 @@ public class SimulationService {
                 .vuelosCancelados(0)
                 .progreso(0)
                 .colapsada(false)
+                .elapsedRealtimeSeconds(0L)
                 .logs(logs)
                 .maletas(new ArrayList<>())
                 .build();
@@ -169,6 +172,9 @@ public class SimulationService {
         if (state == null) {
             var session = sessionRepository.findById(sessionId).orElse(null);
             if (session != null) {
+                long elapsed = session.getCreatedAt() != null
+                        ? Duration.between(session.getCreatedAt(), LocalDateTime.now()).getSeconds()
+                        : 0;
                 return SimulationState.builder()
                         .sessionId(sessionId)
                         .status(session.getEstado())
@@ -182,6 +188,7 @@ public class SimulationService {
                         .progreso(session.getProgresoPorcentaje())
                         .colapsada("COLAPSADA".equals(session.getEstado()))
                         .motivoColapso(session.getMotivoColapso())
+                        .elapsedRealtimeSeconds(Math.max(0, elapsed))
                         .logs(new ArrayList<>())
                         .maletas(new ArrayList<>())
                         .build();
@@ -192,11 +199,15 @@ public class SimulationService {
         if (logs != null && logs.size() > 50) {
             logs = logs.subList(logs.size() - 50, logs.size());
         }
+        long elapsed = state.getStartedAt() != null
+                ? Duration.between(state.getStartedAt(), LocalDateTime.now()).getSeconds()
+                : 0;
         return SimulationState.builder()
                 .sessionId(state.getSessionId())
                 .status(state.getStatus())
                 .startedAt(state.getStartedAt())
                 .simulationTime(state.getSimulationTime())
+                .elapsedRealtimeSeconds(Math.max(0, elapsed))
                 .vuelos(state.getVuelos())
                 .aeropuertos(state.getAeropuertos())
                 .maletasEntregadas(state.getMaletasEntregadas())

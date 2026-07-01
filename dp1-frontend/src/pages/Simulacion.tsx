@@ -308,7 +308,14 @@ export default function Simulacion() {
       if (cancelled) return
       if (res.activa && res.sessionId) {
         setSessionId(res.sessionId)
-        startPolling(res.sessionId, undefined, res.startedAt)
+        startPolling(res.sessionId, undefined, res.startedAt, res.elapsedRealtimeSeconds)
+        if (res.startedAt) {
+          const parts = res.startedAt.split('T')
+          if (parts.length === 2) {
+            setFechaInicio(parts[0])
+            setHoraInicio(parts[1].substring(0, 5))
+          }
+        }
       }
     }).catch(() => {})
     return () => { cancelled = true }
@@ -394,7 +401,7 @@ export default function Simulacion() {
       hasShownResults.current = false
       setResultSnapshot(null)
       setSessionId(state.sessionId)
-      startPolling(state.sessionId, 15000, state.startedAt)
+      startPolling(state.sessionId, 15000, state.startedAt, state.elapsedRealtimeSeconds)
     } catch (err: any) {
       const msg = err?.response?.data?.logs?.[0]?.mensaje
         || err?.response?.data?.message

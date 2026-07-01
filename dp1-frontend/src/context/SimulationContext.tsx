@@ -13,7 +13,7 @@ interface SimulationContextType {
   setPollingInterval: (ms: number) => void
   setIsPaused: (paused: boolean) => void
   resetElapsedTimer: () => void
-  startPolling: (sessionId: string, interval?: number, startedAt?: string) => void
+  startPolling: (sessionId: string, interval?: number, startedAt?: string, initialElapsed?: number) => void
   stopPolling: () => void
   resetSimulation: () => void
 }
@@ -30,12 +30,13 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   const [elapsedRealSeconds, setElapsedRealSeconds] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const timerRunningRef = useRef(false)
-  const startedAtRef = useRef<number | null>(null)
+  const serverElapsedRef = useRef(0)
+  const serverPollTimeRef = useRef(0)
 
   const resetElapsedTimer = useCallback(() => {
     setElapsedRealSeconds(0)
-    startedAtRef.current = null
+    serverElapsedRef.current = 0
+    serverPollTimeRef.current = 0
   }, [])
 
   const stopPolling = useCallback(() => {
@@ -52,16 +53,32 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     setSimulationState(null)
     setIsPaused(false)
     setElapsedRealSeconds(0)
-    startedAtRef.current = null
+    serverElapsedRef.current = 0
+    serverPollTimeRef.current = 0
   }, [stopPolling])
 
-  const startPolling = useCallback((sessionId: string, interval?: number, startedAt?: string) => {
+  const startPolling = useCallback((sessionId: string, interval?: number, startedAt?: string, initialElapsed?: number) => {
     stopPolling()
     setSimulationState(null)
     setIsRunning(true)
     setIsPaused(false)
-    startedAtRef.current = startedAt ? Date.parse(startedAt) : Date.now()
-    setElapsedRealSeconds(0)
+    if (initialElapsed !== undefined) {
+      serverElapsedRef.current = initialElapsed
+      serverPollTimeRef.current = performance.now()
+      setElapsedRealSeconds(initialElapsed)
+    } else if (startedAt) {
+      const parsed = Date.parse(startedAt)
+      if (!isNaN(parsed)) {
+        const elapsed = Math.max(0, Math.floor((Date.now() - parsed) / 1000))
+        serverElapsedRef.current = elapsed
+        serverPollTimeRef.current = performance.now()
+        setElapsedRealSeconds(elapsed)
+      }
+    } else {
+      setElapsedRealSeconds(0)
+      serverElapsedRef.current = 0
+      serverPollTimeRef.current = performance.now()
+    }
     pollingActiveRef.current = true
 
     const effectiveInterval = interval ?? pollingInterval
@@ -71,8 +88,9 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       try {
         const state = await simulationService.poll(sessionId)
         if (!pollingActiveRef.current) return
-        if (state.startedAt && !startedAtRef.current) {
-          startedAtRef.current = Date.parse(state.startedAt)
+        if (state.elapsedRealtimeSeconds !== undefined) {
+          serverElapsedRef.current = state.elapsedRealtimeSeconds
+          serverPollTimeRef.current = performance.now()
         }
         setSimulationState(state)
         if (state.colapsada || state.status === 'COMPLETADA') {
@@ -87,21 +105,20 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     intervalRef.current = setInterval(poll, effectiveInterval)
   }, [pollingInterval, stopPolling])
 
-  // Global real-time timer that persists across tabs
+  // Timer: uses server elapsedRealtimeSeconds as base and interpolates between polls
   useEffect(() => {
     const isFinished = simulationState?.status === 'COMPLETADA' || simulationState?.status === 'COLAPSADA' || simulationState?.status === 'ERROR' || (simulationState && simulationState.progreso >= 100)
     const isSimActive = isRunning && !isFinished
-    const shouldRun = isSimActive && !isPaused
+    const shouldTick = isSimActive && !isPaused
 
-    if (shouldRun && !timerRunningRef.current) {
-      timerRunningRef.current = true
-      timerIntervalRef.current = setInterval(() => {
-        const startedAtMs = startedAtRef.current
-        if (!startedAtMs) return
-        setElapsedRealSeconds(Math.max(0, Math.floor((Date.now() - startedAtMs) / 1000)))
-      }, 1000)
-    } else if (!shouldRun && timerRunningRef.current) {
-      timerRunningRef.current = false
+    if (shouldTick) {
+      if (!timerIntervalRef.current) {
+        timerIntervalRef.current = setInterval(() => {
+          const delta = Math.floor((performance.now() - serverPollTimeRef.current) / 1000)
+          setElapsedRealSeconds(serverElapsedRef.current + delta)
+        }, 1000)
+      }
+    } else {
       if (timerIntervalRef.current) {
         clearInterval(timerIntervalRef.current)
         timerIntervalRef.current = null
@@ -113,7 +130,6 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
         clearInterval(timerIntervalRef.current)
         timerIntervalRef.current = null
       }
-      timerRunningRef.current = false
     }
   }, [isRunning, isPaused, simulationState?.status, simulationState?.progreso])
 

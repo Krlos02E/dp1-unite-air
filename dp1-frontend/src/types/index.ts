@@ -77,6 +77,7 @@ export interface SimulationState {
   progreso: number;
   colapsada: boolean;
   motivoColapso: string;
+  elapsedRealtimeSeconds?: number;
   logs: LogEntry[];
   envios?: EnvioEstado[];
   maletas?: MaletaEstado[];
