@@ -4,8 +4,14 @@ import {
   buildAirportLookup,
   getAirportCityResolved,
   getAirportCountryResolved,
+  getAirportTimezone,
 } from '../data/airportsData'
 import { cargaArchivosService } from '../services/CargaArchivosService'
+import {
+  formatLocalClockTimeInTimezone,
+  formatTimeInTimezone,
+  parseUtcOffsetLabel,
+} from '../utils/timezoneFormat'
 import VueloProgramacionModal from './VueloProgramacionModal'
 import VueloDetailCard from './VueloDetailCard'
 import type { VueloDTO, EnvioEstado, AeropuertoDTO, AlmacenContexto, ProgramacionVueloDTO } from '../types'
@@ -31,13 +37,6 @@ interface Props {
   tzOffset?: number
   onSelectedVueloClear?: () => void
 }
-
-function formatTime(iso: string): string {
-  if (!iso) return ''
-  const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z')
-  return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' })
-}
-
 
 const estadoColor: Record<string, string> = {
   EN_ESPERA: 'text-amber-400 bg-amber-400/10',
@@ -122,6 +121,16 @@ function occupationCategory(cargaActual: number, ocupPct: number): OccupationFil
   if (ocupPct > 90) return 'critico'
   if (ocupPct > 70) return 'alerta'
   return 'normal'
+}
+
+function formatProgramacionTime(
+  localTime: string,
+  airportCode: string,
+  targetOffsetMinutes: number,
+): string {
+  const airportOffset = parseUtcOffsetLabel(getAirportTimezone(airportCode))
+  if (airportOffset == null) return localTime.slice(0, 5) || '--:--'
+  return formatLocalClockTimeInTimezone(localTime, airportOffset, targetOffsetMinutes)
 }
 
 function VueloListPanel({
@@ -480,7 +489,11 @@ function VueloListPanel({
                           {programacion.origenOACI} → {programacion.destinoOACI}
                         </div>
                         <div className="text-[10px] text-gray-400">
-                          {programacion.horaSalidaLocal.slice(0, 5)} - {programacion.horaLlegadaLocal.slice(0, 5)} · cap. {programacion.capacidad}
+                          {formatProgramacionTime(programacion.horaSalidaLocal, programacion.origenOACI, tzOffset)}
+                          {' - '}
+                          {formatProgramacionTime(programacion.horaLlegadaLocal, programacion.destinoOACI, tzOffset)}
+                          {' · cap. '}
+                          {programacion.capacidad}
                         </div>
                       </div>
                       <div className="flex gap-1">
@@ -801,7 +814,7 @@ function VueloListPanel({
                       <span className="font-semibold text-emerald-400">{origenPais}</span>
                       <span className="text-gray-500 mx-0.5">→</span>
                       <span className="font-semibold text-emerald-400">{destinoPais}</span>
-                      <span className="text-[10px] text-gray-500 ml-1">· {formatTime(v.salidaUtc)} - {formatTime(v.llegadaUtc)}</span>
+                      <span className="text-[10px] text-gray-500 ml-1">· {formatTimeInTimezone(v.salidaUtc, tzOffset)} - {formatTimeInTimezone(v.llegadaUtc, tzOffset)}</span>
                     </div>
                     {v.estado && (
                       <span className={`text-[9px] font-medium px-1 py-0.5 rounded-full ${estadoColor[v.estado] || 'text-gray-500'}`}>

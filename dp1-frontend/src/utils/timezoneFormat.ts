@@ -49,3 +49,48 @@ export function extractUtcTime(isoString: string): string {
   if (!isoString || !isoString.includes('T')) return '--:--'
   return isoString.split('T')[1].substring(0, 5)
 }
+
+export function parseUtcOffsetLabel(offsetLabel?: string): number | null {
+  if (!offsetLabel) return null
+
+  const match = offsetLabel.trim().match(/^UTC([+-])(\d{1,2})(?::(\d{2}))?$/i)
+  if (!match) return null
+
+  const [, sign, hoursRaw, minutesRaw] = match
+  const hours = Number(hoursRaw)
+  const minutes = Number(minutesRaw ?? '0')
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return null
+
+  const totalMinutes = hours * 60 + minutes
+  return sign === '-' ? -totalMinutes : totalMinutes
+}
+
+export function formatLocalClockTimeInTimezone(
+  localTime: string,
+  sourceOffsetMinutes: number,
+  targetOffsetMinutes: number,
+): string {
+  const match = localTime.trim().match(/^(\d{2}):(\d{2})/)
+  if (!match) return '--:--'
+
+  const [, hoursRaw, minutesRaw] = match
+  const hours = Number(hoursRaw)
+  const minutes = Number(minutesRaw)
+  if (
+    Number.isNaN(hours)
+    || Number.isNaN(minutes)
+    || hours < 0
+    || hours > 23
+    || minutes < 0
+    || minutes > 59
+  ) {
+    return '--:--'
+  }
+
+  const totalMinutes = hours * 60 + minutes + (targetOffsetMinutes - sourceOffsetMinutes)
+  const normalizedMinutes = ((totalMinutes % 1440) + 1440) % 1440
+  const targetHours = Math.floor(normalizedMinutes / 60)
+  const targetMinutes = normalizedMinutes % 60
+
+  return `${String(targetHours).padStart(2, '0')}:${String(targetMinutes).padStart(2, '0')}`
+}
