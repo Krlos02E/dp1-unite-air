@@ -1,6 +1,11 @@
 import { useMemo, useState } from 'react'
 import type { AeropuertoDTO, EnvioEstado, VueloDTO } from '../types'
-import { buildAirportLookup, getAirportCityCountryResolved } from '../data/airportsData'
+import {
+  buildAirportLookup,
+  getAirportCityCountryResolved,
+  getAirportCityResolved,
+  getAirportCountryResolved,
+} from '../data/airportsData'
 import { formatTimeInTimezone, formatDateInTimezone } from '../utils/timezoneFormat'
 
 interface Props {
@@ -35,7 +40,8 @@ export default function AeropuertoDetailCard({
   const [filtroCancelados, setFiltroCancelados] = useState<'id' | 'ciudad'>('ciudad')
 
   const airportLookup = useMemo(() => buildAirportLookup(aeropuertos), [aeropuertos])
-  const pais = aeropuerto?.pais || ''
+  const ciudad = getAirportCityResolved(aeropuerto.codigoOACI, airportLookup) || aeropuerto.ciudad || ''
+  const pais = getAirportCountryResolved(aeropuerto.codigoOACI, airportLookup) || aeropuerto.pais || ''
 
   const vuelosMap = useMemo(() => {
     const map = new Map<string, VueloDTO>()
@@ -151,7 +157,7 @@ export default function AeropuertoDetailCard({
         <div>
           <h4 className="text-xs font-bold uppercase tracking-wide text-violet-300">Almacén seleccionado</h4>
           <p className="text-xs font-semibold text-emerald-400">{aeropuerto.codigoOACI}</p>
-          <p className="text-[10px] text-gray-400">{aeropuerto.ciudad || ''}{pais ? `, ${pais}` : ''}</p>
+          <p className="text-[10px] text-gray-400">{ciudad}{pais ? `, ${pais}` : ''}</p>
         </div>
         {onClear && (
           <button
