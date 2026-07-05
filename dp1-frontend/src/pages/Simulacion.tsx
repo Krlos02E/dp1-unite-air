@@ -610,7 +610,7 @@ export default function Simulacion() {
             onMapTzChange={setMapTz}
             simulationMode={true}
             simulationTime={simulationState?.simulationTime ?? null}
-            filteredFlightIds={hasSimulationStarted && panelMode === 'aviones' && !panelCollapsed ? filteredFlightIds : null}
+            filteredFlightIds={hasSimulationStarted && (panelMode === 'aviones' || panelMode === 'envios') && !panelCollapsed ? filteredFlightIds : null}
             filteredAirportIds={panelMode === 'almacenes' && !panelCollapsed ? filteredAirportIds : null}
           />
 
@@ -798,6 +798,7 @@ export default function Simulacion() {
               onClearSelectedEnvio={clearSelectedEnvio}
               enviosExternos={enviosActivos}
               currentTime={simulationState?.simulationTime}
+              onVisibleFlightsChange={handleVisibleFlightsChange}
               onViewMaletasForEnvio={handleViewMaletasForEnvio}
               onIrAVuelo={handleIrAVueloDesdeEnvio}
               maletasExternas={maletasActivas}

@@ -25,6 +25,8 @@ interface Props {
 const DEFAULT_LIMIT = 50
 type SearchScope = 'todos' | 'codigo' | 'ciudad' | 'pais'
 type OccupationFilter = 'todos' | 'vacio' | 'normal' | 'alerta' | 'critico'
+type SortField = 'ocupacion' | 'proxima-salida' | 'proxima-llegada'
+type SortDirection = 'asc' | 'desc'
 
 interface CombinedWarehouse extends AeropuertoDTO {
   continente?: string
@@ -103,6 +105,13 @@ function occupationCategory(ocupacionActual: number, capacidadMaxima: number): O
   return 'normal'
 }
 
+function parseUtc(iso: string): number {
+  if (!iso) return Number.POSITIVE_INFINITY
+  const date = new Date(iso.endsWith('Z') ? iso : `${iso}Z`)
+  const time = date.getTime()
+  return Number.isNaN(time) ? Number.POSITIVE_INFINITY : time
+}
+
 export default function AlmacenListPanel({
   aeropuertos,
   envios,
@@ -124,6 +133,8 @@ export default function AlmacenListPanel({
   const [codePatternFilter, setCodePatternFilter] = useState('')
   const [continentFilter, setContinentFilter] = useState('todos')
   const [occupationFilter, setOccupationFilter] = useState<OccupationFilter>('todos')
+  const [sortField, setSortField] = useState<SortField>('ocupacion')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [almacenesDB, setAlmacenesDB] = useState<AlmacenDTO[]>([])
   const [showForm, setShowForm] = useState(false)
   const [editingAlmacen, setEditingAlmacen] = useState<AlmacenDTO | null>(null)
@@ -195,7 +206,7 @@ export default function AlmacenListPanel({
   }, [aeropuertosCombinados, codePatternFilter, continentFilter, occupationFilter])
 
   const filtradosSinLimite = useMemo(() => {
-    return term
+    const filtered = term
       ? filtradosPorFiltro.filter((a) => {
           const codigo = normalizeSearch(a.codigoOACI)
           const ciudad = normalizeSearch(a.ciudad || getAirportCity(a.codigoOACI) || '')
@@ -207,7 +218,39 @@ export default function AlmacenListPanel({
           return searchCodeMatcher(codigo) || ciudad.includes(term) || pais.includes(term)
         })
       : filtradosPorFiltro
-  }, [filtradosPorFiltro, term, searchScope, searchCodeMatcher])
+
+    const vuelosMap = new Map(vuelos.map((vuelo) => [vuelo.id, vuelo]))
+    const getNextDeparture = (airport: CombinedWarehouse): number => {
+      const timestamps = airport.vuelosSalientes
+        .map((id) => vuelosMap.get(id))
+        .filter((vuelo): vuelo is VueloDTO => Boolean(vuelo))
+        .map((vuelo) => parseUtc(vuelo.salidaUtc))
+      return timestamps.length ? Math.min(...timestamps) : Number.POSITIVE_INFINITY
+    }
+    const getNextArrival = (airport: CombinedWarehouse): number => {
+      const timestamps = airport.vuelosEntrantes
+        .map((id) => vuelosMap.get(id))
+        .filter((vuelo): vuelo is VueloDTO => Boolean(vuelo))
+        .map((vuelo) => parseUtc(vuelo.llegadaUtc))
+      return timestamps.length ? Math.min(...timestamps) : Number.POSITIVE_INFINITY
+    }
+
+    return [...filtered].sort((a, b) => {
+      let comparison = 0
+      if (sortField === 'ocupacion') {
+        const aRatio = a.capacidadMaxima > 0 ? a.ocupacionActual / a.capacidadMaxima : 0
+        const bRatio = b.capacidadMaxima > 0 ? b.ocupacionActual / b.capacidadMaxima : 0
+        comparison = aRatio - bRatio
+      } else if (sortField === 'proxima-salida') {
+        comparison = getNextDeparture(a) - getNextDeparture(b)
+      } else {
+        comparison = getNextArrival(a) - getNextArrival(b)
+      }
+
+      if (comparison === 0) comparison = a.codigoOACI.localeCompare(b.codigoOACI)
+      return sortDirection === 'asc' ? comparison : -comparison
+    })
+  }, [filtradosPorFiltro, term, searchScope, searchCodeMatcher, vuelos, sortField, sortDirection])
 
   const filtrados = showAll || term ? filtradosSinLimite : filtradosSinLimite.slice(0, DEFAULT_LIMIT)
 
@@ -345,6 +388,28 @@ export default function AlmacenListPanel({
             {deleteError}
           </div>
         )}
+      </div>
+
+      <div className="px-3 py-1.5 border-b border-gray-800 flex items-center gap-1.5">
+        <span className="text-[10px] text-gray-500 whitespace-nowrap">Ordenar:</span>
+        <select
+          value={sortField}
+          onChange={(e) => setSortField(e.target.value as SortField)}
+          className="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded px-1.5 py-1 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
+        >
+          <option value="ocupacion">Nivel de ocupación</option>
+          <option value="proxima-salida">UT más próxima en salir</option>
+          <option value="proxima-llegada">UT más próxima en llegar</option>
+        </select>
+        <button
+          type="button"
+          onClick={() => setSortDirection((current) => current === 'asc' ? 'desc' : 'asc')}
+          className="w-7 h-6 rounded bg-gray-800 border border-gray-700 text-[11px] text-sky-400 hover:bg-gray-700 cursor-pointer"
+          title={sortDirection === 'asc' ? 'Orden ascendente' : 'Orden descendente'}
+          aria-label={sortDirection === 'asc' ? 'Cambiar a orden descendente' : 'Cambiar a orden ascendente'}
+        >
+          {sortDirection === 'asc' ? '↑' : '↓'}
+        </button>
       </div>
 
       {/* Content */}

@@ -452,7 +452,7 @@ export default function OperacionDiaria() {
             onVueloClick={handleVueloClick}
             mapTz={mapTz}
             onMapTzChange={setMapTz}
-            filteredFlightIds={panelMode === 'aviones' && !panelCollapsed ? filteredFlightIds : null}
+            filteredFlightIds={(panelMode === 'aviones' || panelMode === 'envios') && !panelCollapsed ? filteredFlightIds : null}
             filteredAirportIds={panelMode === 'almacenes' && !panelCollapsed ? filteredAirportIds : null}
           />
           <button
@@ -614,6 +614,7 @@ export default function OperacionDiaria() {
               onSelectedEnvioRouteModeChange={setSelectedEnvioRouteMode}
               onClearSelectedEnvio={clearSelectedEnvio}
               enviosExternos={todosEnvios}
+              onVisibleFlightsChange={handleVisibleFlightsChange}
               onViewMaletasForEnvio={handleViewMaletasForEnvio}
               onIrAVuelo={handleIrAVueloDesdeEnvio}
               maletasExternas={todasMaletas}

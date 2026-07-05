@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useDeferredValue } from 'react'
 import { cargaArchivosService } from '../services/CargaArchivosService'
 import { getAirportCity, getAirportCountry } from '../data/airportsData'
 import type { EnvioEstado, MaletaEstado } from '../types'
@@ -6,7 +6,6 @@ import EnvioDetailCard from './EnvioDetailCard'
 
 type Tab = 'pendientes' | 'planificados' | 'envuelo' | 'entregados'
 type MainTab = 'almacen' | 'envuelo' | 'entregados'
-type SearchScope = 'todos' | 'id' | 'origen' | 'destino'
 type FilterScope = 'directo' | 'ruta'
 type FilterMatchBy = 'codigo' | 'ciudad' | 'pais'
 
@@ -37,6 +36,7 @@ interface Props {
   maletasExternas?: MaletaEstado[]
   selectedMaletaId?: string | null
   onMaletaSelect?: (maleta: MaletaEstado) => void
+  onVisibleFlightsChange?: (flightIds: string[] | null) => void
 }
 
 const DEFAULT_LIMIT = 50
@@ -114,14 +114,19 @@ export default function EnvioListPanel({
   maletasExternas = [],
   selectedMaletaId,
   onMaletaSelect,
+  onVisibleFlightsChange,
 }: Props) {
   const [tab, setTab] = useState<Tab>('pendientes')
-  const [search, setSearch] = useState('')
-  const [searchScope, setSearchScope] = useState<SearchScope>('todos')
+  const [searchOrigin, setSearchOrigin] = useState('')
+  const [searchDestination, setSearchDestination] = useState('')
+  const [searchId, setSearchId] = useState('')
+  const [searchOriginMatchBy, setSearchOriginMatchBy] = useState<FilterMatchBy>('ciudad')
+  const [searchDestinationMatchBy, setSearchDestinationMatchBy] = useState<FilterMatchBy>('ciudad')
   const [filterScope, setFilterScope] = useState<FilterScope>('directo')
   const [filterMatchBy, setFilterMatchBy] = useState<FilterMatchBy>('ciudad')
   const [originFilter, setOriginFilter] = useState('')
   const [destinationFilter, setDestinationFilter] = useState('')
+  const [idFilter, setIdFilter] = useState('')
   const [envios, setEnvios] = useState<EnvioEstado[]>([])
   const [loading, setLoading] = useState(false)
   const [showAll, setShowAll] = useState(false)
@@ -131,8 +136,21 @@ export default function EnvioListPanel({
   const config = TAB_CONFIG.find((c) => c.key === tab)!
   const currentMainTab: MainTab = tab === 'pendientes' || tab === 'planificados' ? 'almacen' : tab
   const enviosBase = enviosExternos ?? envios
+  const deferredSearchOrigin = useDeferredValue(searchOrigin)
+  const deferredSearchDestination = useDeferredValue(searchDestination)
+  const deferredSearchId = useDeferredValue(searchId)
+  const searchOriginTerm = normalizeSearch(deferredSearchOrigin)
+  const searchDestinationTerm = normalizeSearch(deferredSearchDestination)
+  const searchIdTerm = normalizeSearch(deferredSearchId)
+  const hasPanelSearch = Boolean(searchOriginTerm || searchDestinationTerm || searchIdTerm)
+  const hasFilters = Boolean(originFilter || destinationFilter || idFilter)
   const enviosConFiltrosPersistentes = enviosBase.filter((envio) => (
     matchesPersistentFilters(envio, originFilter, destinationFilter, filterScope, filterMatchBy)
+  ))
+  const visibleFlightIdsFromFilters = Array.from(new Set(
+    enviosConFiltrosPersistentes.flatMap((envio) => (
+      [envio.vueloActual, envio.vueloEsperado, envio.ultimoVuelo].filter((flightId): flightId is string => Boolean(flightId))
+    )),
   ))
   const countsByTab: Record<Tab, number> = {
     pendientes: enviosConFiltrosPersistentes.filter((e) => e.estado === 'EN_ESPERA').length,
@@ -201,21 +219,31 @@ export default function EnvioListPanel({
     envuelo: tabCounts.envuelo,
     entregados: tabCounts.entregados,
   }
-  const term = normalizeSearch(search)
-  const hasFilters = Boolean(originFilter || destinationFilter)
-  const filtradosSinLimite = term
-    ? enviosVisibles.filter((envio) => {
-        const idMatch = normalizeSearch(envio.id).includes(term)
-        const originMatch = airportMatches(envio.origen, term, 'codigo') || airportMatches(envio.origen, term, 'ciudad') || airportMatches(envio.origen, term, 'pais')
-        const destinationMatch = airportMatches(envio.destino, term, 'codigo') || airportMatches(envio.destino, term, 'ciudad') || airportMatches(envio.destino, term, 'pais')
+  const enviosConFiltrosCompletos = enviosVisibles.filter((envio) => {
+    if (idFilter && !normalizeSearch(envio.id).includes(normalizeSearch(idFilter))) return false
+    return true
+  })
+  const filtradosSinLimite = enviosConFiltrosCompletos.filter((envio) => {
+    if (searchIdTerm && !normalizeSearch(envio.id).includes(searchIdTerm)) return false
+    if (searchOriginTerm && !airportMatches(envio.origen, searchOriginTerm, searchOriginMatchBy)) return false
+    if (searchDestinationTerm && !airportMatches(envio.destino, searchDestinationTerm, searchDestinationMatchBy)) return false
+    return true
+  })
+  const filtrados = showAll || hasPanelSearch ? filtradosSinLimite : filtradosSinLimite.slice(0, DEFAULT_LIMIT)
 
-        if (searchScope === 'id') return idMatch
-        if (searchScope === 'origen') return originMatch
-        if (searchScope === 'destino') return destinationMatch
-        return idMatch || originMatch || destinationMatch
-      })
-    : enviosVisibles
-  const filtrados = showAll || term ? filtradosSinLimite : filtradosSinLimite.slice(0, DEFAULT_LIMIT)
+  useEffect(() => {
+    if (!onVisibleFlightsChange) return
+    if (!hasFilters) {
+      onVisibleFlightsChange(null)
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      onVisibleFlightsChange(visibleFlightIdsFromFilters)
+    }, 120)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [hasFilters, onVisibleFlightsChange, visibleFlightIdsFromFilters])
 
   const estadoLabel: Record<string, string> = {
     EN_ESPERA: 'En espera',
@@ -238,30 +266,66 @@ export default function EnvioListPanel({
         <h3 className="text-sm font-semibold text-gray-200 mb-2">Envíos</h3>
         <div className="space-y-1.5">
           <div>
-            <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-gray-500">Búsqueda temporal</p>
-            <div className="flex gap-1.5">
-              <select
-                value={searchScope}
-                onChange={(e) => setSearchScope(e.target.value as SearchScope)}
-                className="w-[88px] bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
-              >
-                <option value="todos">Todo</option>
-                <option value="id">ID</option>
-                <option value="origen">Origen</option>
-                <option value="destino">Destino</option>
-              </select>
-              <div className="relative min-w-0 flex-1">
+            <div className="mb-1.5 flex items-center justify-between">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-gray-500">Búsqueda en panel</p>
+              {hasPanelSearch && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchOrigin('')
+                    setSearchDestination('')
+                    setSearchId('')
+                  }}
+                  className="text-[9px] text-sky-400 hover:text-sky-300"
+                >
+                  Limpiar
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-1 gap-1.5">
+              <div className="flex gap-1.5">
+                <select
+                  value={searchOriginMatchBy}
+                  onChange={(e) => setSearchOriginMatchBy(e.target.value as FilterMatchBy)}
+                  className="w-[92px] bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
+                >
+                  <option value="codigo">Código</option>
+                  <option value="ciudad">Ciudad</option>
+                  <option value="pais">País</option>
+                </select>
                 <input
                   type="text"
-                  placeholder="Buscar temporalmente..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-8 pr-3 py-1.5 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
+                  placeholder="Búsqueda por origen"
+                  value={searchOrigin}
+                  onChange={(e) => setSearchOrigin(e.target.value)}
+                  className="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
                 />
-                <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
               </div>
+              <div className="flex gap-1.5">
+                <select
+                  value={searchDestinationMatchBy}
+                  onChange={(e) => setSearchDestinationMatchBy(e.target.value as FilterMatchBy)}
+                  className="w-[92px] bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
+                >
+                  <option value="codigo">Código</option>
+                  <option value="ciudad">Ciudad</option>
+                  <option value="pais">País</option>
+                </select>
+                <input
+                  type="text"
+                  placeholder="Búsqueda por destino"
+                  value={searchDestination}
+                  onChange={(e) => setSearchDestination(e.target.value)}
+                  className="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
+                />
+              </div>
+              <input
+                type="text"
+                placeholder="Búsqueda por ID"
+                value={searchId}
+                onChange={(e) => setSearchId(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
+              />
             </div>
           </div>
           <div className="pt-2 border-t border-gray-800/80">
@@ -273,6 +337,7 @@ export default function EnvioListPanel({
                   onClick={() => {
                     setOriginFilter('')
                     setDestinationFilter('')
+                    setIdFilter('')
                   }}
                   className="text-[9px] text-sky-400 hover:text-sky-300"
                 >
@@ -286,8 +351,8 @@ export default function EnvioListPanel({
                 onChange={(e) => setFilterScope(e.target.value as FilterScope)}
                 className="bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
               >
-                <option value="directo">Directo</option>
-                <option value="ruta">Ruta</option>
+                <option value="directo">Filtrar en tramo</option>
+                <option value="ruta">Filtrar en ruta</option>
               </select>
               <select
                 value={filterMatchBy}
@@ -311,6 +376,13 @@ export default function EnvioListPanel({
                 onChange={(e) => setDestinationFilter(e.target.value)}
                 placeholder="Filtrar destino"
                 className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
+              />
+              <input
+                type="text"
+                value={idFilter}
+                onChange={(e) => setIdFilter(e.target.value)}
+                placeholder="Filtrar ID"
+                className="col-span-2 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
               />
             </div>
           </div>
@@ -392,7 +464,7 @@ export default function EnvioListPanel({
 
         {!loading && filtrados.length === 0 && (
           <p className="text-center text-xs text-gray-500 py-8">
-            {term ? 'No se encontraron envíos' : 'No hay envíos en esta categoría'}
+            {hasPanelSearch || hasFilters ? 'No se encontraron envíos' : 'No hay envíos en esta categoría'}
           </p>
         )}
 
@@ -470,7 +542,7 @@ export default function EnvioListPanel({
               </button>
             </div>
           ) : (
-            !showAll && !term && enviosVisibles.length > DEFAULT_LIMIT && (
+            !showAll && !hasPanelSearch && enviosVisibles.length > DEFAULT_LIMIT && (
             <button onClick={() => setShowAll(true)} className="text-sky-400 hover:text-sky-300 font-medium cursor-pointer">
               Mostrar todos
             </button>
