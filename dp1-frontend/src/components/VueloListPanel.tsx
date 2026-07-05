@@ -52,12 +52,11 @@ const estadoColor: Record<string, string> = {
 
 const DEFAULT_LIMIT = 50
 
-type SearchScope = 'todos' | 'codigo' | 'tramo' | 'origen' | 'destino'
 type SortField = 'ocupacion' | 'salida' | 'llegada' | 'origen' | 'destino'
 type SortDirection = 'asc' | 'desc'
+type LocationMatchMode = 'codigo' | 'ciudad'
+type RouteFilterScope = 'tramo' | 'ruta'
 type OccupationFilter = 'todos' | 'vacio' | 'normal' | 'alerta' | 'critico'
-type FilterMatchBy = 'codigo' | 'ciudad' | 'pais'
-type RouteFilterMode = 'tramo' | 'ruta'
 
 function normalizeSearch(value: string): string {
   return value
@@ -67,27 +66,18 @@ function normalizeSearch(value: string): string {
     .trim()
 }
 
-function locationTerms(code: string, airportLookup: Map<string, AirportLookupData>): string {
-  return normalizeSearch([
-    code,
-    getAirportCityResolved(code, airportLookup),
-    getAirportCountryResolved(code, airportLookup),
-  ].filter(Boolean).join(' '))
+function locationFieldValue(code: string, airportLookup: Map<string, AirportLookupData>, mode: LocationMatchMode): string {
+  if (mode === 'codigo') return normalizeSearch(code)
+  return normalizeSearch(getAirportCityResolved(code, airportLookup) || '')
 }
 
-function locationFieldValue(code: string, airportLookup: Map<string, AirportLookupData>, matchBy: FilterMatchBy): string {
-  if (matchBy === 'codigo') return code
-  if (matchBy === 'pais') return getAirportCountryResolved(code, airportLookup) || ''
-  return getAirportCityResolved(code, airportLookup) || ''
+function locationMatches(code: string, term: string, airportLookup: Map<string, AirportLookupData>, mode: LocationMatchMode): boolean {
+  return locationFieldValue(code, airportLookup, mode).includes(normalizeSearch(term))
 }
 
-function locationMatches(code: string, term: string, airportLookup: Map<string, AirportLookupData>, matchBy: FilterMatchBy): boolean {
-  return normalizeSearch(locationFieldValue(code, airportLookup, matchBy)).includes(normalizeSearch(term))
-}
-
-function routeAirportMatches(route: string[] | undefined, term: string, airportLookup: Map<string, AirportLookupData>, matchBy: FilterMatchBy): boolean {
+function routeMatches(route: string[] | undefined, term: string, airportLookup: Map<string, AirportLookupData>, mode: LocationMatchMode): boolean {
   if (!route?.length) return false
-  return route.some((code) => locationMatches(code, term, airportLookup, matchBy))
+  return route.some((code) => locationMatches(code, term, airportLookup, mode))
 }
 
 function createCodePatternMatcher(rawPattern: string): (code: string) => boolean {
@@ -154,14 +144,19 @@ function VueloListPanel({
   tzOffset = 0,
   onSelectedVueloClear,
 }: Props) {
-  const [search, setSearch] = useState('')
+  const [searchOrigin, setSearchOrigin] = useState('')
+  const [searchDestination, setSearchDestination] = useState('')
+  const [searchCode, setSearchCode] = useState('')
+  const [searchOriginMode, setSearchOriginMode] = useState<LocationMatchMode>('ciudad')
+  const [searchDestinationMode, setSearchDestinationMode] = useState<LocationMatchMode>('ciudad')
   const [filterEstado, setFilterEstado] = useState<string>('ACTIVO')
-  const [searchScope, setSearchScope] = useState<SearchScope>('todos')
   const [originFilter, setOriginFilter] = useState('')
   const [destinationFilter, setDestinationFilter] = useState('')
-  const [filterMatchBy, setFilterMatchBy] = useState<FilterMatchBy>('ciudad')
-  const [routeFilterMode, setRouteFilterMode] = useState<RouteFilterMode>('tramo')
+  const [codeFilter, setCodeFilter] = useState('')
   const [occupationFilter, setOccupationFilter] = useState<OccupationFilter>('todos')
+  const [originFilterMode, setOriginFilterMode] = useState<LocationMatchMode>('ciudad')
+  const [destinationFilterMode, setDestinationFilterMode] = useState<LocationMatchMode>('ciudad')
+  const [filterRouteScope, setFilterRouteScope] = useState<RouteFilterScope>('tramo')
   const [sortField, setSortField] = useState<SortField>('ocupacion')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [programaciones, setProgramaciones] = useState<ProgramacionVueloDTO[]>([])
@@ -174,10 +169,23 @@ function VueloListPanel({
   const contentRef = useRef<HTMLDivElement | null>(null)
   const airportLookup = useMemo(() => buildAirportLookup(aeropuertosDisponibles), [aeropuertosDisponibles])
 
-  const deferredSearch = useDeferredValue(search)
-  const term = normalizeSearch(deferredSearch)
-  const hasListFilters = Boolean(originFilter || destinationFilter || occupationFilter !== 'todos')
-  const hasMapFilters = Boolean(term || originFilter || destinationFilter || occupationFilter !== 'todos' || filterEstado !== 'ACTIVO')
+  const deferredSearchOrigin = useDeferredValue(searchOrigin)
+  const deferredSearchDestination = useDeferredValue(searchDestination)
+  const deferredSearchCode = useDeferredValue(searchCode)
+  const searchOriginTerm = normalizeSearch(deferredSearchOrigin)
+  const searchDestinationTerm = normalizeSearch(deferredSearchDestination)
+  const searchCodeTerm = normalizeSearch(deferredSearchCode)
+  const searchCodeMatcher = useMemo(
+    () => createCodePatternMatcher(deferredSearchCode),
+    [deferredSearchCode],
+  )
+  const filterCodeMatcher = useMemo(
+    () => createCodePatternMatcher(codeFilter),
+    [codeFilter],
+  )
+  const hasPanelSearch = Boolean(searchOriginTerm || searchDestinationTerm || normalizeSearch(deferredSearchCode))
+  const hasPersistentFilters = Boolean(originFilter || destinationFilter || codeFilter || occupationFilter !== 'todos')
+  const hasMapFilters = Boolean(originFilter || destinationFilter || codeFilter || occupationFilter !== 'todos')
   const canManageTransportUnits = Boolean(contexto)
   const canCancelFlights = Boolean(contexto)
 
@@ -223,14 +231,9 @@ function VueloListPanel({
 
   const indexedFlights = useMemo(() => visibleFlights.map((flight) => {
     const codigo = normalizeSearch(flight.id)
-    const origen = locationTerms(flight.origen, airportLookup)
-    const destino = locationTerms(flight.destino, airportLookup)
     return {
       flight,
       codigo,
-      origen,
-      destino,
-      tramo: `${origen} ${destino} ${normalizeSearch(`${flight.origen}-${flight.destino}`)}`,
       ocupacion: flight.capacidad > 0 ? flight.cargaActual / flight.capacidad : 0,
       ocupacionCategoria: occupationCategory(
         flight.cargaActual,
@@ -243,34 +246,33 @@ function VueloListPanel({
     }
   }), [visibleFlights, airportLookup])
 
-  const searchCodeMatcher = useMemo(
-    () => createCodePatternMatcher(deferredSearch),
-    [deferredSearch],
-  )
-
-  const filtradosSinLimite = useMemo(() => {
-    return indexedFlights.filter(({ flight: v, codigo, origen, destino, tramo }) => {
-      if (showStatusFilters && v.estado !== filterEstado) return false
+  const filtradosPersistentes = useMemo(() => {
+    return indexedFlights.filter(({ flight: v, codigo, ocupacionCategoria }) => {
       if (originFilter) {
-        const originVisible = routeFilterMode === 'tramo'
-          ? locationMatches(v.origen, originFilter, airportLookup, filterMatchBy)
-          : enviosByFlight.get(v.id)?.some((envio) => routeAirportMatches(envio.rutaAeropuertos, originFilter, airportLookup, filterMatchBy))
-        if (!originVisible) return false
+        const matchesOrigin = filterRouteScope === 'ruta'
+          ? (enviosByFlight.get(v.id)?.some((envio) => routeMatches(envio.rutaAeropuertos, originFilter, airportLookup, originFilterMode)) ?? false)
+          : locationMatches(v.origen, originFilter, airportLookup, originFilterMode)
+        if (!matchesOrigin) return false
       }
       if (destinationFilter) {
-        const destinationVisible = routeFilterMode === 'tramo'
-          ? locationMatches(v.destino, destinationFilter, airportLookup, filterMatchBy)
-          : enviosByFlight.get(v.id)?.some((envio) => routeAirportMatches(envio.rutaAeropuertos, destinationFilter, airportLookup, filterMatchBy))
-        if (!destinationVisible) return false
+        const matchesDestination = filterRouteScope === 'ruta'
+          ? (enviosByFlight.get(v.id)?.some((envio) => routeMatches(envio.rutaAeropuertos, destinationFilter, airportLookup, destinationFilterMode)) ?? false)
+          : locationMatches(v.destino, destinationFilter, airportLookup, destinationFilterMode)
+        if (!matchesDestination) return false
       }
-      if (occupationFilter !== 'todos' && occupationCategory(v.cargaActual, v.capacidad > 0 ? Math.round((v.cargaActual / v.capacidad) * 100) : 0) !== occupationFilter) return false
-      if (!term) return true
+      if (codeFilter && !filterCodeMatcher(codigo)) return false
+      if (occupationFilter !== 'todos' && ocupacionCategoria !== occupationFilter) return false
+      return true
+    })
+  }, [indexedFlights, originFilter, destinationFilter, codeFilter, filterCodeMatcher, occupationFilter, airportLookup, originFilterMode, destinationFilterMode, filterRouteScope, enviosByFlight])
 
-      if (searchScope === 'codigo') return searchCodeMatcher(codigo)
-      if (searchScope === 'tramo') return tramo.includes(term)
-      if (searchScope === 'origen') return origen.includes(term)
-      if (searchScope === 'destino') return destino.includes(term)
-      return searchCodeMatcher(codigo) || tramo.includes(term)
+  const filtradosSinLimite = useMemo(() => {
+    return filtradosPersistentes.filter(({ flight, codigo }) => {
+      if (showStatusFilters && flight.estado !== filterEstado) return false
+      if (searchOriginTerm && !locationMatches(flight.origen, searchOriginTerm, airportLookup, searchOriginMode)) return false
+      if (searchDestinationTerm && !locationMatches(flight.destino, searchDestinationTerm, airportLookup, searchDestinationMode)) return false
+      if (searchCodeTerm && !searchCodeMatcher(codigo)) return false
+      return true
     }).sort((a, b) => {
       let comparison: number
       if (sortField === 'ocupacion') comparison = a.ocupacion - b.ocupacion
@@ -282,7 +284,7 @@ function VueloListPanel({
       if (comparison === 0) comparison = a.codigo.localeCompare(b.codigo)
       return sortDirection === 'asc' ? comparison : -comparison
     }).map(({ flight }) => flight)
-  }, [indexedFlights, term, filterEstado, searchScope, searchCodeMatcher, originFilter, destinationFilter, occupationFilter, sortField, sortDirection, showStatusFilters, routeFilterMode, filterMatchBy, enviosByFlight, airportLookup])
+  }, [filtradosPersistentes, searchOriginTerm, searchDestinationTerm, searchCodeMatcher, searchCodeTerm, sortField, sortDirection, airportLookup, searchOriginMode, searchDestinationMode, showStatusFilters, filterEstado])
 
   const estadosDisponibles = useMemo(() => {
     const states = includeProgrammed ? ['PROGRAMADO', 'ACTIVO'] : ['ACTIVO']
@@ -298,11 +300,11 @@ function VueloListPanel({
     }
 
     const timeoutId = window.setTimeout(() => {
-      onVisibleFlightsChange(filtradosSinLimite.map((flight) => flight.id))
+      onVisibleFlightsChange(filtradosPersistentes.map(({ flight }) => flight.id))
     }, 120)
 
     return () => window.clearTimeout(timeoutId)
-  }, [filtradosSinLimite, hasMapFilters, onVisibleFlightsChange])
+  }, [filtradosPersistentes, hasMapFilters, onVisibleFlightsChange])
 
   useEffect(() => {
     if (!selectedVueloId) return
@@ -326,31 +328,23 @@ function VueloListPanel({
     }, 0)
   }, [selectedVueloId, selectedVuelo?.id, vuelos, estadosDisponibles, filterEstado, filtradosSinLimite])
 
-  const resultKey = `${term}|${originFilter}|${destinationFilter}|${occupationFilter}|${filterEstado}|${searchScope}|${sortField}|${sortDirection}|${routeFilterMode}|${filterMatchBy}`
+  const resultKey = `${searchOriginTerm}|${searchDestinationTerm}|${searchCodeTerm}|${searchOriginMode}|${searchDestinationMode}|${originFilter}|${destinationFilter}|${codeFilter}|${occupationFilter}|${originFilterMode}|${destinationFilterMode}|${filterRouteScope}|${filterEstado}|${sortField}|${sortDirection}`
   const [page, setPage] = useState({ key: '', limit: DEFAULT_LIMIT })
   const visibleLimit = page.key === resultKey ? page.limit : DEFAULT_LIMIT
   const filtrados = filtradosSinLimite.slice(0, visibleLimit)
 
   const programacionesFiltradas = useMemo(() => {
     return programaciones.filter((programacion) => {
-      if (originFilter && !locationMatches(programacion.origenOACI, originFilter, airportLookup, filterMatchBy)) return false
-      if (destinationFilter && !locationMatches(programacion.destinoOACI, destinationFilter, airportLookup, filterMatchBy)) return false
-      if (!term) return true
-
-      const codigoProgramacion = normalizeSearch(
-        `USR-${programacion.id ?? ''}-${programacion.origenOACI}-${programacion.destinoOACI}`
-      )
-      const origen = locationTerms(programacion.origenOACI, airportLookup)
-      const destino = locationTerms(programacion.destinoOACI, airportLookup)
-      const tramo = `${origen} ${destino} ${normalizeSearch(`${programacion.origenOACI}-${programacion.destinoOACI}`)}`
-
-      if (searchScope === 'codigo') return searchCodeMatcher(codigoProgramacion)
-      if (searchScope === 'tramo') return tramo.includes(term)
-      if (searchScope === 'origen') return origen.includes(term)
-      if (searchScope === 'destino') return destino.includes(term)
-      return searchCodeMatcher(codigoProgramacion) || tramo.includes(term)
+      if (originFilter && !locationMatches(programacion.origenOACI, originFilter, airportLookup, originFilterMode)) return false
+      if (destinationFilter && !locationMatches(programacion.destinoOACI, destinationFilter, airportLookup, destinationFilterMode)) return false
+      const codigoProgramacion = normalizeSearch(`USR-${programacion.id ?? ''}-${programacion.origenOACI}-${programacion.destinoOACI}`)
+      if (codeFilter && !filterCodeMatcher(codigoProgramacion)) return false
+      if (searchOriginTerm && !locationMatches(programacion.origenOACI, searchOriginTerm, airportLookup, searchOriginMode)) return false
+      if (searchDestinationTerm && !locationMatches(programacion.destinoOACI, searchDestinationTerm, airportLookup, searchDestinationMode)) return false
+      if (searchCodeTerm && !searchCodeMatcher(codigoProgramacion)) return false
+      return true
     })
-  }, [programaciones, originFilter, destinationFilter, term, searchScope, searchCodeMatcher, airportLookup, filterMatchBy])
+  }, [programaciones, originFilter, destinationFilter, codeFilter, filterCodeMatcher, searchOriginTerm, searchDestinationTerm, searchCodeMatcher, searchCodeTerm, airportLookup, originFilterMode, destinationFilterMode, searchOriginMode, searchDestinationMode])
 
   const estadoVueloLabel: Record<string, string> = {
     ACTIVO: 'Activos',
@@ -535,28 +529,6 @@ function VueloListPanel({
             )}
           </div>
         )}
-        <div className="flex gap-1.5">
-          <select
-            value={searchScope}
-            onChange={(e) => setSearchScope(e.target.value as SearchScope)}
-            aria-label="Buscar unidad de transporte por"
-            className="w-[92px] bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
-          >
-            <option value="todos">Todo</option>
-            <option value="codigo">Código UT</option>
-            <option value="tramo">Tramo</option>
-            <option value="origen">Origen</option>
-            <option value="destino">Destino</option>
-          </select>
-          <input
-            type="text"
-            placeholder="Texto o patrón, ej. SPIM-*"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            aria-label="Término de búsqueda de unidades de transporte"
-            className="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
-          />
-        </div>
         <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-2" aria-label="Semáforo de ocupación">
           {[
             ['bg-sky-500', 'Vacío'],
@@ -571,13 +543,78 @@ function VueloListPanel({
         </div>
         <div className="mt-2 pt-2 border-t border-gray-800/80">
           <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[10px] font-medium text-gray-400">Búsqueda en panel</span>
+            {hasPanelSearch && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchOrigin('')
+                  setSearchDestination('')
+                  setSearchCode('')
+                }}
+                className="text-[9px] text-sky-400 hover:text-sky-300 cursor-pointer"
+              >
+                Limpiar
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-1 gap-1.5">
+            <div className="flex gap-1.5">
+              <select
+                value={searchOriginMode}
+                onChange={(e) => setSearchOriginMode(e.target.value as LocationMatchMode)}
+                aria-label="Buscar origen por tipo"
+                className="w-[92px] bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
+              >
+                <option value="codigo">Código</option>
+                <option value="ciudad">Ciudad</option>
+              </select>
+              <input
+                type="text"
+                value={searchOrigin}
+                onChange={(e) => setSearchOrigin(e.target.value)}
+                aria-label="Buscar unidades de transporte por origen en el panel"
+                placeholder="Búsqueda por origen"
+                className="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-300 placeholder-gray-500 focus:outline-none focus:border-sky-500"
+              />
+            </div>
+            <div className="flex gap-1.5">
+              <select
+                value={searchDestinationMode}
+                onChange={(e) => setSearchDestinationMode(e.target.value as LocationMatchMode)}
+                aria-label="Buscar destino por tipo"
+                className="w-[92px] bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
+              >
+                <option value="codigo">Código</option>
+                <option value="ciudad">Ciudad</option>
+              </select>
+              <input
+                type="text"
+                value={searchDestination}
+                onChange={(e) => setSearchDestination(e.target.value)}
+                aria-label="Buscar unidades de transporte por destino en el panel"
+                placeholder="Búsqueda por destino"
+                className="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-300 placeholder-gray-500 focus:outline-none focus:border-sky-500"
+              />
+            </div>
+            <input
+              type="text"
+              value={searchCode}
+              onChange={(e) => setSearchCode(e.target.value)}
+              aria-label="Buscar unidades de transporte por código en el panel"
+              placeholder="Búsqueda por código UT"
+              className="min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-300 placeholder-gray-500 focus:outline-none focus:border-sky-500"
+            />
+          </div>
+          <div className="mt-2 flex items-center justify-between mb-1.5">
             <span className="text-[10px] font-medium text-gray-400">Filtros persistentes</span>
-            {hasListFilters && (
+            {hasPersistentFilters && (
               <button
                 type="button"
                 onClick={() => {
                   setOriginFilter('')
                   setDestinationFilter('')
+                  setCodeFilter('')
                   setOccupationFilter('todos')
                 }}
                 className="text-[9px] text-sky-400 hover:text-sky-300 cursor-pointer"
@@ -586,53 +623,75 @@ function VueloListPanel({
               </button>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-1.5">
+          <div className="grid grid-cols-1 gap-1.5">
             <select
-              value={routeFilterMode}
-              onChange={(e) => setRouteFilterMode(e.target.value as RouteFilterMode)}
-              className="min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
+              value={filterRouteScope}
+              onChange={(e) => setFilterRouteScope(e.target.value as RouteFilterScope)}
+              aria-label="Aplicar filtros de origen y destino en tramo o ruta"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
             >
-              <option value="tramo">En el tramo</option>
-              <option value="ruta">En la ruta</option>
+              <option value="tramo">Filtrar en tramo</option>
+              <option value="ruta">Filtrar en ruta</option>
             </select>
-            <select
-              value={filterMatchBy}
-              onChange={(e) => setFilterMatchBy(e.target.value as FilterMatchBy)}
-              className="min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
-            >
-              <option value="codigo">Código</option>
-              <option value="ciudad">Ciudad</option>
-              <option value="pais">País</option>
-            </select>
+            <div className="flex gap-1.5">
+              <select
+                value={originFilterMode}
+                onChange={(e) => setOriginFilterMode(e.target.value as LocationMatchMode)}
+                aria-label="Filtrar origen por tipo"
+                className="w-[92px] bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
+              >
+                <option value="codigo">Código</option>
+                <option value="ciudad">Ciudad</option>
+              </select>
+              <input
+                type="text"
+                value={originFilter}
+                onChange={(e) => setOriginFilter(e.target.value)}
+                aria-label="Filtrar unidades de transporte por origen"
+                placeholder="Filtrar origen"
+                className="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-300 placeholder-gray-500 focus:outline-none focus:border-sky-500"
+              />
+            </div>
+            <div className="flex gap-1.5">
+              <select
+                value={destinationFilterMode}
+                onChange={(e) => setDestinationFilterMode(e.target.value as LocationMatchMode)}
+                aria-label="Filtrar destino por tipo"
+                className="w-[92px] bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
+              >
+                <option value="codigo">Código</option>
+                <option value="ciudad">Ciudad</option>
+              </select>
+              <input
+                type="text"
+                value={destinationFilter}
+                onChange={(e) => setDestinationFilter(e.target.value)}
+                aria-label="Filtrar unidades de transporte por destino"
+                placeholder="Filtrar destino"
+                className="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-300 placeholder-gray-500 focus:outline-none focus:border-sky-500"
+              />
+            </div>
             <input
               type="text"
-              value={originFilter}
-              onChange={(e) => setOriginFilter(e.target.value)}
-              aria-label="Filtrar unidades de transporte por origen"
-              placeholder="Filtrar origen"
+              value={codeFilter}
+              onChange={(e) => setCodeFilter(e.target.value)}
+              aria-label="Filtrar unidades de transporte por código"
+              placeholder="Filtrar código UT"
               className="min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-300 placeholder-gray-500 focus:outline-none focus:border-sky-500"
             />
-            <input
-              type="text"
-              value={destinationFilter}
-              onChange={(e) => setDestinationFilter(e.target.value)}
-              aria-label="Filtrar unidades de transporte por destino"
-              placeholder="Filtrar destino"
-              className="min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-300 placeholder-gray-500 focus:outline-none focus:border-sky-500"
-            />
+            <select
+              value={occupationFilter}
+              onChange={(e) => setOccupationFilter(e.target.value as OccupationFilter)}
+              aria-label="Filtrar unidades de transporte por semáforo"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
+            >
+              <option value="todos">Filtrar semáforo: Todos</option>
+              <option value="vacio">Semáforo: Vacío</option>
+              <option value="normal">Semáforo: Normal</option>
+              <option value="alerta">Semáforo: Alerta</option>
+              <option value="critico">Semáforo: Crítico</option>
+            </select>
           </div>
-          <select
-            value={occupationFilter}
-            onChange={(e) => setOccupationFilter(e.target.value as OccupationFilter)}
-            aria-label="Filtrar unidades de transporte por semáforo de ocupación"
-            className="mt-1.5 w-full bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
-          >
-            <option value="todos">Todos los semáforos</option>
-            <option value="vacio">Vacío</option>
-            <option value="normal">Normal</option>
-            <option value="alerta">Alerta</option>
-            <option value="critico">Crítico</option>
-          </select>
         </div>
       </div>
 
@@ -700,7 +759,7 @@ function VueloListPanel({
           <p className="text-center text-xs text-gray-500 py-8">
             {programacionesFiltradas.length > 0
               ? 'No hay vuelos activos para este filtro. Revisa la programación recurrente superior.'
-              : term ? 'No se encontraron vuelos' : 'No hay vuelos disponibles'}
+              : hasPanelSearch || hasPersistentFilters ? 'No se encontraron vuelos' : 'No hay vuelos disponibles'}
           </p>
         )}
 

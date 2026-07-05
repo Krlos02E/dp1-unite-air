@@ -45,12 +45,9 @@ const AIRPLANE_COLOR_GREEN = '#22c55e'
 const AIRPLANE_COLOR_YELLOW = '#eab308'
 const AIRPLANE_COLOR_RED = '#ef4444'
 const MAP_SELECTION_COLOR = '#8b5cf6'
-const MAP_SELECTION_SOFT = '#c4b5fd'
 const BASE_ICON_SIZE = 29
 const AIRPORT_ICON_RATIO = 0.9
 const ROUTE_POINT_COUNT = 28
-const ROUTE_UPDATE_INTERVAL_MS = 220
-const ROUTE_MIN_INDEX_DELTA = 2
 
 type RouteDisplayMode = 'all' | 'selected'
 type RouteDirectionFilter = 'both' | 'outbound' | 'inbound'
@@ -186,7 +183,6 @@ function applyTransform(mk: L.Marker, angle: number) {
 
 interface RoutePair {
   pending: L.Polyline
-  flown: L.Polyline | null
 }
 
 interface FlightAnim {
@@ -200,14 +196,26 @@ interface FlightAnim {
   transitionStartedAt: number
   transitionDurationMs: number
   snapshotAt: number
-  lastRouteIndex: number
-  lastRouteUpdatedAt: number
 }
 
 interface SimClockSnapshot {
   simulationTimeMs: number
   receivedAtMs: number
   rateMsPerRealMs: number
+}
+
+function buildPendingRoutePoints(
+  from: [number, number],
+  to: [number, number],
+  pts: [number, number][],
+  progress: number,
+): [number, number][] {
+  const clampedProgress = Math.max(0, Math.min(100, progress))
+  const tNorm = clampedProgress / 100
+  const currentPos = interpolatePosition(from, to, tNorm)
+  const splitIndex = Math.max(0, Math.min(pts.length - 1, Math.ceil(tNorm * (pts.length - 1))))
+  const tail = pts.slice(Math.min(splitIndex + 1, pts.length))
+  return [currentPos, ...tail]
 }
 
 function animatedProgress(anim: FlightAnim, now: number): number {
@@ -235,6 +243,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
   const airportLookup = useMemo(() => buildAirportLookup(aeropuertos), [aeropuertos])
   const selectedRouteRef = useRef<L.LayerGroup | null>(null)
   const selectedStopsLayerRef = useRef<L.LayerGroup | null>(null)
+  const selectedFlightRouteLineRef = useRef<L.Polyline | null>(null)
   const routeLayerRef = useRef<L.LayerGroup | null>(null)
   const routeLinesRef = useRef<Map<string, RoutePair>>(new Map())
   const flightAnimsRef = useRef<Map<string, FlightAnim>>(new Map())
@@ -255,11 +264,32 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
   const [selectedRouteAirports, setSelectedRouteAirports] = useState<string[]>([])
   const [showRouteFilterPanel, setShowRouteFilterPanel] = useState(false)
   const showRouteLinesRef = useRef(showRouteLines)
+  const previousShowRouteLinesRef = useRef(showRouteLines)
+  const autoDisabledRoutesForSelectionRef = useRef(false)
   const routeDisplayModeRef = useRef<RouteDisplayMode>(routeDisplayMode)
   const routeDirectionFilterRef = useRef<RouteDirectionFilter>(routeDirectionFilter)
   const selectedRouteAirportsRef = useRef<string[]>(selectedRouteAirports)
   const isZoomingRef = useRef(false)
   const simClockRef = useRef<SimClockSnapshot | null>(null)
+
+  const updateSelectedFlightRouteOverlay = (flightId: string, progress: number) => {
+    const selectedVuelo = persistentFlightsRef.current.get(flightId) ?? vuelos.find((v) => v.id === flightId)
+    const routeLine = selectedFlightRouteLineRef.current
+    if (!selectedVuelo || !routeLine) return
+    const from: [number, number] = [selectedVuelo.latOrigen, selectedVuelo.lonOrigen]
+    const to: [number, number] = [selectedVuelo.latDestino, selectedVuelo.lonDestino]
+    const pts = bezierPoints(from, to, 40)
+    const pendingPts = buildPendingRoutePoints(from, to, pts, progress)
+    routeLine.setLatLngs(pendingPts.length >= 2 ? pendingPts : [])
+  }
+
+  const updateBaseFlightRouteOverlay = (flightId: string, progress: number) => {
+    const anim = flightAnimsRef.current.get(flightId)
+    const pair = routeLinesRef.current.get(flightId)
+    if (!anim?.pts || !pair) return
+    const pendingPts = buildPendingRoutePoints(anim.from, anim.to, anim.pts, progress)
+    pair.pending.setLatLngs(pendingPts.length >= 2 ? pendingPts : [])
+  }
 
   const getSimulationNow = (frameNow?: number): Date | null => {
     if (!simulationMode) return null
@@ -315,6 +345,24 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
   }, [onVueloClick, onAeropuertoClick, velocidad, selectedVueloId, selectedAeropuertoId, showRouteLines, routeDisplayMode, routeDirectionFilter, selectedRouteAirports])
 
   useEffect(() => {
+    if (selectedVueloId) {
+      if (!autoDisabledRoutesForSelectionRef.current) {
+        previousShowRouteLinesRef.current = showRouteLinesRef.current
+        autoDisabledRoutesForSelectionRef.current = true
+      }
+      if (showRouteLinesRef.current) {
+        setShowRouteLines(false)
+      }
+      return
+    }
+
+    if (autoDisabledRoutesForSelectionRef.current) {
+      autoDisabledRoutesForSelectionRef.current = false
+      setShowRouteLines(previousShowRouteLinesRef.current)
+    }
+  }, [selectedVueloId])
+
+  useEffect(() => {
     if (!simulationMode || !simulationTime) {
       simClockRef.current = null
       return
@@ -344,14 +392,12 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
     const pair = routeLinesRef.current.get(id)
     if (!pair) return
     routeLayerRef.current?.removeLayer(pair.pending)
-    if (pair.flown) routeLayerRef.current?.removeLayer(pair.flown)
     routeLinesRef.current.delete(id)
   }
 
   function removeAllRoutes() {
     routeLinesRef.current.forEach((pair) => {
       routeLayerRef.current?.removeLayer(pair.pending)
-      if (pair.flown) routeLayerRef.current?.removeLayer(pair.flown)
     })
     routeLinesRef.current.clear()
   }
@@ -469,15 +515,24 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         isZoomingRef.current = true
         routeLinesRef.current.forEach((pair) => {
           pair.pending.setStyle({ opacity: 0 })
-          if (pair.flown) pair.flown.setStyle({ opacity: 0 })
         })
+        selectedFlightRouteLineRef.current?.setStyle({ opacity: 0 })
       })
 
       map.on('zoomend', () => {
-        routeLinesRef.current.forEach((pair) => {
+        routeLinesRef.current.forEach((pair, id) => {
+          const anim = flightAnimsRef.current.get(id)
+          if (anim) {
+            updateBaseFlightRouteOverlay(id, anim.displayedProgress)
+          }
           pair.pending.setStyle({ opacity: showRouteLinesRef.current ? 0.25 : 0 })
-          if (pair.flown) pair.flown.setStyle({ opacity: showRouteLinesRef.current ? 0 : 0 })
         })
+        if (selectedVueloIdRef.current && selectedFlightRouteLineRef.current) {
+          const anim = flightAnimsRef.current.get(selectedVueloIdRef.current)
+          const progress = anim?.displayedProgress ?? 0
+          updateSelectedFlightRouteOverlay(selectedVueloIdRef.current, progress)
+          selectedFlightRouteLineRef.current.setStyle({ opacity: 0.95 })
+        }
         isZoomingRef.current = false
         map.setMaxBounds(WORLD_BOUNDS)
       })
@@ -564,16 +619,6 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
   useEffect(() => {
     if (!mapRef.current) return
     const simulationNow = simulationMode ? getSimulationNow() : null
-
-    if (selectedRouteRef.current) {
-      mapRef.current.removeLayer(selectedRouteRef.current)
-      selectedRouteRef.current = null
-    }
-    if (selectedStopsLayerRef.current) {
-      mapRef.current.removeLayer(selectedStopsLayerRef.current)
-      selectedStopsLayerRef.current = null
-    }
-
     const selection = selectedEnvio
       ? `envio:${selectedEnvio.id}:${selectedEnvioRouteMode}`
       : selectedVueloId
@@ -581,6 +626,19 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       : selectedAeropuertoId
         ? `aeropuerto:${selectedAeropuertoId}`
         : null
+    const selectionChanged = selection !== prevSelectionRef.current
+
+    if (selectionChanged) {
+      if (selectedRouteRef.current) {
+        mapRef.current.removeLayer(selectedRouteRef.current)
+        selectedRouteRef.current = null
+        selectedFlightRouteLineRef.current = null
+      }
+      if (selectedStopsLayerRef.current) {
+        mapRef.current.removeLayer(selectedStopsLayerRef.current)
+        selectedStopsLayerRef.current = null
+      }
+    }
 
     if (selection && prevSelectionRef.current === null) {
       prevViewRef.current = { center: mapRef.current.getCenter(), zoom: mapRef.current.getZoom() }
@@ -601,38 +659,40 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
 
       if (points.length >= 2 && mapRef.current) {
         const latLngs = points.map((point) => point.coords)
-        if (selection !== prevSelectionRef.current) {
+        if (selectionChanged) {
           mapRef.current.fitBounds(L.latLngBounds(latLngs), { padding: [40, 40], animate: true, maxZoom: 5 })
         }
 
-        const selectedRouteLayer = L.layerGroup().addTo(mapRef.current)
-        L.polyline(latLngs, {
-          color: selectedEnvioRouteMode === 'anterior' ? '#f97316' : MAP_SELECTION_COLOR,
-          weight: 3,
-          opacity: 0.95,
-          dashArray: selectedEnvioRouteMode === 'anterior' ? '8, 8' : undefined,
-        }).addTo(selectedRouteLayer)
-        selectedRouteRef.current = selectedRouteLayer
+        if (selectionChanged) {
+          const selectedRouteLayer = L.layerGroup().addTo(mapRef.current)
+          L.polyline(latLngs, {
+            color: selectedEnvioRouteMode === 'anterior' ? '#f97316' : MAP_SELECTION_COLOR,
+            weight: 3,
+            opacity: 0.95,
+            dashArray: selectedEnvioRouteMode === 'anterior' ? '8, 8' : undefined,
+          }).addTo(selectedRouteLayer)
+          selectedRouteRef.current = selectedRouteLayer
 
-        const stopsLayer = L.layerGroup().addTo(mapRef.current)
-        points.forEach((point, index) => {
-          const color = index === 0 ? '#22c55e' : index === points.length - 1 ? '#ef4444' : '#38bdf8'
-          const role = index === 0 ? 'Origen' : index === points.length - 1 ? 'Destino' : `Escala ${index}`
-          const flightId = routeFlights[index - 1]
-          const marker = L.circleMarker(point.coords, {
-            radius: index === 0 || index === points.length - 1 ? 8 : 6,
-            color,
-            fillColor: color,
-            fillOpacity: 0.35,
-            weight: 2,
-          }).bindTooltip([
-            `<b>${role}</b>`,
-            getAirportCityResolved(point.code, airportLookup) || point.code,
-            flightId ? `UT: ${flightId}` : null,
-          ].filter(Boolean).join('<br>'))
-          stopsLayer.addLayer(marker)
-        })
-        selectedStopsLayerRef.current = stopsLayer
+          const stopsLayer = L.layerGroup().addTo(mapRef.current)
+          points.forEach((point, index) => {
+            const color = index === 0 ? '#22c55e' : index === points.length - 1 ? '#ef4444' : '#38bdf8'
+            const role = index === 0 ? 'Origen' : index === points.length - 1 ? 'Destino' : `Escala ${index}`
+            const flightId = routeFlights[index - 1]
+            const marker = L.circleMarker(point.coords, {
+              radius: index === 0 || index === points.length - 1 ? 8 : 6,
+              color,
+              fillColor: color,
+              fillOpacity: 0.35,
+              weight: 2,
+            }).bindTooltip([
+              `<b>${role}</b>`,
+              getAirportCityResolved(point.code, airportLookup) || point.code,
+              flightId ? `UT: ${flightId}` : null,
+            ].filter(Boolean).join('<br>'))
+            stopsLayer.addLayer(marker)
+          })
+          selectedStopsLayerRef.current = stopsLayer
+        }
       }
     } else if (selectedVueloId) {
       const selectedVuelo = persistentFlightsRef.current.get(selectedVueloId) ?? vuelos.find((v) => v.id === selectedVueloId)
@@ -642,57 +702,48 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         const anim = flightAnimsRef.current.get(selectedVueloId)
         const progress = anim?.displayedProgress ?? (simulationNow ? calcularProgresoEnSimulacion(selectedVuelo, simulationNow) : selectedVuelo.progresoVuelo)
         const pos = interpolatePosition(from, to, progress / 100)
-        if (selection !== prevSelectionRef.current) {
+        if (selectionChanged) {
           mapRef.current.setView(pos, Math.min(mapRef.current.getZoom() + 1, 5), { animate: true })
         }
-        const pts = bezierPoints(from, to, 40)
-        const splitIndex = Math.max(0, Math.min(pts.length - 1, Math.round((progress / 100) * (pts.length - 1))))
-        const traveledPts = pts.slice(0, splitIndex + 1)
-        const pendingPts = pts.slice(splitIndex)
-        const selectedRouteLayer = L.layerGroup().addTo(mapRef.current)
+        if (selectionChanged) {
+          const pts = bezierPoints(from, to, 40)
+          const pendingPts = buildPendingRoutePoints(from, to, pts, progress)
+          const selectedRouteLayer = L.layerGroup().addTo(mapRef.current)
 
-        if (traveledPts.length >= 2) {
-          L.polyline(traveledPts, {
-            dashArray: '2, 8',
-            color: MAP_SELECTION_SOFT,
-            weight: 3,
-            opacity: 0.75,
-            lineCap: 'round',
-          }).addTo(selectedRouteLayer)
+          if (pendingPts.length >= 2) {
+            const routeLine = L.polyline(pendingPts, {
+              dashArray: '6, 8',
+              color: MAP_SELECTION_COLOR,
+              weight: 3,
+              opacity: 0.95,
+              lineCap: 'round',
+            }).addTo(selectedRouteLayer)
+            selectedFlightRouteLineRef.current = routeLine
+          }
+
+          selectedRouteRef.current = selectedRouteLayer
+
+          const stopsLayer = L.layerGroup().addTo(mapRef.current)
+          stopsLayer.addLayer(L.circleMarker(from, {
+            radius: 8,
+            color: '#22c55e',
+            fillColor: '#22c55e',
+            fillOpacity: 0.3,
+            weight: 2,
+          }))
+          stopsLayer.addLayer(L.circleMarker(to, {
+            radius: 8,
+            color: '#ef4444',
+            fillColor: '#ef4444',
+            fillOpacity: 0.3,
+            weight: 2,
+          }))
+          selectedStopsLayerRef.current = stopsLayer
         }
-
-        if (pendingPts.length >= 2) {
-          L.polyline(pendingPts, {
-            dashArray: '6, 8',
-            color: MAP_SELECTION_COLOR,
-            weight: 3,
-            opacity: 0.95,
-            lineCap: 'round',
-          }).addTo(selectedRouteLayer)
-        }
-
-        selectedRouteRef.current = selectedRouteLayer
-
-        const stopsLayer = L.layerGroup().addTo(mapRef.current)
-        stopsLayer.addLayer(L.circleMarker(from, {
-          radius: 8,
-          color: '#22c55e',
-          fillColor: '#22c55e',
-          fillOpacity: 0.3,
-          weight: 2,
-        }))
-        stopsLayer.addLayer(L.circleMarker(to, {
-          radius: 8,
-          color: '#ef4444',
-          fillColor: '#ef4444',
-          fillOpacity: 0.3,
-          weight: 2,
-        }))
-        selectedStopsLayerRef.current = stopsLayer
       }
     } else if (selectedAeropuertoId) {
       const marker = airportMarkersRef.current.get(selectedAeropuertoId)
-      if (marker && selection !== prevSelectionRef.current) {
+      if (marker && selectionChanged) {
         mapRef.current.setView(marker.getLatLng(), Math.min(mapRef.current.getZoom() + 1, 5), { animate: true })
       }
     } else if (prevSelectionRef.current !== null && prevViewRef.current) {
@@ -752,7 +803,6 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
           if (element) element.style.pointerEvents = 'none'
           const route = routeLinesRef.current.get(id)
           route?.pending.setStyle({ opacity: 0 })
-          route?.flown?.setStyle({ opacity: 0 })
         }
       })
 
@@ -793,8 +843,6 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
           transitionStartedAt: frameNow,
           transitionDurationMs: 1,
           snapshotAt: frameNow,
-          lastRouteIndex: -1,
-          lastRouteUpdatedAt: 0,
         })
       }
 
@@ -834,7 +882,6 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       const vuelo = flightAnimsRef.current.get(id)?.vuelo
       const visible = vuelo ? shouldDisplayRouteForFlight(vuelo) : false
       pair.pending.setStyle({ opacity: visible ? 0.25 : 0 })
-      if (pair.flown) pair.flown.setStyle({ opacity: visible ? 0 : 0 })
     })
   }, [showRouteLines, routeDisplayMode, routeDirectionFilter, selectedRouteAirports])
 
@@ -856,6 +903,9 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
           ? (simulationNow ? calcularProgresoEnSimulacion(anim.vuelo, simulationNow) : animatedProgress(anim, frameNow))
           : calcularProgresoLocal(anim.vuelo, realNow!)
         anim.displayedProgress = currentProgress
+        if (id === selectedVueloIdRef.current) {
+          updateSelectedFlightRouteOverlay(id, currentProgress)
+        }
         if (currentProgress >= 100) {
           markerLayerRef.current?.removeLayer(mk)
           flightMarkersRef.current.delete(id)
@@ -885,75 +935,29 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
 
           if (!pair) {
             if (routeVisible) {
-              const pendingLine = L.polyline(anim.pts, {
+              const pendingLine = L.polyline(buildPendingRoutePoints(anim.from, anim.to, anim.pts, currentProgress), {
                 dashArray: '4, 6',
                 color: '#6b7280',
                 weight: 1.5,
                 opacity: 0.25,
               })
               routeLayerRef.current?.addLayer(pendingLine)
-              const newPair: RoutePair = { pending: pendingLine, flown: null }
-              if (splitIndex > 0) {
-                const flownPts = anim.pts.slice(0, splitIndex + 1)
-                const flownLine = L.polyline(flownPts, {
-                  dashArray: '1, 8',
-                  color: '#6b7280',
-                  weight: 1.5,
-                  opacity: 0,
-                  lineCap: 'round',
-                })
-                routeLayerRef.current?.addLayer(flownLine)
-                newPair.flown = flownLine
-              }
-              routeLinesRef.current.set(id, newPair)
+          routeLinesRef.current.set(id, { pending: pendingLine })
             }
-            anim.lastRouteIndex = splitIndex
-            anim.lastRouteUpdatedAt = frameNow
             return
           }
 
           if (!routeVisible) {
             pair.pending.setStyle({ opacity: 0 })
-            if (pair.flown) pair.flown.setStyle({ opacity: 0 })
             return
           }
 
-          const routeIndexDelta = Math.abs(splitIndex - anim.lastRouteIndex)
-          const routeUpdateElapsed = frameNow - anim.lastRouteUpdatedAt
-          if (
-            splitIndex === anim.lastRouteIndex
-            || (
-              routeIndexDelta < ROUTE_MIN_INDEX_DELTA
-              && routeUpdateElapsed < ROUTE_UPDATE_INTERVAL_MS
-            )
-          ) {
+          if (splitIndex >= anim.pts.length) {
             return
           }
 
-          anim.lastRouteIndex = splitIndex
-          anim.lastRouteUpdatedAt = frameNow
-
-          if (splitIndex < anim.pts.length) {
-            pair.pending.setLatLngs(anim.pts.slice(splitIndex))
-            pair.pending.setStyle({ opacity: 0.25 })
-          }
-          if (splitIndex > 0) {
-            const flownPts = anim.pts.slice(0, splitIndex + 1)
-            if (pair.flown) {
-              pair.flown.setLatLngs(flownPts)
-              pair.flown.setStyle({ opacity: 0 })
-            } else {
-              const flownLine = L.polyline(flownPts, {
-                dashArray: '1, 8',
-                color: '#6b7280',
-                weight: 1.5,
-                opacity: 0,
-                lineCap: 'round',
-              })
-              routeLayerRef.current?.addLayer(flownLine)
-              pair.flown = flownLine
-            }
-          }
+          pair.pending.setLatLngs(anim.pts.slice(splitIndex))
+          pair.pending.setStyle({ opacity: 0.25 })
         }
       })
 
