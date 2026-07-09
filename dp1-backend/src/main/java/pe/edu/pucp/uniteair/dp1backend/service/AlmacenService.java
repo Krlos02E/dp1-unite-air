@@ -151,7 +151,7 @@ public class AlmacenService {
 
     @Transactional
     public Almacen crear(AlmacenContexto contexto, Almacen almacen) {
-        validarDatosAlmacen(almacen, false);
+        validarDatosAlmacen(contexto, almacen, false);
         if (almacenConfiguracionRepository.existsByContextoAndCodigoOACI(contexto, almacen.getCodigoOACI())) {
             throw new IllegalArgumentException(
                     "Ya existe una configuración de almacén para " + almacen.getCodigoOACI()
@@ -177,7 +177,7 @@ public class AlmacenService {
 
     @Transactional
     public Almacen actualizar(AlmacenContexto contexto, String codigoOACI, Almacen datos) {
-        validarDatosAlmacen(datos, true);
+        validarDatosAlmacen(contexto, datos, true);
         AlmacenConfiguracion configuracion = almacenConfiguracionRepository
                 .findByContextoAndCodigoOACI(contexto, codigoOACI)
                 .orElseGet(() -> AlmacenConfiguracion.builder()
@@ -285,7 +285,7 @@ public class AlmacenService {
                 .build();
     }
 
-    private void validarDatosAlmacen(Almacen almacen, boolean actualizacion) {
+    private void validarDatosAlmacen(AlmacenContexto contexto, Almacen almacen, boolean actualizacion) {
         String codigo = almacen.getCodigoOACI();
         if (!actualizacion && (codigo == null || !codigo.matches("[A-Z0-9]{4}"))) {
             throw new IllegalArgumentException("El código OACI debe tener exactamente 4 caracteres alfanuméricos en mayúscula");
@@ -295,6 +295,14 @@ public class AlmacenService {
         }
         if (almacen.getCapacidadMaxima() <= 0) {
             throw new IllegalArgumentException("La capacidad máxima debe ser mayor que 0");
+        }
+        if (actualizacion && contexto == AlmacenContexto.OPERACION && codigo != null && !codigo.isBlank()) {
+            int ocupacionActual = cargaArchivosService.getOcupacionAeropuerto(codigo, java.time.LocalDateTime.now(java.time.ZoneOffset.UTC));
+            if (almacen.getCapacidadMaxima() < ocupacionActual) {
+                throw new IllegalArgumentException(
+                        "La capacidad no puede ser menor que la ocupación actual del almacén (" + ocupacionActual + " maletas)"
+                );
+            }
         }
     }
 

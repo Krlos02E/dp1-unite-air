@@ -41,6 +41,7 @@ export interface AlmacenDTO {
   latitud: number;
   longitud: number;
   editable?: boolean;
+  ocupacionActual?: number;
 }
 
 export type AlmacenContexto = 'OPERACION' | 'SIMULACION';

@@ -78,6 +78,10 @@ export default function AlmacenFormModal({ isOpen, onClose, onSave, almacen }: P
       setError('La capacidad debe ser mayor que 0')
       return
     }
+    if ((almacen?.ocupacionActual ?? 0) > capacidadMaxima) {
+      setError(`La capacidad no puede ser menor que la ocupación actual del almacén (${almacen?.ocupacionActual} maletas)`)
+      return
+    }
     const lat = parseFloat(latitud)
     const lon = parseFloat(longitud)
     if (isNaN(lat) || isNaN(lon)) {

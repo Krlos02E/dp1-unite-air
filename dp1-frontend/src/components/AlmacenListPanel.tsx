@@ -478,6 +478,7 @@ export default function AlmacenListPanel({
                           latitud: almacenDB?.latitud || a.latitud,
                           longitud: almacenDB?.longitud || a.longitud,
                           editable: almacenDB?.editable,
+                          ocupacionActual: a.ocupacionActual,
                         })
                         setShowForm(true)
                       }}
