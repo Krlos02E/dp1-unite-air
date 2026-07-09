@@ -55,6 +55,19 @@ export interface ProgramacionVueloDTO {
   capacidad: number;
 }
 
+export interface PlanificacionLogDTO {
+  id: number;
+  timestampEjecucion: string;
+  duracionMs: number;
+  paquetesProcesados: number;
+  rutasAsignadas: number;
+  paquetesNoAsignados: number;
+  costoTotal: number;
+  estado: string;
+  mensajeError?: string | null;
+  detallesJson?: string | null;
+}
+
 export interface LogEntry {
   timestamp: string;
   tipo: 'INFO' | 'WARN' | 'ERROR' | 'COLAPSO';

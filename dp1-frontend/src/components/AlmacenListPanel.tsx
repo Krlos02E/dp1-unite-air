@@ -141,12 +141,53 @@ export default function AlmacenListPanel({
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [showAll, setShowAll] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [pendingReplanBaseLogId, setPendingReplanBaseLogId] = useState<number | null>(null)
+  const [pendingSyncMessage, setPendingSyncMessage] = useState<string | null>(null)
 
   useEffect(() => {
     cargaArchivosService.obtenerAlmacenes(contexto)
       .then(setAlmacenesDB)
       .catch(() => {})
   }, [contexto])
+
+  useEffect(() => {
+    if (contexto !== 'OPERACION' || pendingReplanBaseLogId == null || !onDataChanged) return
+
+    let cancelled = false
+
+    const pollForReplan = async () => {
+      try {
+        const logs = await cargaArchivosService.obtenerLogsPlanificacion()
+        const latestLogId = logs[0]?.id ?? 0
+        if (latestLogId <= pendingReplanBaseLogId) return
+
+        const refreshedAeropuertos = await cargaArchivosService.obtenerAeropuertos(contexto)
+        if (cancelled) return
+        await onDataChanged(refreshedAeropuertos)
+        if (cancelled) return
+        setPendingReplanBaseLogId(null)
+        setPendingSyncMessage(null)
+      } catch {
+        // Keep polling; a transient failure should not drop the pending refresh.
+      }
+    }
+
+    void pollForReplan()
+    const intervalId = window.setInterval(() => {
+      void pollForReplan()
+    }, 15000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(intervalId)
+    }
+  }, [contexto, pendingReplanBaseLogId, onDataChanged])
+
+  const scheduleOperationalRefresh = async (message: string) => {
+    const logs = await cargaArchivosService.obtenerLogsPlanificacion()
+    setPendingReplanBaseLogId(logs[0]?.id ?? 0)
+    setPendingSyncMessage(message)
+  }
 
   const deferredSearch = useDeferredValue(search)
 
@@ -276,7 +317,9 @@ export default function AlmacenListPanel({
     }
     const updated = await cargaArchivosService.obtenerAlmacenes(contexto)
     setAlmacenesDB(updated)
-    if (onDataChanged) {
+    if (contexto === 'OPERACION' && onDataChanged) {
+      await scheduleOperationalRefresh('Cambios guardados. El mapa y el detalle operativo se actualizarán después de la próxima replanificación programada.')
+    } else if (onDataChanged) {
       const refreshedAeropuertos = await cargaArchivosService.obtenerAeropuertos(contexto)
       await onDataChanged(refreshedAeropuertos)
     }
@@ -287,7 +330,9 @@ export default function AlmacenListPanel({
       await cargaArchivosService.eliminarAlmacen(codigo, contexto)
       const updated = await cargaArchivosService.obtenerAlmacenes(contexto)
       setAlmacenesDB(updated)
-      if (onDataChanged) {
+      if (contexto === 'OPERACION' && onDataChanged) {
+        await scheduleOperationalRefresh('El almacén se eliminó. El mapa y el detalle operativo se actualizarán después de la próxima replanificación programada.')
+      } else if (onDataChanged) {
         const refreshedAeropuertos = await cargaArchivosService.obtenerAeropuertos(contexto)
         await onDataChanged(refreshedAeropuertos)
       }
@@ -386,6 +431,11 @@ export default function AlmacenListPanel({
         {deleteError && (
           <div className="mt-2 rounded-lg border border-red-700 bg-red-900/40 px-3 py-2 text-xs text-red-300">
             {deleteError}
+          </div>
+        )}
+        {pendingSyncMessage && (
+          <div className="mt-2 rounded-lg border border-amber-700 bg-amber-900/30 px-3 py-2 text-xs text-amber-200">
+            {pendingSyncMessage}
           </div>
         )}
       </div>

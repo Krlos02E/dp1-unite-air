@@ -111,9 +111,6 @@ public class VueloController {
     ) {
         try {
             ProgramacionVueloDTO response = programacionVueloService.crear(contexto, request);
-            if (contexto == AlmacenContexto.OPERACION) {
-                cargaArchivosService.replanificarOperacionActual();
-            }
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of(
@@ -131,9 +128,6 @@ public class VueloController {
     ) {
         try {
             ProgramacionVueloDTO response = programacionVueloService.actualizar(contexto, id, request);
-            if (contexto == AlmacenContexto.OPERACION) {
-                cargaArchivosService.replanificarOperacionActual();
-            }
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of(
@@ -150,9 +144,6 @@ public class VueloController {
     ) {
         try {
             programacionVueloService.eliminar(contexto, id);
-            if (contexto == AlmacenContexto.OPERACION) {
-                cargaArchivosService.replanificarOperacionActual();
-            }
             return ResponseEntity.ok(Map.of("success", true));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of(

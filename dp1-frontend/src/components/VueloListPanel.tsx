@@ -175,6 +175,7 @@ function VueloListPanel({
   const [programacionesExpanded, setProgramacionesExpanded] = useState(false)
   const [cancellingFlightId, setCancellingFlightId] = useState<string | null>(null)
   const [flightMessage, setFlightMessage] = useState<{ tipo: 'success' | 'error'; texto: string } | null>(null)
+  const [pendingReplanBaseLogId, setPendingReplanBaseLogId] = useState<number | null>(null)
   const rowRefs = useRef(new Map<string, HTMLDivElement>())
   const contentRef = useRef<HTMLDivElement | null>(null)
   const airportLookup = useMemo(() => buildAirportLookup(aeropuertosDisponibles), [aeropuertosDisponibles])
@@ -205,6 +206,38 @@ function VueloListPanel({
       .then(setProgramaciones)
       .catch(() => {})
   }, [contexto])
+
+  useEffect(() => {
+    if (contexto !== 'OPERACION' || pendingReplanBaseLogId == null || !onDataChanged) return
+
+    let cancelled = false
+
+    const pollForReplan = async () => {
+      try {
+        const logs = await cargaArchivosService.obtenerLogsPlanificacion()
+        const latestLogId = logs[0]?.id ?? 0
+        if (latestLogId <= pendingReplanBaseLogId) return
+
+        if (cancelled) return
+        await onDataChanged()
+        if (cancelled) return
+        setPendingReplanBaseLogId(null)
+        setFlightMessage(null)
+      } catch {
+        // Keep polling until the scheduled replan becomes visible in logs.
+      }
+    }
+
+    void pollForReplan()
+    const intervalId = window.setInterval(() => {
+      void pollForReplan()
+    }, 15000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(intervalId)
+    }
+  }, [contexto, pendingReplanBaseLogId, onDataChanged])
 
   const enviosByFlight = useMemo(() => {
     const index = new Map<string, EnvioEstado[]>()
@@ -365,11 +398,14 @@ function VueloListPanel({
 
   const refreshProgramaciones = async () => {
     if (!contexto) return
-    const [programacionesActualizadas] = await Promise.all([
-      cargaArchivosService.obtenerProgramacionesVuelo(contexto),
-      onDataChanged?.(),
-    ])
+    const programacionesActualizadas = await cargaArchivosService.obtenerProgramacionesVuelo(contexto)
     setProgramaciones(programacionesActualizadas)
+  }
+
+  const scheduleOperationalRefresh = async (message: string) => {
+    const logs = await cargaArchivosService.obtenerLogsPlanificacion()
+    setPendingReplanBaseLogId(logs[0]?.id ?? 0)
+    setFlightMessage({ tipo: 'success', texto: message })
   }
 
   const handleProgramacionSave = async (data: ProgramacionVueloDTO) => {
@@ -380,12 +416,24 @@ function VueloListPanel({
       await cargaArchivosService.crearProgramacionVuelo(data, contexto)
     }
     await refreshProgramaciones()
+    if (contexto === 'OPERACION' && onDataChanged) {
+      await scheduleOperationalRefresh('UT guardada. Los vuelos operativos se actualizarán después de la próxima replanificación programada.')
+    } else {
+      setFlightMessage({ tipo: 'success', texto: 'UT guardada correctamente' })
+      await onDataChanged?.()
+    }
   }
 
   const handleDeleteProgramacion = async (id: number) => {
     if (!contexto) return
     await cargaArchivosService.eliminarProgramacionVuelo(id, contexto)
     await refreshProgramaciones()
+    if (contexto === 'OPERACION' && onDataChanged) {
+      await scheduleOperationalRefresh('UT eliminada. Los vuelos operativos se actualizarán después de la próxima replanificación programada.')
+    } else {
+      setFlightMessage({ tipo: 'success', texto: 'UT eliminada correctamente' })
+      await onDataChanged?.()
+    }
     setDeletingProgramacionId(null)
   }
 

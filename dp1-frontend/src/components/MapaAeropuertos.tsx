@@ -132,6 +132,14 @@ function calcularProgresoEnSimulacion(v: VueloDTO, simulationNow: Date): number 
   return calcularProgresoLocal(v, simulationNow)
 }
 
+function isFlightInProgress(vuelo: VueloDTO, simulationMode: boolean, referenceTime: Date | null): boolean {
+  if (vuelo.estado === 'CULMINADO' || vuelo.estado === 'CANCELADO') return false
+  const progress = simulationMode
+    ? (referenceTime ? calcularProgresoEnSimulacion(vuelo, referenceTime) : vuelo.progresoVuelo)
+    : calcularProgresoLocal(vuelo, referenceTime ?? new Date())
+  return progress > 0 && progress < 100
+}
+
 function normalizeSearch(text: string): string {
   return text
     .normalize('NFD')
@@ -276,6 +284,11 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
     const selectedVuelo = persistentFlightsRef.current.get(flightId) ?? vuelos.find((v) => v.id === flightId)
     const routeLine = selectedFlightRouteLineRef.current
     if (!selectedVuelo || !routeLine) return
+    if (progress <= 0 || progress >= 100 || selectedVuelo.estado === 'CULMINADO' || selectedVuelo.estado === 'CANCELADO') {
+      routeLine.setLatLngs([])
+      routeLine.setStyle({ opacity: 0 })
+      return
+    }
     const from: [number, number] = [selectedVuelo.latOrigen, selectedVuelo.lonOrigen]
     const to: [number, number] = [selectedVuelo.latDestino, selectedVuelo.lonDestino]
     const pts = bezierPoints(from, to, 40)
@@ -528,10 +541,16 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
           pair.pending.setStyle({ opacity: showRouteLinesRef.current ? 0.25 : 0 })
         })
         if (selectedVueloIdRef.current && selectedFlightRouteLineRef.current) {
+          const selectedVuelo = persistentFlightsRef.current.get(selectedVueloIdRef.current) ?? vuelos.find((v) => v.id === selectedVueloIdRef.current)
           const anim = flightAnimsRef.current.get(selectedVueloIdRef.current)
           const progress = anim?.displayedProgress ?? 0
-          updateSelectedFlightRouteOverlay(selectedVueloIdRef.current, progress)
-          selectedFlightRouteLineRef.current.setStyle({ opacity: 0.95 })
+          if (selectedVuelo && isFlightInProgress(selectedVuelo, simulationMode, getSimulationNow())) {
+            updateSelectedFlightRouteOverlay(selectedVueloIdRef.current, progress)
+            selectedFlightRouteLineRef.current.setStyle({ opacity: 0.95 })
+          } else {
+            selectedFlightRouteLineRef.current.setLatLngs([])
+            selectedFlightRouteLineRef.current.setStyle({ opacity: 0 })
+          }
         }
         isZoomingRef.current = false
         map.setMaxBounds(WORLD_BOUNDS)
@@ -696,7 +715,10 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       }
     } else if (selectedVueloId) {
       const selectedVuelo = persistentFlightsRef.current.get(selectedVueloId) ?? vuelos.find((v) => v.id === selectedVueloId)
-      if (selectedVuelo && mapRef.current) {
+      const selectedFlightActive = selectedVuelo
+        ? isFlightInProgress(selectedVuelo, simulationMode, simulationNow)
+        : false
+      if (selectedVuelo && selectedFlightActive && mapRef.current) {
         const from: [number, number] = [selectedVuelo.latOrigen, selectedVuelo.lonOrigen]
         const to: [number, number] = [selectedVuelo.latDestino, selectedVuelo.lonDestino]
         const anim = flightAnimsRef.current.get(selectedVueloId)
@@ -740,6 +762,9 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
           }))
           selectedStopsLayerRef.current = stopsLayer
         }
+      } else if (selectedFlightRouteLineRef.current) {
+        selectedFlightRouteLineRef.current.setLatLngs([])
+        selectedFlightRouteLineRef.current.setStyle({ opacity: 0 })
       }
     } else if (selectedAeropuertoId) {
       const marker = airportMarkersRef.current.get(selectedAeropuertoId)

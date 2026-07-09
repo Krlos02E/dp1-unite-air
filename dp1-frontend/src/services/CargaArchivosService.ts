@@ -13,6 +13,7 @@ import type {
   AlmacenDTO,
   AlmacenContexto,
   ProgramacionVueloDTO,
+  PlanificacionLogDTO,
 } from '../types'
 
 class CargaArchivosService extends HttpClient {
@@ -71,6 +72,10 @@ class CargaArchivosService extends HttpClient {
 
   eliminarProgramacionVuelo(id: number, contexto: AlmacenContexto = 'OPERACION'): Promise<void> {
     return this.instance.delete(`/vuelos/programaciones/${id}`, { params: { contexto } }).then(() => undefined)
+  }
+
+  obtenerLogsPlanificacion(): Promise<PlanificacionLogDTO[]> {
+    return this.get<PlanificacionLogDTO[]>('/planificacion/logs')
   }
 
   agregarEnvios(envios: EnvioEntrada[]): Promise<AgregarEnviosResult> {
