@@ -195,6 +195,8 @@ export default function Simulacion() {
       setSelectedMaleta(null)
       setSelectedEnvioRouteMode('actual')
       setSelectedMaletaRouteMode('actual')
+      setPanelMode('aviones')
+      setPanelCollapsed(false)
     }
   }, [simulationState])
 
@@ -256,6 +258,8 @@ export default function Simulacion() {
   const hasShownResults = useRef(false)
   const [resultSnapshot, setResultSnapshot] = useState<SimulationState | null>(null)
 
+  const hasSimulationStarted = Boolean(sessionId || simulationState)
+
   const aeropuertos = useMemo(() => {
     const base = simulationState?.aeropuertos?.length ? simulationState.aeropuertos : []
     const map = new Map<string, AeropuertoDTO>()
@@ -271,10 +275,17 @@ export default function Simulacion() {
     return Array.from(map.values())
   }, [simulationState?.aeropuertos, aeropuertosEstaticos])
 
+  useEffect(() => {
+    if (!selectedAeropuerto) return
+    const actualizado = aeropuertos.find((a) => a.codigoOACI === selectedAeropuerto.codigoOACI)
+    if (actualizado && actualizado !== selectedAeropuerto) {
+      setSelectedAeropuerto(actualizado)
+    }
+  }, [aeropuertos, selectedAeropuerto])
+
   const isCompleted = simulationState?.status === 'COMPLETADA' || (simulationState && simulationState.progreso >= 100)
   const isColapsada = simulationState?.status === 'COLAPSADA'
   const isError = simulationState?.status === 'ERROR'
-  const hasSimulationStarted = Boolean(sessionId || simulationState)
 
   // Restore config from sessionStorage on mount
   useEffect(() => {
@@ -321,18 +332,29 @@ export default function Simulacion() {
     return () => { cancelled = true }
   }, [startPolling, resetSimulation])
 
+  const vuelos = useMemo(() => {
+    if (!hasSimulationStarted) return EMPTY_FLIGHTS
+
+    const combinados = new Map<string, VueloDTO>()
+    vuelosEstaticos.forEach((vuelo) => {
+      combinados.set(vuelo.id, vuelo)
+    })
+    simulationState?.vuelos?.forEach((vuelo) => {
+      combinados.set(vuelo.id, vuelo)
+    })
+    return Array.from(combinados.values())
+  }, [hasSimulationStarted, simulationState?.vuelos, vuelosEstaticos])
+
   // Keep selected flight info synced with latest poll data
   useEffect(() => {
     if (!selectedVuelo) return
-    if (simulationState?.vuelos) {
-      const updated = simulationState.vuelos.find((v) => v.id === selectedVuelo.id)
-      if (updated) {
-        setSelectedVuelo(updated)
-      } else if (simulationState.status === 'COMPLETADA') {
-        setSelectedVuelo((prev) => (prev ? { ...prev, progresoVuelo: 100 } : prev))
-      }
+    const updated = vuelos.find((v) => v.id === selectedVuelo.id)
+    if (updated) {
+      setSelectedVuelo(updated)
+    } else if (simulationState?.status === 'COMPLETADA') {
+      setSelectedVuelo((prev) => (prev ? { ...prev, progresoVuelo: 100 } : prev))
     }
-  }, [simulationState?.vuelos, simulationState?.status])
+  }, [vuelos, simulationState?.status, selectedVuelo])
 
   // Show results modal when simulation completes
   useEffect(() => {
@@ -458,9 +480,6 @@ export default function Simulacion() {
     return () => window.clearTimeout(timeoutId)
   }, [panelCollapsed])
 
-  const vuelos = hasSimulationStarted
-    ? (simulationState?.vuelos?.length ? simulationState.vuelos : vuelosEstaticos || EMPTY_FLIGHTS)
-    : EMPTY_FLIGHTS
   const enviosActivos = hasSimulationStarted ? (simulationState?.envios || []) : []
   const maletasActivas = hasSimulationStarted ? (simulationState?.maletas || []) : []
 

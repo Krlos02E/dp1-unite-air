@@ -466,15 +466,21 @@ export default function AlmacenListPanel({
                   </div>
                   <div className="flex gap-1 flex-shrink-0">
                     <button
-                      onClick={(e) => { e.stopPropagation(); setEditingAlmacen(almacenDB || {
-                        codigoOACI: a.codigoOACI,
-                        ciudad, pais: a.pais || '',
-                        continente: '',
-                        gmtOffsetMinutos: 0,
-                        capacidadMaxima: a.capacidadMaxima,
-                        latitud: a.latitud,
-                        longitud: a.longitud,
-                      }); setShowForm(true) }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setEditingAlmacen({
+                          codigoOACI: a.codigoOACI,
+                          ciudad,
+                          pais,
+                          continente: almacenDB?.continente || a.continente || '',
+                          gmtOffsetMinutos: almacenDB?.gmtOffsetMinutos ?? 0,
+                          capacidadMaxima: almacenDB?.capacidadMaxima || a.capacidadMaxima,
+                          latitud: almacenDB?.latitud || a.latitud,
+                          longitud: almacenDB?.longitud || a.longitud,
+                          editable: almacenDB?.editable,
+                        })
+                        setShowForm(true)
+                      }}
                       className="text-[10px] text-gray-500 hover:text-sky-400 px-1 py-0.5 rounded transition-colors"
                       title="Editar"
                     >

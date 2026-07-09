@@ -246,6 +246,8 @@ export default function OperacionDiaria() {
       setSelectedMaleta(null)
       setSelectedEnvioRouteMode('actual')
       setSelectedMaletaRouteMode('actual')
+      setPanelMode('aviones')
+      setPanelCollapsed(false)
     }
   }, [vuelos])
 
@@ -396,6 +398,22 @@ export default function OperacionDiaria() {
     }, 15000)
     return () => clearInterval(interval)
   }, [dataLoaded])
+
+  useEffect(() => {
+    if (!selectedAeropuerto) return
+    const actualizado = aeropuertosEstaticos.find((a) => a.codigoOACI === selectedAeropuerto.codigoOACI)
+    if (actualizado && actualizado !== selectedAeropuerto) {
+      setSelectedAeropuerto(actualizado)
+    }
+  }, [aeropuertosEstaticos, selectedAeropuerto])
+
+  useEffect(() => {
+    if (!selectedVuelo) return
+    const actualizado = vuelos.find((v) => v.id === selectedVuelo.id)
+    if (actualizado && actualizado !== selectedVuelo) {
+      setSelectedVuelo(actualizado)
+    }
+  }, [vuelos, selectedVuelo])
 
   useEffect(() => {
     if (!panelCollapsed) {

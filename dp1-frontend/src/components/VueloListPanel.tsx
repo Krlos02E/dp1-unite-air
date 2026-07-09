@@ -172,6 +172,7 @@ function VueloListPanel({
   const [showProgramacionForm, setShowProgramacionForm] = useState(false)
   const [editingProgramacion, setEditingProgramacion] = useState<ProgramacionVueloDTO | null>(null)
   const [deletingProgramacionId, setDeletingProgramacionId] = useState<number | null>(null)
+  const [programacionesExpanded, setProgramacionesExpanded] = useState(false)
   const [cancellingFlightId, setCancellingFlightId] = useState<string | null>(null)
   const [flightMessage, setFlightMessage] = useState<{ tipo: 'success' | 'error'; texto: string } | null>(null)
   const rowRefs = useRef(new Map<string, HTMLDivElement>())
@@ -471,16 +472,28 @@ function VueloListPanel({
         )}
         {canManageTransportUnits && (
           <div className="mb-3 rounded-lg border border-gray-800 bg-gray-950/70 p-2">
-            <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setProgramacionesExpanded((current) => !current)}
+              className="flex w-full items-center justify-between gap-2 text-left"
+            >
               <span className="text-[10px] font-medium text-gray-300">Programación recurrente diaria</span>
-              <span className="text-[9px] text-gray-500">{programacionesFiltradas.length} de {programaciones.length}</span>
-            </div>
+              <span className="text-[9px] text-gray-500">
+                {programacionesFiltradas.length} de {programaciones.length} {programacionesExpanded ? '▼' : '▶'}
+              </span>
+            </button>
             {programaciones.length === 0 ? (
               <p className="mt-1 text-[10px] text-gray-500">No hay UT creadas por interfaz en este contexto.</p>
+            ) : !programacionesExpanded ? (
+              <p className="mt-1 text-[10px] text-gray-500">
+                {programacionesFiltradas.length === 0
+                  ? 'No hay UT creadas por interfaz que coincidan con el filtro actual.'
+                  : 'Expandir para ver y editar las UT creadas por interfaz.'}
+              </p>
             ) : programacionesFiltradas.length === 0 ? (
               <p className="mt-1 text-[10px] text-gray-500">No hay UT creadas por interfaz que coincidan con el filtro actual.</p>
             ) : (
-              <div className="mt-2 space-y-1.5">
+              <div className="mt-2 max-h-44 space-y-1.5 overflow-y-auto pr-1">
                 {programacionesFiltradas.map((programacion) => (
                   <div key={programacion.id} className="rounded-md border border-gray-800 bg-gray-900/80 px-2 py-1.5">
                     <div className="flex items-start justify-between gap-2">

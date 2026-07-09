@@ -137,7 +137,7 @@ public class CargaArchivosService {
         if (dataset == null || dataset.getPaquetes().isEmpty()) return;
         if (planificando) return;
         planificando = true;
-        Dataset datasetOperacion = datasetContextService.construirDatasetEfectivo(AlmacenContexto.OPERACION, dataset);
+        Dataset datasetOperacion = construirDatasetPlanificable(AlmacenContexto.OPERACION, dataset);
         executor.submit(() -> {
             try {
                 planificarDataset(datasetOperacion);
@@ -545,7 +545,7 @@ public class CargaArchivosService {
                 lastDataset.getVuelos(),
                 pendientes
             );
-            Dataset datasetPendientes = datasetContextService.construirDatasetEfectivo(
+            Dataset datasetPendientes = construirDatasetPlanificable(
                     AlmacenContexto.OPERACION,
                     datasetPendientesBase
             );
@@ -576,7 +576,7 @@ public class CargaArchivosService {
                 lastDataset.getVuelos(),
                 paquetesPlanificables
             );
-            Dataset datasetCompleto = datasetContextService.construirDatasetEfectivo(
+            Dataset datasetCompleto = construirDatasetPlanificable(
                     AlmacenContexto.OPERACION,
                     datasetCompletoBase
             );
@@ -875,6 +875,28 @@ public class CargaArchivosService {
         return vueloCanceladoRepository.findAllByContextoOrderBySalidaUtcAsc(contexto).stream()
                 .map(VueloCancelado::getVueloId)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private Dataset construirDatasetPlanificable(AlmacenContexto contexto, Dataset base) {
+        Dataset datasetEfectivo = datasetContextService.construirDatasetEfectivo(contexto, base);
+        if (datasetEfectivo == null) {
+            return new Dataset(Map.of(), List.of(), List.of());
+        }
+
+        Set<String> vuelosCancelados = obtenerVuelosCancelados(contexto);
+        if (vuelosCancelados.isEmpty()) {
+            return datasetEfectivo;
+        }
+
+        List<Vuelo> vuelosDisponibles = datasetEfectivo.getVuelos().stream()
+                .filter(vuelo -> !vuelosCancelados.contains(vuelo.getId()))
+                .toList();
+
+        return new Dataset(
+                datasetEfectivo.getAeropuertos(),
+                vuelosDisponibles,
+                datasetEfectivo.getPaquetes()
+        );
     }
 
     public synchronized boolean estaVueloCancelado(String vueloId, AlmacenContexto contexto) {

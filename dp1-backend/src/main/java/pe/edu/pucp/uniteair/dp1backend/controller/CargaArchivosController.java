@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -90,7 +91,9 @@ public class CargaArchivosController {
         if (contexto == AlmacenContexto.SIMULACION) {
             SimulationState estadoSimulacion = obtenerEstadoSimulacionActivo();
             if (estadoSimulacion != null && estadoSimulacion.getAeropuertos() != null) {
-                return ResponseEntity.ok(estadoSimulacion.getAeropuertos());
+                return ResponseEntity.ok(
+                        combinarAeropuertosConAlmacenes(estadoSimulacion.getAeropuertos(), contexto)
+                );
             }
         }
 
@@ -149,6 +152,62 @@ public class CargaArchivosController {
         return ResponseEntity.ok(aeropuertos);
     }
 
+    private List<AeropuertoDTO> combinarAeropuertosConAlmacenes(
+            List<AeropuertoDTO> baseAeropuertos,
+            AlmacenContexto contexto
+    ) {
+        Map<String, Almacen> almacenMap = almacenService.getMapaAlmacenes(contexto);
+        Map<String, AeropuertoDTO> combinados = new LinkedHashMap<>();
+
+        for (AeropuertoDTO aeropuerto : baseAeropuertos) {
+            Almacen almacen = almacenMap.get(aeropuerto.getCodigoOACI());
+            combinados.put(aeropuerto.getCodigoOACI(), aplicarAlmacenSobreAeropuerto(aeropuerto, almacen));
+        }
+
+        for (Almacen almacen : almacenMap.values()) {
+            combinados.computeIfAbsent(
+                    almacen.getCodigoOACI(),
+                    codigo -> aplicarAlmacenSobreAeropuerto(
+                            AeropuertoDTO.builder()
+                                    .codigoOACI(codigo)
+                                    .ocupacionActual(0)
+                                    .vuelosEntrantes(List.of())
+                                    .vuelosSalientes(List.of())
+                                    .vuelosCanceladosSalientes(List.of())
+                                    .build(),
+                            almacen
+                    )
+            );
+        }
+
+        return new ArrayList<>(combinados.values());
+    }
+
+    private AeropuertoDTO aplicarAlmacenSobreAeropuerto(AeropuertoDTO base, Almacen almacen) {
+        if (almacen == null) {
+            return base;
+        }
+
+        double latitud = almacen.getLatitud();
+        double longitud = almacen.getLongitud();
+        int capacidadMaxima = almacen.getCapacidadMaxima();
+
+        return AeropuertoDTO.builder()
+                .codigoOACI(base.getCodigoOACI())
+                .latitud(latitud != 0 ? latitud : base.getLatitud())
+                .longitud(longitud != 0 ? longitud : base.getLongitud())
+                .ciudad(almacen.getCiudad() != null ? almacen.getCiudad() : base.getCiudad())
+                .pais(almacen.getPais() != null ? almacen.getPais() : base.getPais())
+                .capacidadMaxima(capacidadMaxima > 0 ? capacidadMaxima : base.getCapacidadMaxima())
+                .ocupacionActual(base.getOcupacionActual())
+                .vuelosEntrantes(base.getVuelosEntrantes() != null ? base.getVuelosEntrantes() : List.of())
+                .vuelosSalientes(base.getVuelosSalientes() != null ? base.getVuelosSalientes() : List.of())
+                .vuelosCanceladosSalientes(
+                        base.getVuelosCanceladosSalientes() != null ? base.getVuelosCanceladosSalientes() : List.of()
+                )
+                .build();
+    }
+
     @GetMapping("/vuelos")
     public ResponseEntity<List<VueloDTO>> obtenerVuelos(
             @RequestParam(defaultValue = "OPERACION") AlmacenContexto contexto
@@ -157,19 +216,40 @@ public class CargaArchivosController {
         if (contexto == AlmacenContexto.SIMULACION) {
             SimulationState estadoSimulacion = obtenerEstadoSimulacionActivo();
             if (estadoSimulacion != null && estadoSimulacion.getVuelos() != null) {
-                return ResponseEntity.ok(estadoSimulacion.getVuelos());
+                List<VueloDTO> vuelosContexto = construirVuelosDTO(
+                        contexto,
+                        true,
+                        estadoSimulacion.getSimulationTime() != null
+                                ? estadoSimulacion.getSimulationTime()
+                                : LocalDateTime.now(ZoneOffset.UTC)
+                );
+                return ResponseEntity.ok(
+                        combinarVuelosConContexto(estadoSimulacion.getVuelos(), vuelosContexto)
+                );
             }
         }
 
+        return ResponseEntity.ok(
+                construirVuelosDTO(contexto, esSimulacion, LocalDateTime.now(ZoneOffset.UTC))
+        );
+    }
+
+    private List<VueloDTO> construirVuelosDTO(
+            AlmacenContexto contexto,
+            boolean esSimulacion,
+            LocalDateTime referenciaUtc
+    ) {
         Dataset dataset = datasetContextService.construirDatasetEfectivo(contexto, cargaArchivosService.obtenerUltimoDataset());
         if (dataset == null) {
-            return ResponseEntity.ok(List.of());
+            return List.of();
         }
+
         Set<String> vuelosCancelados = cargaArchivosService.obtenerVuelosCancelados(contexto);
         boolean operacionSoloManual = contexto == AlmacenContexto.OPERACION && !cargaArchivosService.usaPaquetesBaseEnOperacion();
-        LocalDateTime ahora = LocalDateTime.now(ZoneOffset.UTC);
+        LocalDateTime ahora = referenciaUtc != null ? referenciaUtc : LocalDateTime.now(ZoneOffset.UTC);
         Map<String, Almacen> almacenMap = almacenService.getMapaAlmacenes(contexto);
         List<VueloDTO> vuelos = new ArrayList<>();
+
         for (Vuelo v : dataset.getVuelos()) {
             double[] orig = AeropuertoCoordenadas.get(v.getOrigen().getCodigoOACI());
             double[] dest = AeropuertoCoordenadas.get(v.getDestino().getCodigoOACI());
@@ -216,7 +296,25 @@ public class CargaArchivosController {
                     .recurrente(editable)
                     .build());
         }
-        return ResponseEntity.ok(vuelos);
+
+        return vuelos;
+    }
+
+    private List<VueloDTO> combinarVuelosConContexto(
+            List<VueloDTO> vuelosEstado,
+            List<VueloDTO> vuelosContexto
+    ) {
+        Map<String, VueloDTO> combinados = new LinkedHashMap<>();
+
+        for (VueloDTO vuelo : vuelosContexto) {
+            combinados.put(vuelo.getId(), vuelo);
+        }
+
+        for (VueloDTO vuelo : vuelosEstado) {
+            combinados.put(vuelo.getId(), vuelo);
+        }
+
+        return new ArrayList<>(combinados.values());
     }
 
     private Long extraerProgramacionId(String vueloId) {

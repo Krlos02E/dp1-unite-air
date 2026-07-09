@@ -74,8 +74,8 @@ export default function AlmacenFormModal({ isOpen, onClose, onSave, almacen }: P
       setError('La ciudad es obligatoria')
       return
     }
-    if (capacidadMaxima < 100 || capacidadMaxima > 2000) {
-      setError('La capacidad debe estar entre 100 y 2000')
+    if (capacidadMaxima <= 0) {
+      setError('La capacidad debe ser mayor que 0')
       return
     }
     const lat = parseFloat(latitud)
@@ -189,8 +189,7 @@ export default function AlmacenFormModal({ isOpen, onClose, onSave, almacen }: P
                 type="number"
                 value={capacidadMaxima}
                 onChange={(e) => setCapacidadMaxima(Number(e.target.value))}
-                min={100}
-                max={2000}
+                min={1}
                 className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500"
               />
             </div>
