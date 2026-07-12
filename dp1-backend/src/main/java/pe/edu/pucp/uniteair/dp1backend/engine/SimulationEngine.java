@@ -37,8 +37,8 @@ import java.util.stream.Collectors;
 public class SimulationEngine {
 
 
-    private static final long REALTIME_REPLAN_INTERVAL_MS = 300_000L;
-    private static final int ROLLING_LOOKAHEAD_MINUTES = 1440;
+    private static final int REPLAN_SIM_INTERVAL_HOURS = 1;
+    private static final int ROLLING_LOOKAHEAD_MINUTES = 180;
     private static final int FLIGHT_WINDOW_LOOKBACK_HOURS = 24;
     private static final int FLIGHT_WINDOW_FORWARD_BUFFER_HOURS = 48;
 
@@ -268,7 +268,6 @@ public class SimulationEngine {
                 Set<String> rutasEntregadas = new HashSet<>();
                 LocalDateTime simTimeActual = simTimeRef[0];
                 int horaActual = horaRef[0];
-                long ultimaReplanificacionRealMs = System.currentTimeMillis();
                 final CompletableFuture<ReplanificacionResultado>[] replanFutureRef = new CompletableFuture[]{null};
 
                 MaletasResumen resumenInicio = calcularResumenMaletas(dataset, rutas, simTimeActual, fechaInicio);
@@ -353,10 +352,9 @@ public class SimulationEngine {
                     maletasEntregadas = resumenHora.entregadas();
                     maletasEnTransito = resumenHora.enTransito();
 
-                    // Re-planificacion cada 5 minutos reales con ventana rodante de 1.67 dias.
-                    long ahoraRealMs = System.currentTimeMillis();
+                    // Re-planificacion cada hora simulada con ventana rodante de 3 horas simuladas.
                     if (hora > horaActual
-                            && ahoraRealMs - ultimaReplanificacionRealMs >= REALTIME_REPLAN_INTERVAL_MS
+                            && hora % REPLAN_SIM_INTERVAL_HOURS == 0
                             && replanFutureRef[0] == null
                             && !cancellationFlags.getOrDefault(sessionId, false)) {
                         final Map<String, Ruta> rutasSnapshot = new HashMap<>(rutas);
@@ -378,7 +376,6 @@ public class SimulationEngine {
                                         fechaInicio
                                 )
                         );
-                        ultimaReplanificacionRealMs = ahoraRealMs;
                     }
 
 
