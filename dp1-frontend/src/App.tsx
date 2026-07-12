@@ -1,31 +1,24 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { SimulationProvider, useSimulation } from './context/SimulationContext'
 import GestionEnvios from './pages/GestionEnvios'
 import OperacionDiaria from './pages/OperacionDiaria'
 import Simulacion from './pages/Simulacion'
 import Colapso from './pages/Colapso'
-import { simulationService } from './services/SimulationService'
 
 type Page = 'carga' | 'operacion-diaria' | 'simulacion' | 'colapso'
 
 function App() {
-  const [checking, setChecking] = useState(true)
-
-  useEffect(() => {
-    simulationService.activa().then(() => {}).catch(() => {}).finally(() => setChecking(false))
-  }, [])
-
   return (
     <SimulationProvider>
-      <AppContent checking={checking} />
+      <AppContent />
     </SimulationProvider>
   )
 }
 
-function AppContent({ checking }: { checking: boolean }) {
+function AppContent() {
   const [page, setPage] = useState<Page>('operacion-diaria')
   const [showBlockModal, setShowBlockModal] = useState(false)
-  const { simulationState, isRunning } = useSimulation()
+  const { simulationState, activeSimulation, checkingActiveSimulation, isRunning } = useSimulation()
 
   const isFinished =
     simulationState?.status === 'COMPLETADA' ||
@@ -33,7 +26,8 @@ function AppContent({ checking }: { checking: boolean }) {
     simulationState?.status === 'ERROR' ||
     (simulationState && simulationState.progreso >= 100)
 
-  const isSimBlocking = isRunning && !isFinished
+  const isBackendSimActive = Boolean(activeSimulation?.activa && activeSimulation?.sessionId)
+  const isSimBlocking = isBackendSimActive || (isRunning && !isFinished)
 
   const handleNav = (p: Page) => () => {
     if (isSimBlocking && p !== 'simulacion') {
@@ -57,7 +51,7 @@ function AppContent({ checking }: { checking: boolean }) {
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
-      {checking ? (
+      {checkingActiveSimulation ? (
         <div className="flex items-center justify-center h-screen">
           <div className="w-8 h-8 border-4 border-sky-400 border-t-transparent rounded-full animate-spin" />
         </div>

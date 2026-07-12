@@ -34,12 +34,14 @@ const aeropuertosFallback: AeropuertoDTO[] = Object.values(AIRPORTS_DATA).map((a
 export default function Simulacion() {
   const {
     simulationState,
+    activeSimulation,
     startPolling,
     resetSimulation,
     elapsedRealSeconds,
     setIsPaused,
     setSimulationState,
     resetElapsedTimer,
+    refreshActiveSimulation,
   } = useSimulation()
   const [sessionId, setSessionId] = useState<string>('')
   const [aeropuertosEstaticos, setAeropuertosEstaticos] = useState<AeropuertoDTO[]>(aeropuertosFallback)
@@ -307,28 +309,35 @@ export default function Simulacion() {
   // Detectar simulación activa al montar (permite ver simulación en otros clientes)
   useEffect(() => {
     let cancelled = false
-    simulationService.activa().then((res) => {
+    const syncFromActiveSimulation = async () => {
       if (cancelled) return
       const stoppedSessionId = localStorage.getItem(SIM_STOPPED_KEY)
-      if (res.activa && res.sessionId) {
-        if (stoppedSessionId && stoppedSessionId === res.sessionId) {
+      if (activeSimulation?.activa && activeSimulation.sessionId) {
+        if (stoppedSessionId && stoppedSessionId === activeSimulation.sessionId) {
           resetSimulation()
           setSessionId('')
           setResultSnapshot(null)
           hasShownResults.current = false
           return
         }
-        setSessionId(res.sessionId)
-        startPolling(res.sessionId, undefined, res.startedAt, res.elapsedRealtimeSeconds)
-        if (res.simulationStartedAt) {
-          const parts = res.simulationStartedAt.split('T')
+        setSessionId(activeSimulation.sessionId)
+        if (sessionId !== activeSimulation.sessionId || simulationState?.sessionId !== activeSimulation.sessionId) {
+          startPolling(
+            activeSimulation.sessionId,
+            undefined,
+            activeSimulation.startedAt,
+            activeSimulation.elapsedRealtimeSeconds,
+          )
+        }
+        if (activeSimulation.simulationStartedAt) {
+          const parts = activeSimulation.simulationStartedAt.split('T')
           if (parts.length === 2) {
             setFechaInicio(parts[0])
             setHoraInicio(parts[1].substring(0, 5))
           }
         } else {
           const activeCfg = getActiveConfigFromStorage()
-          if (activeCfg?.sessionId === res.sessionId) {
+          if (activeCfg?.sessionId === activeSimulation.sessionId) {
             setFechaInicio(activeCfg.fechaInicio)
             setHoraInicio(activeCfg.horaInicio)
           }
@@ -336,9 +345,10 @@ export default function Simulacion() {
       } else if (stoppedSessionId) {
         localStorage.removeItem(SIM_STOPPED_KEY)
       }
-    }).catch(() => {})
+    }
+    void syncFromActiveSimulation()
     return () => { cancelled = true }
-  }, [startPolling, resetSimulation])
+  }, [activeSimulation, sessionId, simulationState?.sessionId, startPolling, resetSimulation])
 
   const vuelos = useMemo(() => {
     if (!hasSimulationStarted) return EMPTY_FLIGHTS
@@ -444,6 +454,7 @@ export default function Simulacion() {
       setResultSnapshot(null)
       setSessionId(state.sessionId)
       startPolling(state.sessionId, undefined, state.startedAt, state.elapsedRealtimeSeconds)
+      await refreshActiveSimulation()
     } catch (err: any) {
       const msg = err?.response?.data?.logs?.[0]?.mensaje
         || err?.response?.data?.message
@@ -473,6 +484,7 @@ export default function Simulacion() {
     setResultSnapshot(null)
     setShowResultados(false)
     setShowStopConfirm(false)
+    await refreshActiveSimulation()
   }
 
   const handleNuevaSimulacion = () => {
@@ -487,6 +499,7 @@ export default function Simulacion() {
     setResultSnapshot(null)
     setShowResultados(false)
     refreshSimulacionContextData().catch(() => {})
+    void refreshActiveSimulation()
   }
 
   const showActionButton = sessionId && !isColapsada && !isError

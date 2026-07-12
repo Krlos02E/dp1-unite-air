@@ -2,8 +2,20 @@ import { createContext, useContext, useRef, useState, useCallback, useEffect, ty
 import { simulationService } from '../services/SimulationService'
 import type { SimulationState } from '../types'
 
+interface ActiveSimulationInfo {
+  activa: boolean
+  sessionId?: string
+  status?: string
+  progreso?: number
+  startedAt?: string
+  simulationStartedAt?: string
+  elapsedRealtimeSeconds?: number
+}
+
 interface SimulationContextType {
   simulationState: SimulationState | null
+  activeSimulation: ActiveSimulationInfo | null
+  checkingActiveSimulation: boolean
   isRunning: boolean
   pollingInterval: number
   elapsedRealSeconds: number
@@ -16,12 +28,15 @@ interface SimulationContextType {
   startPolling: (sessionId: string, interval?: number, startedAt?: string, initialElapsed?: number) => void
   stopPolling: () => void
   resetSimulation: () => void
+  refreshActiveSimulation: () => Promise<void>
 }
 
 const SimulationContext = createContext<SimulationContextType | null>(null)
 
 export function SimulationProvider({ children }: { children: ReactNode }) {
   const [simulationState, setSimulationState] = useState<SimulationState | null>(null)
+  const [activeSimulation, setActiveSimulation] = useState<ActiveSimulationInfo | null>(null)
+  const [checkingActiveSimulation, setCheckingActiveSimulation] = useState(true)
   const [isRunning, setIsRunning] = useState(false)
   const [pollingInterval, setPollingInterval] = useState(1500)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -57,9 +72,27 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     serverPollTimeRef.current = 0
   }, [stopPolling])
 
+  const refreshActiveSimulation = useCallback(async () => {
+    try {
+      const state = await simulationService.activa()
+      setActiveSimulation(state)
+    } catch {
+      setActiveSimulation({ activa: false })
+    } finally {
+      setCheckingActiveSimulation(false)
+    }
+  }, [])
+
   const startPolling = useCallback((sessionId: string, interval?: number, startedAt?: string, initialElapsed?: number) => {
     stopPolling()
     setSimulationState(null)
+    setActiveSimulation((current) => ({
+      activa: true,
+      ...(current ?? {}),
+      sessionId,
+      startedAt: startedAt ?? current?.startedAt,
+      elapsedRealtimeSeconds: initialElapsed ?? current?.elapsedRealtimeSeconds,
+    }))
     setIsRunning(true)
     setIsPaused(false)
     if (initialElapsed !== undefined) {
@@ -105,6 +138,16 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     intervalRef.current = setInterval(poll, effectiveInterval)
   }, [pollingInterval, stopPolling])
 
+  useEffect(() => {
+    void refreshActiveSimulation()
+
+    const intervalId = window.setInterval(() => {
+      void refreshActiveSimulation()
+    }, 5000)
+
+    return () => window.clearInterval(intervalId)
+  }, [refreshActiveSimulation])
+
   // Timer: uses server elapsedRealtimeSeconds as base and interpolates between polls
   useEffect(() => {
     const isFinished = simulationState?.status === 'COMPLETADA' || simulationState?.status === 'COLAPSADA' || simulationState?.status === 'ERROR' || (simulationState && simulationState.progreso >= 100)
@@ -136,6 +179,8 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   return (
     <SimulationContext.Provider value={{
       simulationState,
+      activeSimulation,
+      checkingActiveSimulation,
       isRunning,
       pollingInterval,
       elapsedRealSeconds,
@@ -148,6 +193,7 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       startPolling,
       stopPolling,
       resetSimulation,
+      refreshActiveSimulation,
     }}>
       {children}
     </SimulationContext.Provider>
