@@ -51,6 +51,7 @@ export default function Simulacion() {
   const algoritmo = 'ALNS'
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [fechaHoraActual, setFechaHoraActual] = useState('')
 
   // Modals
   const [selectedVuelo, setSelectedVuelo] = useState<VueloDTO | null>(null)
@@ -390,6 +391,23 @@ export default function Simulacion() {
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
   }
 
+  function formatCurrentDateTime(date: Date): string {
+    const d = date.getDate().toString().padStart(2, '0')
+    const mo = (date.getMonth() + 1).toString().padStart(2, '0')
+    const y = date.getFullYear()
+    const h = date.getHours().toString().padStart(2, '0')
+    const min = date.getMinutes().toString().padStart(2, '0')
+    return `${d}/${mo}/${y} ${h}:${min}`
+  }
+
+  // Reloj actual a nivel de minuto
+  useEffect(() => {
+    const tick = () => setFechaHoraActual(formatCurrentDateTime(new Date()))
+    tick()
+    const timer = setInterval(tick, 1000)
+    return () => clearInterval(timer)
+  }, [])
+
   const simulatedElapsedSeconds = useMemo(() => {
     if (!simulationState?.simulationTime || !fechaInicio || !horaInicio) return 0
     const simulationNowMs = Date.parse(`${simulationState.simulationTime}Z`)
@@ -580,10 +598,11 @@ export default function Simulacion() {
         {/* Tiempos de simulación */}
         {simulationState && (
           <div className="flex items-center gap-6">
+            <span className="text-[11px] text-sky-400/80 font-medium">Fecha y hora actual <span className="font-mono text-xs text-white font-semibold">{fechaHoraActual}</span></span>
             <span className="text-[11px] text-sky-400/80 font-medium">Tiempo real transcurrido <span className="font-mono text-xs text-white font-semibold">{formatElapsed(elapsedRealSeconds)}</span></span>
-            <span className="text-[11px] text-sky-400/80 font-medium">Tiempo simulado transcurrido <span className="font-mono text-xs text-white font-semibold">{formatElapsed(simulatedElapsedSeconds)}</span></span>
-            <span className="text-[11px] text-emerald-400/80 font-medium">Fecha actual simulación <span className="font-mono text-xs text-white font-semibold">{formatDateTime(simulationState?.simulationTime)}</span></span>
-            <span className="text-[11px] text-violet-400/80 font-medium">Día <span className="font-mono text-xs text-white font-semibold">{Math.min(DURACION_FIJA, Math.floor(simulatedElapsedSeconds / 86400) + 1)}/5</span></span>
+            <span className="text-[11px] text-emerald-400/80 font-medium">Fecha y hora simulación <span className="font-mono text-xs text-white font-semibold">{formatDateTime(simulationState?.simulationTime)}</span></span>
+            <span className="text-[11px] text-emerald-400/80 font-medium">Tiempo simulado transcurrido <span className="font-mono text-xs text-white font-semibold">{formatElapsed(simulatedElapsedSeconds)}</span></span>
+            <span className="text-[11px] text-emerald-400/80 font-medium">Día <span className="font-mono text-xs text-white font-semibold">{Math.min(DURACION_FIJA, Math.floor(simulatedElapsedSeconds / 86400) + 1)}/5</span></span>
             <div className="flex items-center gap-2">
               <div className="w-48 bg-gray-800 rounded-full h-1.5 overflow-hidden">
                 <div
