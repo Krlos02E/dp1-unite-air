@@ -531,7 +531,7 @@ export default function Simulacion() {
   return (
     <div className="flex flex-col gap-2">
       {/* Barra superior de parámetros + tiempos */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-2 flex flex-wrap items-center gap-3">
+      <div className="bg-gray-900 border border-gray-800 rounded-xl px-3 py-2 flex flex-wrap items-center gap-x-2 gap-y-2">
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-400 font-medium">Escenario:</span>
           <span className="text-sm text-gray-200 font-semibold">{DURACION_FIJA} días</span>
@@ -561,24 +561,24 @@ export default function Simulacion() {
 
         {/* Tiempos de simulación */}
         {simulationState && (
-          <div className="flex items-center gap-3 ml-4">
-            <div className="flex flex-col bg-sky-950/40 border border-sky-800/40 rounded-lg px-3 py-1">
+          <div className="flex items-center gap-2 ml-1">
+            <div className="flex flex-col bg-sky-950/40 border border-sky-800/40 rounded-lg px-2.5 py-1">
               <span className="text-[10px] text-sky-300/80 leading-tight">Tiempo real transcurrido</span>
               <span className="font-mono text-xs text-sky-200 leading-tight">{formatElapsed(elapsedRealSeconds)}</span>
             </div>
-            <div className="flex flex-col bg-sky-950/40 border border-sky-800/40 rounded-lg px-3 py-1">
+            <div className="flex flex-col bg-sky-950/40 border border-sky-800/40 rounded-lg px-2.5 py-1">
               <span className="text-[10px] text-sky-300/80 leading-tight">Tiempo simulado transcurrido</span>
               <span className="font-mono text-xs text-sky-200 leading-tight">{formatElapsed(simulatedElapsedSeconds)}</span>
             </div>
-            <div className="flex flex-col bg-sky-950/40 border border-sky-800/40 rounded-lg px-3 py-1">
+            <div className="flex flex-col bg-sky-950/40 border border-sky-800/40 rounded-lg px-2.5 py-1">
               <span className="text-[10px] text-sky-300/80 leading-tight">Fecha actual simulación</span>
               <span className="font-mono text-xs text-sky-200 leading-tight">{formatDateTime(simulationState?.simulationTime)}</span>
             </div>
-            <div className="flex flex-col bg-sky-950/40 border border-sky-800/40 rounded-lg px-3 py-1">
+            <div className="flex flex-col bg-sky-950/40 border border-sky-800/40 rounded-lg px-2.5 py-1">
               <span className="text-[10px] text-sky-300/80 leading-tight">Día</span>
               <span className="font-mono text-xs text-sky-200 leading-tight">{Math.ceil((simulationState.progreso / 100) * DURACION_FIJA)}</span>
             </div>
-            <div className="flex flex-col w-[350px]">
+            <div className="flex flex-col w-[260px]">
               <div className="w-full bg-gray-800 rounded-full h-2.5">
                 <div
                   className="bg-emerald-500 h-2.5 rounded-full transition-all"
@@ -590,7 +590,7 @@ export default function Simulacion() {
           </div>
         )}
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex items-center gap-2 ml-2">
           {error && (
             <span className="text-xs text-red-400 font-medium">{error}</span>
           )}
@@ -647,30 +647,30 @@ export default function Simulacion() {
           />
 
           {/* Indicadores flotantes - inferior izquierda */}
-          <div className="absolute bottom-4 left-4 z-[999] flex flex-col gap-2">
-            <div className="bg-gray-900/40 border border-gray-700/40 rounded-xl p-3 backdrop-blur-[2px]">
-              <h4 className="text-xs font-semibold text-gray-300 mb-2 pb-1 border-b border-gray-700/50">Ocupación Global</h4>
-              <div className="grid grid-cols-1 gap-2">
-                <div className="rounded-lg border border-gray-700/50 bg-gray-900/55 px-2.5 py-2">
+          <div className="absolute bottom-3 left-3 z-[999] flex flex-col gap-1.5">
+            <div className="min-w-[238px] bg-gray-900/50 border border-gray-600/45 rounded-xl p-2.5 backdrop-blur-[2px] shadow-md shadow-black/15">
+              <h4 className="text-[11px] font-semibold text-gray-300 mb-1.5 pb-1 border-b border-gray-700/50">Ocupación Global</h4>
+              <div className="grid grid-cols-1 gap-1.5">
+                <div className="rounded-lg border border-gray-600/55 bg-gray-950/65 px-2.5 py-2">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-medium uppercase tracking-wide text-violet-300">Flota</span>
-                    <span className="text-sm font-bold text-gray-100">{occupancy.flota.capacidad > 0 ? Math.round(occupancy.flota.carga / occupancy.flota.capacidad * 100) : 0}%</span>
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-violet-200">Flota</span>
+                    <span className="text-base font-bold text-white">{occupancy.flota.capacidad > 0 ? Math.round(occupancy.flota.carga / occupancy.flota.capacidad * 100) : 0}%</span>
                   </div>
-                  <div className="mt-1 flex items-center justify-between gap-2 text-[11px]">
-                    <span className="font-mono text-gray-200">{occupancy.flota.carga}/{occupancy.flota.capacidad}</span>
+                  <div className="mt-1 flex items-center justify-between gap-2">
+                    <span className="font-mono text-[12px] text-gray-100">{occupancy.flota.carga}/{occupancy.flota.capacidad}</span>
                     <span className={`h-2 w-2 shrink-0 rounded-full ${ocupColor(occupancy.flota.capacidad > 0 ? occupancy.flota.carga / occupancy.flota.capacidad : 0)}`} />
                   </div>
                   <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-800">
                     <div className={`h-full rounded-full transition-all ${ocupColor(occupancy.flota.capacidad > 0 ? occupancy.flota.carga / occupancy.flota.capacidad : 0)}`} style={{ width: `${Math.min(occupancy.flota.capacidad > 0 ? occupancy.flota.carga / occupancy.flota.capacidad * 100 : 0, 100)}%` }} />
                   </div>
                 </div>
-                <div className="rounded-lg border border-gray-700/50 bg-gray-900/55 px-2.5 py-2">
+                <div className="rounded-lg border border-gray-600/55 bg-gray-950/65 px-2.5 py-2">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-medium uppercase tracking-wide text-violet-300">Aeropuertos</span>
-                    <span className="text-sm font-bold text-gray-100">{occupancy.aeropuertos.capacidad > 0 ? Math.round(occupancy.aeropuertos.ocupacion / occupancy.aeropuertos.capacidad * 100) : 0}%</span>
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-violet-200">Aeropuertos</span>
+                    <span className="text-base font-bold text-white">{occupancy.aeropuertos.capacidad > 0 ? Math.round(occupancy.aeropuertos.ocupacion / occupancy.aeropuertos.capacidad * 100) : 0}%</span>
                   </div>
-                  <div className="mt-1 flex items-center justify-between gap-2 text-[11px]">
-                    <span className="font-mono text-gray-200">{occupancy.aeropuertos.ocupacion}/{occupancy.aeropuertos.capacidad}</span>
+                  <div className="mt-1 flex items-center justify-between gap-2">
+                    <span className="font-mono text-[12px] text-gray-100">{occupancy.aeropuertos.ocupacion}/{occupancy.aeropuertos.capacidad}</span>
                     <span className={`h-2 w-2 shrink-0 rounded-full ${ocupColor(occupancy.aeropuertos.capacidad > 0 ? occupancy.aeropuertos.ocupacion / occupancy.aeropuertos.capacidad : 0)}`} />
                   </div>
                   <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-800">
@@ -679,27 +679,27 @@ export default function Simulacion() {
                 </div>
               </div>
             </div>
-            <div className="bg-gray-900/40 border border-gray-700/40 rounded-xl p-3 backdrop-blur-[2px]">
-              <h4 className="text-xs font-semibold text-gray-300 mb-2 pb-1 border-b border-gray-700/50">Estado de Vuelos</h4>
-              <div className="grid grid-cols-1 gap-2">
-                <div className="rounded-lg border border-gray-700/50 bg-gray-900/55 px-2.5 py-2">
+            <div className="min-w-[210px] bg-gray-900/38 border border-gray-700/38 rounded-xl p-2.5 backdrop-blur-[2px]">
+              <h4 className="text-[11px] font-semibold text-gray-300 mb-1.5 pb-1 border-b border-gray-700/50">Estado de Vuelos</h4>
+              <div className="grid grid-cols-1 gap-1.5">
+                <div className="rounded-lg border border-gray-700/50 bg-gray-900/55 px-2 py-1.5">
                   <span className="text-[10px] font-medium uppercase tracking-wide text-violet-300">En vuelo</span>
-                  <div className="mt-1 text-lg font-bold text-gray-100">{vuelosEnTransitoCount}</div>
+                  <div className="mt-0.5 text-sm font-bold text-gray-100">{vuelosEnTransitoCount}</div>
                 </div>
-                <div className="rounded-lg border border-gray-700/50 bg-gray-900/55 px-2.5 py-2">
+                <div className="rounded-lg border border-gray-700/50 bg-gray-900/55 px-2 py-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[10px] font-medium uppercase tracking-wide text-violet-300">Vacíos en vuelo</span>
-                    <span className="text-sm font-bold text-gray-100">{vuelosVaciosEnTransitoPct}%</span>
+                    <span className="text-xs font-bold text-gray-100">{vuelosVaciosEnTransitoPct}%</span>
                   </div>
-                  <div className="mt-1 text-[11px] font-mono text-gray-200">{vuelosVaciosEnTransito}/{vuelosEnTransitoCount}</div>
+                  <div className="mt-0.5 text-[10px] font-mono text-gray-200">{vuelosVaciosEnTransito}/{vuelosEnTransitoCount}</div>
                 </div>
-                <div className="rounded-lg border border-gray-700/50 bg-gray-900/55 px-2.5 py-2">
+                <div className="rounded-lg border border-gray-700/50 bg-gray-900/55 px-2 py-1.5">
                   <span className="text-[10px] font-medium uppercase tracking-wide text-violet-300">Culminados</span>
-                  <div className="mt-1 text-lg font-bold text-gray-100">{vuelosCulminados}</div>
+                  <div className="mt-0.5 text-sm font-bold text-gray-100">{vuelosCulminados}</div>
                 </div>
-                <div className="rounded-lg border border-gray-700/50 bg-gray-900/55 px-2.5 py-2">
+                <div className="rounded-lg border border-gray-700/50 bg-gray-900/55 px-2 py-1.5">
                   <span className="text-[10px] font-medium uppercase tracking-wide text-violet-300">Cancelados</span>
-                  <div className="mt-1 text-lg font-bold text-gray-100">{vuelosCancelados}</div>
+                  <div className="mt-0.5 text-sm font-bold text-gray-100">{vuelosCancelados}</div>
                 </div>
               </div>
             </div>

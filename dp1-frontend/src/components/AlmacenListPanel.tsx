@@ -4,6 +4,7 @@ import { getAirportCity, getAirportCountry } from '../data/airportsData'
 import AlmacenFormModal from './AlmacenFormModal'
 import AeropuertoDetailCard from './AeropuertoDetailCard'
 import type { AeropuertoDTO, EnvioEstado, AlmacenDTO, AlmacenContexto, VueloDTO } from '../types'
+import { formatTimeInTimezone } from '../utils/timezoneFormat'
 
 interface Props {
   aeropuertos: AeropuertoDTO[]
@@ -110,6 +111,27 @@ function parseUtc(iso: string): number {
   const date = new Date(iso.endsWith('Z') ? iso : `${iso}Z`)
   const time = date.getTime()
   return Number.isNaN(time) ? Number.POSITIVE_INFINITY : time
+}
+
+function getClosestFlight(
+  flightIds: string[],
+  flightsMap: Map<string, VueloDTO>,
+  type: 'salida' | 'llegada',
+): VueloDTO | null {
+  let closestFlight: VueloDTO | null = null
+  let closestTimestamp = Number.POSITIVE_INFINITY
+
+  flightIds.forEach((id) => {
+    const flight = flightsMap.get(id)
+    if (!flight) return
+    const timestamp = parseUtc(type === 'salida' ? flight.salidaUtc : flight.llegadaUtc)
+    if (timestamp < closestTimestamp) {
+      closestTimestamp = timestamp
+      closestFlight = flight
+    }
+  })
+
+  return closestFlight
 }
 
 export default function AlmacenListPanel({
@@ -294,6 +316,7 @@ export default function AlmacenListPanel({
   }, [filtradosPorFiltro, term, searchScope, searchCodeMatcher, vuelos, sortField, sortDirection])
 
   const filtrados = showAll || term ? filtradosSinLimite : filtradosSinLimite.slice(0, DEFAULT_LIMIT)
+  const vuelosMap = useMemo(() => new Map(vuelos.map((vuelo) => [vuelo.id, vuelo])), [vuelos])
 
   useEffect(() => {
     if (!onVisibleAirportsChange) return
@@ -461,6 +484,13 @@ export default function AlmacenListPanel({
           {sortDirection === 'asc' ? '↑' : '↓'}
         </button>
       </div>
+      {sortField !== 'ocupacion' && (
+        <div className="px-3 py-1.5 border-b border-gray-800/70 text-[10px] text-violet-300/80">
+          {sortField === 'proxima-salida'
+            ? 'Orden actual: UT que sale más pronto por almacén'
+            : 'Orden actual: UT que llega más pronto por almacén'}
+        </div>
+      )}
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
@@ -493,6 +523,10 @@ export default function AlmacenListPanel({
           const ocupPct = a.capacidadMaxima > 0 ? Math.round((a.ocupacionActual / a.capacidadMaxima) * 100) : 0
           const enviosAqui = envios?.filter((e) => e.aeropuertoActual === a.codigoOACI) || []
           const esEditable = Boolean(almacenDB?.editable)
+          const nextDepartureFlight = getClosestFlight(a.vuelosSalientes, vuelosMap, 'salida')
+          const nextArrivalFlight = getClosestFlight(a.vuelosEntrantes, vuelosMap, 'llegada')
+          const showNextDeparture = sortField === 'proxima-salida' && nextDepartureFlight
+          const showNextArrival = sortField === 'proxima-llegada' && nextArrivalFlight
 
           return (
             <div key={a.codigoOACI} className="border-b border-gray-800/50">
@@ -583,6 +617,18 @@ export default function AlmacenListPanel({
                 {envios && (
                   <div className="text-[10px] text-violet-300/80 mt-1">
                     📦 {enviosAqui.length} envío{enviosAqui.length !== 1 ? 's' : ''} en almacén
+                  </div>
+                )}
+                {showNextDeparture && (
+                  <div className="text-[10px] text-violet-300/80 mt-1 truncate">
+                    ✈️ Próxima salida: <span className="font-mono text-violet-200">{nextDepartureFlight.id}</span>
+                    <span className="text-gray-500"> · sale {formatTimeInTimezone(nextDepartureFlight.salidaUtc, tzOffset)}</span>
+                  </div>
+                )}
+                {showNextArrival && (
+                  <div className="text-[10px] text-violet-300/80 mt-1 truncate">
+                    🛬 Próxima llegada: <span className="font-mono text-violet-200">{nextArrivalFlight.id}</span>
+                    <span className="text-gray-500"> · llega {formatTimeInTimezone(nextArrivalFlight.llegadaUtc, tzOffset)}</span>
                   </div>
                 )}
               </div>
