@@ -12,6 +12,7 @@ import { formatDateTime } from '../utils/dateFormat'
 import { AIRPORTS_DATA } from '../data/airportsData'
 import type { VueloDTO, AeropuertoDTO, SimulationState, EnvioEstado, MaletaEstado } from '../types'
 import { shouldDisplayFlight } from '../utils/flightVisibility'
+import { broadcastSimMessage, listenSimMessages } from '../utils/broadcast'
 
 const SIM_CONFIG_KEY = 'uniteair_simConfig'
 const SIM_ACTIVE_CONFIG_KEY = 'uniteair_activeSimConfig'
@@ -332,6 +333,56 @@ export default function Simulacion() {
     return () => { cancelled = true }
   }, [startPolling, resetSimulation])
 
+  // Sincronización entre pestañas: escuchar inicio/detención de simulación
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === SIM_ACTIVE_CONFIG_KEY && e.newValue) {
+        try {
+          const cfg = JSON.parse(e.newValue)
+          if (cfg?.sessionId && cfg.sessionId !== sessionId) {
+            setSessionId(cfg.sessionId)
+            setFechaInicio(cfg.fechaInicio || '')
+            setHoraInicio(cfg.horaInicio || '')
+            startPolling(cfg.sessionId)
+          }
+        } catch {
+          // ignore parse errors
+        }
+      }
+      if (e.key === SIM_STOPPED_KEY && e.newValue) {
+        resetSimulation()
+        setSessionId('')
+        setResultSnapshot(null)
+        hasShownResults.current = false
+      }
+    }
+
+    window.addEventListener('storage', handleStorage)
+
+    const unlisten = listenSimMessages((msg) => {
+      if (msg.type === 'STARTED' && msg.payload?.sessionId) {
+        const cfg = getActiveConfigFromStorage()
+        if (cfg?.sessionId === msg.payload.sessionId && cfg.sessionId !== sessionId) {
+          setSessionId(cfg.sessionId)
+          setFechaInicio(cfg.fechaInicio)
+          setHoraInicio(cfg.horaInicio)
+          startPolling(cfg.sessionId, undefined, msg.payload.startedAt, msg.payload.elapsedRealtimeSeconds)
+        }
+      }
+      if (msg.type === 'STOPPED') {
+        resetSimulation()
+        setSessionId('')
+        setResultSnapshot(null)
+        hasShownResults.current = false
+      }
+    })
+
+    return () => {
+      window.removeEventListener('storage', handleStorage)
+      unlisten()
+    }
+  }, [sessionId, startPolling, resetSimulation])
+
   const vuelos = useMemo(() => {
     if (!hasSimulationStarted) return EMPTY_FLIGHTS
 
@@ -342,8 +393,24 @@ export default function Simulacion() {
     simulationState?.vuelos?.forEach((vuelo) => {
       combinados.set(vuelo.id, vuelo)
     })
+
+    // Fallback visual durante PLANIFICANDO: asegurar estado ACTIVO y carga estimada
+    // para que los aviones no desaparezcan ni se vean azules (vacíos) en nuevas pestañas
+    if (simulationState?.status === 'PLANIFICANDO') {
+      combinados.forEach((vuelo) => {
+        let updated = vuelo
+        if (!updated.estado || updated.estado === 'PROGRAMADO') {
+          updated = { ...updated, estado: 'ACTIVO' as const }
+        }
+        if (updated.cargaActual === 0 && updated.capacidad > 0) {
+          updated = { ...updated, cargaActual: Math.max(1, Math.round(updated.capacidad * 0.5)) }
+        }
+        combinados.set(vuelo.id, updated)
+      })
+    }
+
     return Array.from(combinados.values())
-  }, [hasSimulationStarted, simulationState?.vuelos, vuelosEstaticos])
+  }, [hasSimulationStarted, simulationState?.vuelos, vuelosEstaticos, simulationState?.status])
 
   // Keep selected flight info synced with latest poll data
   useEffect(() => {
@@ -366,23 +433,7 @@ export default function Simulacion() {
     }
   }, [simulationState])
 
-  // Detener simulación al cerrar la pestaña
-  useEffect(() => {
-    const API_BASE = import.meta.env.VITE_API_URL || '/api'
-    const handleBeforeUnload = () => {
-      if (sessionId) {
-        const url = `${API_BASE}/simulacion/detener/${sessionId}`
-        navigator.sendBeacon?.(url)
-        try {
-          fetch(url, { method: 'POST', keepalive: true, mode: 'no-cors' })
-        } catch {
-          // ignore
-        }
-      }
-    }
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [sessionId])
+  // (eliminado: beforeunload ya no detiene la simulación, para permitir multi-pestaña)
 
   function formatElapsed(seconds: number): string {
     const h = Math.floor(seconds / 3600)
@@ -471,6 +522,11 @@ export default function Simulacion() {
       setResultSnapshot(null)
       setSessionId(state.sessionId)
       startPolling(state.sessionId, undefined, state.startedAt, state.elapsedRealtimeSeconds)
+      broadcastSimMessage('STARTED', {
+        sessionId: state.sessionId,
+        startedAt: state.startedAt,
+        elapsedRealtimeSeconds: state.elapsedRealtimeSeconds,
+      })
     } catch (err: any) {
       const msg = err?.response?.data?.logs?.[0]?.mensaje
         || err?.response?.data?.message
@@ -496,6 +552,7 @@ export default function Simulacion() {
     clearConfigStorage()
     clearActiveConfigStorage()
     localStorage.setItem(SIM_STOPPED_KEY, '1')
+    broadcastSimMessage('STOPPED')
     hasShownResults.current = false
     setResultSnapshot(null)
     setShowResultados(false)
