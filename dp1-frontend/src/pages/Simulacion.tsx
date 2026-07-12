@@ -14,6 +14,7 @@ import type { VueloDTO, AeropuertoDTO, SimulationState, EnvioEstado, MaletaEstad
 import { shouldDisplayFlight } from '../utils/flightVisibility'
 
 const SIM_CONFIG_KEY = 'uniteair_simConfig'
+const SIM_ACTIVE_CONFIG_KEY = 'uniteair_activeSimConfig'
 const SIM_STOPPED_KEY = 'uniteair_simStopped'
 const DURACION_FIJA = 5
 const EMPTY_FLIGHTS: VueloDTO[] = []
@@ -320,12 +321,10 @@ export default function Simulacion() {
       if (res.activa && res.sessionId) {
         setSessionId(res.sessionId)
         startPolling(res.sessionId, undefined, res.startedAt, res.elapsedRealtimeSeconds)
-        if (res.startedAt) {
-          const parts = res.startedAt.split('T')
-          if (parts.length === 2) {
-            setFechaInicio(parts[0])
-            setHoraInicio(parts[1].substring(0, 5))
-          }
+        const activeCfg = getActiveConfigFromStorage()
+        if (activeCfg?.sessionId === res.sessionId) {
+          setFechaInicio(activeCfg.fechaInicio)
+          setHoraInicio(activeCfg.horaInicio)
         }
       }
     }).catch(() => {})
@@ -403,8 +402,28 @@ export default function Simulacion() {
     sessionStorage.setItem(SIM_CONFIG_KEY, JSON.stringify(cfg))
   }
 
+  const saveActiveConfigToStorage = (cfg: { sessionId: string; fechaInicio: string; horaInicio: string }) => {
+    localStorage.setItem(SIM_ACTIVE_CONFIG_KEY, JSON.stringify(cfg))
+  }
+
+  const getActiveConfigFromStorage = (): { sessionId: string; fechaInicio: string; horaInicio: string } | null => {
+    const saved = localStorage.getItem(SIM_ACTIVE_CONFIG_KEY)
+    if (!saved) return null
+    try {
+      const cfg = JSON.parse(saved)
+      if (!cfg?.sessionId || !cfg?.fechaInicio || !cfg?.horaInicio) return null
+      return cfg
+    } catch {
+      return null
+    }
+  }
+
   const clearConfigStorage = () => {
     sessionStorage.removeItem(SIM_CONFIG_KEY)
+  }
+
+  const clearActiveConfigStorage = () => {
+    localStorage.removeItem(SIM_ACTIVE_CONFIG_KEY)
   }
 
   const handleIniciar = async () => {
@@ -428,6 +447,7 @@ export default function Simulacion() {
         return
       }
       saveConfigToStorage({ fechaInicio, horaInicio })
+      saveActiveConfigToStorage({ sessionId: state.sessionId, fechaInicio, horaInicio })
       localStorage.removeItem(SIM_STOPPED_KEY)
       hasShownResults.current = false
       setResultSnapshot(null)
@@ -456,6 +476,7 @@ export default function Simulacion() {
     setIsPaused(false)
     resetElapsedTimer()
     clearConfigStorage()
+    clearActiveConfigStorage()
     localStorage.setItem(SIM_STOPPED_KEY, '1')
     hasShownResults.current = false
     setResultSnapshot(null)
@@ -469,6 +490,7 @@ export default function Simulacion() {
     setIsPaused(false)
     resetElapsedTimer()
     clearConfigStorage()
+    clearActiveConfigStorage()
     localStorage.removeItem(SIM_STOPPED_KEY)
     hasShownResults.current = false
     setResultSnapshot(null)
