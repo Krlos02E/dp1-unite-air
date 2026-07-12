@@ -263,11 +263,11 @@ export default function EnvioListPanel({
     <div className="w-96 flex-1 min-h-0 bg-gray-900 border border-gray-800 rounded-xl flex flex-col overflow-hidden">
       {/* Header */}
       <div className="p-3 border-b border-gray-800">
-        <h3 className="text-sm font-semibold text-gray-200 mb-2">Envíos</h3>
+        <h3 className="text-sm font-semibold text-violet-200 mb-2">Envíos</h3>
         <div className="space-y-1.5">
           <div>
             <div className="mb-1.5 flex items-center justify-between">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-gray-500">Búsqueda en panel</p>
+              <p className="text-[10px] font-medium uppercase tracking-wide text-violet-300">Búsqueda en panel</p>
               {hasPanelSearch && (
                 <button
                   type="button"
@@ -330,7 +330,7 @@ export default function EnvioListPanel({
           </div>
           <div className="pt-2 border-t border-gray-800/80">
             <div className="mb-1.5 flex items-center justify-between">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-gray-500">Filtros persistentes</p>
+              <p className="text-[10px] font-medium uppercase tracking-wide text-violet-300">Filtros persistentes</p>
               {hasFilters && (
                 <button
                   type="button"
@@ -409,7 +409,7 @@ export default function EnvioListPanel({
               className={`flex-1 py-2 text-xs font-medium transition-colors ${
                 currentMainTab === main.key
                   ? 'text-sky-400 border-b-2 border-sky-400 bg-sky-400/5'
-                  : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/50'
+                  : 'text-violet-300/80 hover:text-violet-200 hover:bg-gray-800/50'
               }`}
             >
               {main.label}
@@ -429,7 +429,7 @@ export default function EnvioListPanel({
                   className={`rounded-full px-2.5 py-1 text-[10px] font-medium transition-colors ${
                     isActive
                       ? 'bg-sky-500/20 text-sky-400 border border-sky-500/40'
-                      : 'bg-gray-800 text-gray-500 border border-gray-700 hover:text-gray-300'
+                      : 'bg-gray-800 text-violet-300/80 border border-gray-700 hover:text-violet-200'
                   }`}
                 >
                   {label}
@@ -481,17 +481,17 @@ export default function EnvioListPanel({
               >
                 <div className="flex items-start justify-between gap-1">
                   <div className="min-w-0 flex-1">
-                    <div className="text-xs text-gray-200 truncate">
-                      <span className="font-medium">{getAirportCity(envio.origen) || envio.origen}</span>
+                    <div className="text-xs text-violet-300 truncate">
+                      <span className="font-medium text-violet-200">{getAirportCity(envio.origen) || envio.origen}</span>
                       <span className="text-gray-600 mx-1">→</span>
-                      <span className="font-medium">{getAirportCity(envio.destino) || envio.destino}</span>
+                      <span className="font-medium text-violet-200">{getAirportCity(envio.destino) || envio.destino}</span>
                     </div>
                     {ut && (
-                      <div className="text-[10px] text-gray-500 mt-0.5 truncate">
+                      <div className="text-[10px] text-violet-300/80 mt-0.5 truncate">
                         UT: {ut}
                       </div>
                     )}
-                    <div className="text-[10px] text-gray-500">
+                    <div className="text-[10px] text-violet-300/80">
                       {envio.cantidad} maleta{envio.cantidad !== 1 ? 's' : ''}
                     </div>
                   </div>
@@ -504,7 +504,7 @@ export default function EnvioListPanel({
                 <button
                   type="button"
                   onClick={() => onViewMaletasForEnvio?.(envio.id)}
-                  className="text-[10px] text-sky-400 hover:text-sky-300"
+                  className="text-[10px] text-violet-300 hover:text-violet-200"
                 >
                   Ver maletas del envio ({envio.cantidad})
                 </button>

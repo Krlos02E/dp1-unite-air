@@ -348,7 +348,7 @@ export default function AlmacenListPanel({
       {/* Header */}
       <div className="p-3 border-b border-gray-800">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-semibold text-gray-200">Almacenes</h3>
+          <h3 className="text-sm font-semibold text-violet-200">Almacenes</h3>
           <button
             onClick={() => { setEditingAlmacen(null); setShowForm(true) }}
             className="text-[11px] bg-sky-600 hover:bg-sky-500 text-white px-2 py-1 rounded-md font-medium transition-colors"
@@ -358,7 +358,7 @@ export default function AlmacenListPanel({
         </div>
         <div className="space-y-1.5">
           <div>
-            <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-gray-500">Búsqueda temporal</p>
+            <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-violet-300">Búsqueda temporal</p>
             <div className="flex gap-1.5">
               <select
                 value={searchScope}
@@ -381,7 +381,7 @@ export default function AlmacenListPanel({
           </div>
           <div className="pt-2 border-t border-gray-800/80">
             <div className="mb-1.5 flex items-center justify-between">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-gray-500">Filtros persistentes</p>
+              <p className="text-[10px] font-medium uppercase tracking-wide text-violet-300">Filtros persistentes</p>
               {hasFilters && (
                 <button
                   type="button"
@@ -509,9 +509,9 @@ export default function AlmacenListPanel({
               >
                 <div className="flex items-start justify-between gap-1 mb-1">
                   <div className="min-w-0 flex-1">
-                    <div className="text-xs text-gray-200 truncate">
+                    <div className="text-xs text-violet-300 truncate">
                       <span className="font-semibold text-emerald-400">{a.codigoOACI}</span>
-                      {ciudad && <span className="text-gray-400 ml-1">· {ciudad}{pais ? `, ${pais}` : ''}</span>}
+                      {ciudad && <span className="text-violet-200 ml-1">· {ciudad}{pais ? `, ${pais}` : ''}</span>}
                     </div>
                   </div>
                   <div className="flex gap-1 flex-shrink-0">
@@ -581,7 +581,7 @@ export default function AlmacenListPanel({
                 </div>
 
                 {envios && (
-                  <div className="text-[10px] text-gray-500 mt-1">
+                  <div className="text-[10px] text-violet-300/80 mt-1">
                     📦 {enviosAqui.length} envío{enviosAqui.length !== 1 ? 's' : ''} en almacén
                   </div>
                 )}

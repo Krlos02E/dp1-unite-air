@@ -390,6 +390,14 @@ export default function Simulacion() {
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
   }
 
+  const simulatedElapsedSeconds = useMemo(() => {
+    if (!simulationState?.simulationTime || !fechaInicio || !horaInicio) return 0
+    const simulationNowMs = Date.parse(`${simulationState.simulationTime}Z`)
+    const simulationStartMs = Date.parse(`${fechaInicio}T${horaInicio}:00Z`)
+    if (Number.isNaN(simulationNowMs) || Number.isNaN(simulationStartMs)) return 0
+    return Math.max(0, Math.floor((simulationNowMs - simulationStartMs) / 1000))
+  }, [simulationState?.simulationTime, fechaInicio, horaInicio])
+
   const saveConfigToStorage = (cfg: { fechaInicio: string; horaInicio: string }) => {
     sessionStorage.setItem(SIM_CONFIG_KEY, JSON.stringify(cfg))
   }
@@ -423,7 +431,7 @@ export default function Simulacion() {
       hasShownResults.current = false
       setResultSnapshot(null)
       setSessionId(state.sessionId)
-      startPolling(state.sessionId, 15000, state.startedAt, state.elapsedRealtimeSeconds)
+      startPolling(state.sessionId, undefined, state.startedAt, state.elapsedRealtimeSeconds)
     } catch (err: any) {
       const msg = err?.response?.data?.logs?.[0]?.mensaje
         || err?.response?.data?.message
@@ -556,6 +564,10 @@ export default function Simulacion() {
             <div className="flex flex-col bg-sky-950/40 border border-sky-800/40 rounded-lg px-3 py-1">
               <span className="text-[10px] text-sky-300/80 leading-tight">Tiempo real transcurrido</span>
               <span className="font-mono text-xs text-sky-200 leading-tight">{formatElapsed(elapsedRealSeconds)}</span>
+            </div>
+            <div className="flex flex-col bg-sky-950/40 border border-sky-800/40 rounded-lg px-3 py-1">
+              <span className="text-[10px] text-sky-300/80 leading-tight">Tiempo simulado transcurrido</span>
+              <span className="font-mono text-xs text-sky-200 leading-tight">{formatElapsed(simulatedElapsedSeconds)}</span>
             </div>
             <div className="flex flex-col bg-sky-950/40 border border-sky-800/40 rounded-lg px-3 py-1">
               <span className="text-[10px] text-sky-300/80 leading-tight">Fecha actual simulación</span>
@@ -713,7 +725,7 @@ export default function Simulacion() {
               className={`flex-1 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
                 panelMode === 'envios'
                   ? 'bg-sky-600 text-white'
-                  : 'text-gray-400 hover:text-gray-200 bg-gray-800'
+                  : 'text-violet-300 hover:text-violet-100 bg-gray-800'
               }`}
             >
               📦 Envíos
@@ -723,7 +735,7 @@ export default function Simulacion() {
               className={`flex-1 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
                 panelMode === 'maletas'
                   ? 'bg-sky-600 text-white'
-                  : 'text-gray-400 hover:text-gray-200 bg-gray-800'
+                  : 'text-violet-300 hover:text-violet-100 bg-gray-800'
               }`}
             >
               🧳 Maletas
@@ -733,7 +745,7 @@ export default function Simulacion() {
               className={`flex-1 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
                 panelMode === 'almacenes'
                   ? 'bg-sky-600 text-white'
-                  : 'text-gray-400 hover:text-gray-200 bg-gray-800'
+                  : 'text-violet-300 hover:text-violet-100 bg-gray-800'
               }`}
             >
               🏢 Almacenes
@@ -743,7 +755,7 @@ export default function Simulacion() {
               className={`flex-1 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
                 panelMode === 'aviones'
                   ? 'bg-sky-600 text-white'
-                  : 'text-gray-400 hover:text-gray-200 bg-gray-800'
+                  : 'text-violet-300 hover:text-violet-100 bg-gray-800'
               }`}
             >
               ✈️ Aviones

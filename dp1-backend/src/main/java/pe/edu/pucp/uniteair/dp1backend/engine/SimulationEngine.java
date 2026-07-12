@@ -38,6 +38,7 @@ public class SimulationEngine {
 
 
     private static final int REPLAN_SIM_INTERVAL_HOURS = 1;
+    private static final int SIMULATION_STEP_MINUTES = 5;
     private static final int ROLLING_LOOKAHEAD_MINUTES = 180;
     private static final int FLIGHT_WINDOW_LOOKBACK_HOURS = 24;
     private static final int FLIGHT_WINDOW_FORWARD_BUFFER_HOURS = 48;
@@ -105,6 +106,8 @@ public class SimulationEngine {
         CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
             try {
                 int duracionHoras = duracionDias * 24;
+                int duracionMinutos = duracionHoras * 60;
+                int totalSteps = duracionMinutos / SIMULATION_STEP_MINUTES;
                 EstadoOperacional estado = new EstadoOperacional();
                 Map<String, Integer> cargaVuelo = new ConcurrentHashMap<>();
                 Map<String, Integer> ocupacionAeropuerto = new ConcurrentHashMap<>();
@@ -121,7 +124,7 @@ public class SimulationEngine {
                 precalcularCaches(sessionId, dataset);
 
                 // Variables compartidas entre hilos
-                final int[] horaRef = {0};
+                final int[] stepRef = {0};
                 final LocalDateTime[] simTimeRef = {fechaInicio};
                 final Solucion[] solucionRef = {null};
                 final Map<String, Ruta> rutasAnteriores = new ConcurrentHashMap<>();
@@ -138,9 +141,10 @@ public class SimulationEngine {
                         + " duracionDias=" + duracionDias
                         + " dataset.paquetes=" + dataset.getPaquetes().size()
                         + " dataset.vuelos=" + dataset.getVuelos().size()
-                        + " ventanaPlanificacionMin=" + ROLLING_LOOKAHEAD_MINUTES);
+                        + " ventanaPlanificacionMin=" + ROLLING_LOOKAHEAD_MINUTES
+                        + " stepMin=" + SIMULATION_STEP_MINUTES);
                 actualizarEstadoEnCache(sessionId, fechaInicio, dataset, cargaVuelo, ocupacionAeropuerto,
-                        0, 0, 0, duracionHoras, false, null, logs, "PLANIFICANDO", fechaInicio, null, rutasAnteriores, asignacionesSplit);
+                        0, 0, 0, duracionMinutos, false, null, logs, "PLANIFICANDO", fechaInicio, null, rutasAnteriores, asignacionesSplit);
 
                 // Hilo de planificación
                 Thread planificadorThread = new Thread(() -> {
@@ -254,20 +258,20 @@ public class SimulationEngine {
                             .mensaje(motivo)
                             .build());
                     actualizarEstadoColapsado(sessionId, fechaInicio, motivo, logs);
-                    actualizarSesionColapsada(sessionId, motivo, 0, duracionHoras);
+                    actualizarSesionColapsada(sessionId, motivo, 0, duracionMinutos);
                     return;
                 }
 
                 logs.add(LogEntry.builder()
                         .timestamp(simTimeRef[0])
                         .tipo("INFO")
-                        .mensaje(String.format("Continuando simulación desde hora %d/%d", horaRef[0], duracionHoras))
+                        .mensaje(String.format("Continuando simulación desde paso %d/%d", stepRef[0], totalSteps))
                         .build());
 
                 // Calcular entregas retroactivas hasta el punto donde quedó la visualización
                 Set<String> rutasEntregadas = new HashSet<>();
                 LocalDateTime simTimeActual = simTimeRef[0];
-                int horaActual = horaRef[0];
+                int stepActual = stepRef[0];
                 final CompletableFuture<ReplanificacionResultado>[] replanFutureRef = new CompletableFuture[]{null};
 
                 MaletasResumen resumenInicio = calcularResumenMaletas(dataset, rutas, simTimeActual, fechaInicio);
@@ -282,12 +286,12 @@ public class SimulationEngine {
                     }
                 }
 
-                // Continuar simulación desde horaActual
-                for (int hora = horaActual; hora <= duracionHoras; hora++) {
+                // Continuar simulación desde el paso actual
+                for (int step = stepActual; step <= totalSteps; step++) {
                     if (cancellationFlags.getOrDefault(sessionId, false)) break;
                     esperarSiPausada(sessionId);
 
-                    LocalDateTime simTime = fechaInicio.plusHours(hora);
+                    LocalDateTime simTime = fechaInicio.plusMinutes((long) step * SIMULATION_STEP_MINUTES);
 
                     CompletableFuture<ReplanificacionResultado> replanFuture = replanFutureRef[0];
                     if (replanFuture != null && replanFuture.isDone()) {
@@ -353,8 +357,8 @@ public class SimulationEngine {
                     maletasEnTransito = resumenHora.enTransito();
 
                     // Re-planificacion cada hora simulada con ventana rodante de 3 horas simuladas.
-                    if (hora > horaActual
-                            && hora % REPLAN_SIM_INTERVAL_HOURS == 0
+                    if (step > stepActual
+                            && step % ((REPLAN_SIM_INTERVAL_HOURS * 60) / SIMULATION_STEP_MINUTES) == 0
                             && replanFutureRef[0] == null
                             && !cancellationFlags.getOrDefault(sessionId, false)) {
                         final Map<String, Ruta> rutasSnapshot = new HashMap<>(rutas);
@@ -384,19 +388,20 @@ public class SimulationEngine {
                         ocupacionAeropuerto.put(a.getCodigoOACI(), ocup);
                     }
 
-                    if (hora > 0 && hora % 12 == 0) {
+                    if (step > 0 && step % ((12 * 60) / SIMULATION_STEP_MINUTES) == 0) {
+                        int horaSimulada = step / (60 / SIMULATION_STEP_MINUTES);
                         logs.add(LogEntry.builder()
                                 .timestamp(simTime)
                                 .tipo("INFO")
                                 .mensaje(String.format("Hora %d: %d maletas entregadas, %d en tránsito",
-                                        hora, maletasEntregadas, maletasEnTransito))
+                                        horaSimulada, maletasEntregadas, maletasEnTransito))
                                 .build());
                     }
 
                     actualizarEstadoEnCache(sessionId, simTime, dataset, cargaVuelo, ocupacionAeropuerto,
-                            maletasEntregadas, maletasEnTransito, hora, duracionHoras, false, null, logs, "EJECUTANDO", fechaInicio, rutas, rutasAnteriores, asignacionesSplit);
+                            maletasEntregadas, maletasEnTransito, step * SIMULATION_STEP_MINUTES, duracionMinutos, false, null, logs, "EJECUTANDO", fechaInicio, rutas, rutasAnteriores, asignacionesSplit);
 
-                    long sleepMs = (long) (15000.0 / Math.max(0.5, velocidad));
+                    long sleepMs = (long) ((15000.0 * SIMULATION_STEP_MINUTES / 60.0) / Math.max(0.5, velocidad));
                     if (sleepMs > 0) {
                         Thread.sleep(sleepMs);
                     }
@@ -1061,7 +1066,7 @@ public class SimulationEngine {
         List<VueloDTO> vuelosDTO = new ArrayList<>();
         Map<String, double[]> flightCoords = flightCoordCache.get(sessionId);
         Map<String, Long> flightDurations = flightDurationCache.get(sessionId);
-        LocalDateTime fechaFin = fechaInicio.plusHours(totalHoras);
+        LocalDateTime fechaFin = fechaInicio.plusMinutes(totalHoras);
         for (Vuelo v : dataset.getVuelos()) {
             if (v.getSalidaUtc() != null && v.getSalidaUtc().isBefore(fechaInicio)) continue;
             // Los dos días extra del dataset son margen para el planificador, no parte

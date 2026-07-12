@@ -135,7 +135,7 @@ function calcularProgresoEnSimulacion(v: VueloDTO, simulationNow: Date): number 
 function isFlightInProgress(vuelo: VueloDTO, simulationMode: boolean, referenceTime: Date | null): boolean {
   if (vuelo.estado === 'CULMINADO' || vuelo.estado === 'CANCELADO') return false
   const progress = simulationMode
-    ? (referenceTime ? calcularProgresoEnSimulacion(vuelo, referenceTime) : vuelo.progresoVuelo)
+    ? vuelo.progresoVuelo
     : calcularProgresoLocal(vuelo, referenceTime ?? new Date())
   return progress > 0 && progress < 100
 }
@@ -211,6 +211,8 @@ interface SimClockSnapshot {
   receivedAtMs: number
   rateMsPerRealMs: number
 }
+
+const DEFAULT_SIM_CLOCK_RATE = 240
 
 function buildPendingRoutePoints(
   from: [number, number],
@@ -384,18 +386,23 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
     const simulationDate = parseUtc(simulationTime)
     const now = performance.now()
     const previous = simClockRef.current
-    let rateMsPerRealMs = previous?.rateMsPerRealMs ?? 0
+    let rateMsPerRealMs = previous?.rateMsPerRealMs ?? DEFAULT_SIM_CLOCK_RATE
+    let simulationTimeMs = simulationDate.getTime()
 
     if (previous) {
       const realDelta = now - previous.receivedAtMs
       const simulationDelta = simulationDate.getTime() - previous.simulationTimeMs
-      if (realDelta > 0 && simulationDelta >= 0) {
-        rateMsPerRealMs = simulationDelta / realDelta
+      const projectedSimulationNow = previous.simulationTimeMs + (Math.max(0, realDelta) * previous.rateMsPerRealMs)
+      simulationTimeMs = Math.max(simulationTimeMs, projectedSimulationNow)
+
+      if (realDelta > 0 && simulationDelta > 0) {
+        const instantRate = simulationDelta / realDelta
+        rateMsPerRealMs = (previous.rateMsPerRealMs * 0.85) + (instantRate * 0.15)
       }
     }
 
     simClockRef.current = {
-      simulationTimeMs: simulationDate.getTime(),
+      simulationTimeMs,
       receivedAtMs: now,
       rateMsPerRealMs,
     }
@@ -466,7 +473,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
     })
 
     const realNow = simulationMode ? null : new Date()
-    const simulationNow = simulationMode ? getSimulationNow() : null
+    const simulationNow = simulationMode ? getSimulationNow(performance.now()) : null
     vuelos.forEach((v) => {
       const progresoLocal = simulationMode
         ? (simulationNow ? calcularProgresoEnSimulacion(v, simulationNow) : v.progresoVuelo)
@@ -813,7 +820,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
 
     const displayFlights = Array.from(persistentFlightsRef.current.values()).filter((v) => {
       const progreso = simulationMode
-        ? (simulationNow ? calcularProgresoEnSimulacion(v, simulationNow) : v.progresoVuelo)
+        ? v.progresoVuelo
         : calcularProgresoLocal(v, realNow)
       const passesPanelFilter = !filteredFlightIds || filteredFlightIds.has(v.id) || v.id === selectedVueloIdRef.current
       return progreso > 0 && progreso < 100 && passesPanelFilter
@@ -844,13 +851,12 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
 
       const existingAnim = flightAnimsRef.current.get(v.id)
       if (existingAnim) {
-        const currentProgress = simulationMode ? progresoActual : progresoActual
+        const currentProgress = simulationMode ? existingAnim.displayedProgress : progresoActual
         const snapshotInterval = Math.min(20_000, Math.max(1_000, frameNow - existingAnim.snapshotAt))
         existingAnim.vuelo = v
         existingAnim.from = from
         existingAnim.to = to
         existingAnim.pts = pts
-        existingAnim.displayedProgress = currentProgress
         existingAnim.startProgress = currentProgress
         existingAnim.targetProgress = Math.max(currentProgress, progresoActual)
         existingAnim.transitionStartedAt = frameNow
@@ -925,13 +931,16 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         if (!mk) return
 
         const currentProgress = simulationMode
-          ? (simulationNow ? calcularProgresoEnSimulacion(anim.vuelo, simulationNow) : animatedProgress(anim, frameNow))
+          ? Math.max(
+              anim.displayedProgress,
+              simulationNow ? calcularProgresoEnSimulacion(anim.vuelo, simulationNow) : animatedProgress(anim, frameNow),
+            )
           : calcularProgresoLocal(anim.vuelo, realNow!)
         anim.displayedProgress = currentProgress
         if (id === selectedVueloIdRef.current) {
           updateSelectedFlightRouteOverlay(id, currentProgress)
         }
-        if (currentProgress >= 100) {
+        if (!simulationMode && currentProgress >= 100) {
           markerLayerRef.current?.removeLayer(mk)
           flightMarkersRef.current.delete(id)
           flightAngleRef.current.delete(id)

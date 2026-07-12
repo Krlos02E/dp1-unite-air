@@ -164,7 +164,7 @@ export default function MaletaListPanel({
   return (
     <div className="w-96 flex-1 min-h-0 bg-gray-900 border border-gray-800 rounded-xl flex flex-col overflow-hidden">
       <div className="p-3 border-b border-gray-800">
-        <h3 className="text-sm font-semibold text-gray-200 mb-2">Maletas</h3>
+        <h3 className="text-sm font-semibold text-violet-200 mb-2">Maletas</h3>
         {filterEnvioId && (
           <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2 py-1.5">
             <span className="truncate text-[10px] text-sky-300">Filtrando por envio {filterEnvioId}</span>
@@ -205,7 +205,7 @@ export default function MaletaListPanel({
               className={`flex-1 py-2 text-xs font-medium transition-colors ${
                 currentMainTab === main.key
                   ? 'text-sky-400 border-b-2 border-sky-400 bg-sky-400/5'
-                  : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/50'
+                  : 'text-violet-300/80 hover:text-violet-200 hover:bg-gray-800/50'
               }`}
             >
               {main.label}
@@ -225,7 +225,7 @@ export default function MaletaListPanel({
                   className={`rounded-full px-2.5 py-1 text-[10px] font-medium transition-colors ${
                     isActive
                       ? 'bg-sky-500/20 text-sky-400 border border-sky-500/40'
-                      : 'bg-gray-800 text-gray-500 border border-gray-700 hover:text-gray-300'
+                      : 'bg-gray-800 text-violet-300/80 border border-gray-700 hover:text-violet-200'
                   }`}
                 >
                   {label}
@@ -272,13 +272,13 @@ export default function MaletaListPanel({
               }`}
             >
               <div className="text-[11px] font-semibold text-amber-300 truncate">{maleta.id}</div>
-              <div className="text-[10px] text-gray-500 truncate">Envío: {maleta.envioId}</div>
-              <div className="text-xs text-gray-200 truncate mt-1">
-                <span className="font-medium">{getAirportCity(maleta.origen) || maleta.origen}</span>
+              <div className="text-[10px] text-violet-300/80 truncate">Envío: {maleta.envioId}</div>
+              <div className="text-xs text-violet-300 truncate mt-1">
+                <span className="font-medium text-violet-200">{getAirportCity(maleta.origen) || maleta.origen}</span>
                 <span className="text-gray-600 mx-1">→</span>
-                <span className="font-medium">{getAirportCity(maleta.destino) || maleta.destino}</span>
+                <span className="font-medium text-violet-200">{getAirportCity(maleta.destino) || maleta.destino}</span>
               </div>
-              <div className="text-[10px] text-gray-500 truncate mt-0.5">
+              <div className="text-[10px] text-violet-300/80 truncate mt-0.5">
                 Subruta {maleta.subrutaIndex || 1}{ut ? ` · UT ${ut}` : ''}
               </div>
             </button>

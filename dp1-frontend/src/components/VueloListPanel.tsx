@@ -610,14 +610,14 @@ function VueloListPanel({
             ['bg-amber-500', 'Alerta'],
             ['bg-red-500', 'Crítico'],
           ].map(([color, label]) => (
-            <span key={label} className="inline-flex items-center gap-1 text-[9px] text-gray-500">
+            <span key={label} className="inline-flex items-center gap-1 text-[9px] text-violet-300/80">
               <span className={`w-1.5 h-1.5 rounded-full ${color}`} />{label}
             </span>
           ))}
         </div>
         <div className="mt-2 pt-2 border-t border-gray-800/80">
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[10px] font-medium text-gray-400">Búsqueda en panel</span>
+            <span className="text-[10px] font-medium text-violet-300">Búsqueda en panel</span>
             {hasPanelSearch && (
               <button
                 type="button"
@@ -681,7 +681,7 @@ function VueloListPanel({
             />
           </div>
           <div className="mt-2 flex items-center justify-between mb-1.5">
-            <span className="text-[10px] font-medium text-gray-400">Filtros persistentes</span>
+            <span className="text-[10px] font-medium text-violet-300">Filtros persistentes</span>
             {hasPersistentFilters && (
               <button
                 type="button"
@@ -779,7 +779,7 @@ function VueloListPanel({
               className={`text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors whitespace-nowrap cursor-pointer ${
                 filterEstado === est
                   ? 'bg-sky-600 text-white'
-                  : 'bg-gray-800 text-gray-400 hover:text-gray-200'
+                  : 'bg-gray-800 text-violet-300/80 hover:text-violet-200'
               }`}
             >
               {estadoVueloLabel[est] || est}
@@ -790,7 +790,7 @@ function VueloListPanel({
 
       {/* Sorting */}
       <div className="px-3 py-1.5 border-b border-gray-800 flex items-center gap-1.5">
-        <span className="text-[10px] text-gray-500 whitespace-nowrap">Ordenar:</span>
+        <span className="text-[10px] text-violet-300 whitespace-nowrap">Ordenar:</span>
         <select
           value={sortField}
           onChange={(e) => setSortField(e.target.value as SortField)}
@@ -868,13 +868,13 @@ function VueloListPanel({
               >
                 <div className="flex items-start justify-between gap-1 mb-1">
                   <div className="min-w-0 flex-1">
-                    <div className="text-[10px] font-mono font-semibold text-sky-400 mb-0.5" title={v.id}>
+                    <div className="text-sm font-mono font-bold text-violet-200 mb-0.5" title={v.id}>
                       UT {v.origen}-{v.destino}
                     </div>
-                    <div className="text-xs text-gray-200 truncate">
-                      <span className="font-semibold text-emerald-400">{origenPais}</span>
+                    <div className="text-[11px] text-violet-300 truncate">
+                      <span className="font-medium text-violet-200">{origenPais}</span>
                       <span className="text-gray-500 mx-0.5">→</span>
-                      <span className="font-semibold text-emerald-400">{destinoPais}</span>
+                      <span className="font-medium text-violet-200">{destinoPais}</span>
                       <span className="text-[10px] text-gray-500 ml-1">· {formatTimeInTimezone(v.salidaUtc, tzOffset)} - {formatTimeInTimezone(v.llegadaUtc, tzOffset)}</span>
                     </div>
                     {v.estado && (
@@ -926,7 +926,7 @@ function VueloListPanel({
                 </div>
 
                 {envios && (
-                  <div className="text-[10px] text-gray-500 mt-1">
+                  <div className="text-[10px] text-violet-300/80 mt-1">
                     📦 {enviosEnEsteVuelo.length} envío{enviosEnEsteVuelo.length !== 1 ? 's' : ''} · 🎒 {totalMaletas} maleta{totalMaletas !== 1 ? 's' : ''}
                   </div>
                 )}
