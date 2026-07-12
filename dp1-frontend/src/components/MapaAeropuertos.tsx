@@ -133,11 +133,16 @@ function calcularProgresoEnSimulacion(v: VueloDTO, simulationNow: Date): number 
   return calcularProgresoLocal(v, simulationNow)
 }
 
+function getFlightProgress(vuelo: VueloDTO, simulationMode: boolean, referenceTime?: Date | null): number {
+  if (simulationMode) {
+    return vuelo.progresoVuelo
+  }
+  return calcularProgresoLocal(vuelo, referenceTime ?? new Date())
+}
+
 function isFlightInProgress(vuelo: VueloDTO, simulationMode: boolean, referenceTime: Date | null): boolean {
   if (vuelo.estado === 'CULMINADO' || vuelo.estado === 'CANCELADO') return false
-  const progress = simulationMode
-    ? vuelo.progresoVuelo
-    : calcularProgresoLocal(vuelo, referenceTime ?? new Date())
+  const progress = getFlightProgress(vuelo, simulationMode, referenceTime)
   return progress > 0 && progress < 100
 }
 
@@ -474,11 +479,8 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
     })
 
     const realNow = simulationMode ? null : new Date()
-    const simulationNow = simulationMode ? getSimulationNow(performance.now()) : null
     vuelos.forEach((v) => {
-      const progresoLocal = simulationMode
-        ? (simulationNow ? calcularProgresoEnSimulacion(v, simulationNow) : v.progresoVuelo)
-        : calcularProgresoLocal(v, realNow!)
+      const progresoLocal = getFlightProgress(v, simulationMode, realNow)
       const isActive = simulationMode
         ? v.estado === 'ACTIVO' && progresoLocal > 0 && progresoLocal < 100
         : progresoLocal > 0 && progresoLocal < 100
@@ -817,12 +819,8 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
 
     const realNow = new Date()
     const frameNow = performance.now()
-    const simulationNow = simulationMode ? getSimulationNow(frameNow) : null
-
     const displayFlights = Array.from(persistentFlightsRef.current.values()).filter((v) => {
-      const progreso = simulationMode
-        ? (simulationNow ? calcularProgresoEnSimulacion(v, simulationNow) : v.progresoVuelo)
-        : calcularProgresoLocal(v, realNow)
+      const progreso = getFlightProgress(v, simulationMode, realNow)
       const passesPanelFilter = !filteredFlightIds || filteredFlightIds.has(v.id) || v.id === selectedVueloIdRef.current
       return progreso > 0 && progreso < 100 && passesPanelFilter
     })
@@ -843,11 +841,9 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       const from: [number, number] = [v.latOrigen, v.lonOrigen]
       const to: [number, number] = [v.latDestino, v.lonDestino]
       const isSelected = v.id === selectedVueloIdRef.current
-      const tooltipText = tooltipForFlight(v, airportLookup, simulationMode ? simulationNow ?? undefined : realNow ?? undefined)
+      const tooltipText = tooltipForFlight(v, airportLookup, realNow ?? undefined)
       const pts = bezierPoints(from, to, ROUTE_POINT_COUNT)
-      const progresoActual = simulationMode
-        ? (simulationNow ? calcularProgresoEnSimulacion(v, simulationNow) : v.progresoVuelo)
-        : calcularProgresoLocal(v, realNow)
+      const progresoActual = getFlightProgress(v, simulationMode, realNow)
       const tNorm = progresoActual / 100
 
       const existingAnim = flightAnimsRef.current.get(v.id)
@@ -925,17 +921,13 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       }
       lastAnimationFrameRef.current = frameNow
       const realNow = simulationMode ? null : new Date()
-      const simulationNow = simulationMode ? getSimulationNow(frameNow) : null
       flightAnimsRef.current.forEach((anim, id) => {
         if (!visibleFlightIdsRef.current.has(id)) return
         const mk = flightMarkersRef.current.get(id)
         if (!mk) return
 
         const currentProgress = simulationMode
-          ? Math.max(
-              anim.displayedProgress,
-              simulationNow ? calcularProgresoEnSimulacion(anim.vuelo, simulationNow) : animatedProgress(anim, frameNow),
-            )
+          ? animatedProgress(anim, frameNow)
           : calcularProgresoLocal(anim.vuelo, realNow!)
         anim.displayedProgress = currentProgress
         if (id === selectedVueloIdRef.current) {

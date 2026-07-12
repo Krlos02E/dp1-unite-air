@@ -11,7 +11,6 @@ import ResultadosModal from '../components/ResultadosModal'
 import { formatDateTime } from '../utils/dateFormat'
 import { AIRPORTS_DATA } from '../data/airportsData'
 import type { VueloDTO, AeropuertoDTO, SimulationState, EnvioEstado, MaletaEstado } from '../types'
-import { shouldDisplayFlight } from '../utils/flightVisibility'
 import { hasSharedVersionChanged } from '../utils/sharedSync'
 import { broadcastSimMessage, listenSimMessages } from '../utils/broadcast'
 
@@ -274,6 +273,7 @@ export default function Simulacion() {
   const [resultSnapshot, setResultSnapshot] = useState<SimulationState | null>(null)
 
   const hasSimulationStarted = Boolean(sessionId || simulationState)
+  const hasSimulationFlightSnapshot = (simulationState?.vuelos?.length ?? 0) > 0
 
   const aeropuertos = useMemo(() => {
     const map = new Map<string, AeropuertoDTO>()
@@ -437,7 +437,7 @@ export default function Simulacion() {
   }, [refreshActiveSimulation])
 
   const vuelos = useMemo(() => {
-    if (!hasSimulationStarted) return EMPTY_FLIGHTS
+    if (!hasSimulationFlightSnapshot) return EMPTY_FLIGHTS
 
     const combinados = new Map<string, VueloDTO>()
     simulationState?.vuelos?.forEach((vuelo) => {
@@ -462,23 +462,8 @@ export default function Simulacion() {
         estado: vuelo.estado === 'CANCELADO' ? 'CANCELADO' : current.estado,
       })
     })
-
-    // Fallback visual durante PLANIFICANDO: asegurar estado ACTIVO y carga estimada
-    // para que los aviones no desaparezcan ni se vean azules (vacíos) en nuevas pestañas
-    if (simulationState?.status === 'PLANIFICANDO') {
-      combinados.forEach((vuelo) => {
-        let updated = vuelo
-        if (!updated.estado || updated.estado === 'PROGRAMADO') {
-          updated = { ...updated, estado: 'ACTIVO' as const }
-        }
-        if (updated.cargaActual === 0 && updated.capacidad > 0) {
-          updated = { ...updated, cargaActual: Math.max(1, Math.round(updated.capacidad * 0.5)) }
-        }
-        combinados.set(vuelo.id, updated)
-      })
-    }
     return Array.from(combinados.values())
-  }, [hasSimulationStarted, simulationState?.vuelos, vuelosEstaticos, simulationState?.status])
+  }, [hasSimulationFlightSnapshot, simulationState?.vuelos, vuelosEstaticos])
 
   // Keep selected flight info synced with latest poll data
   useEffect(() => {
@@ -656,34 +641,33 @@ export default function Simulacion() {
   const enviosActivos = hasSimulationStarted ? (simulationState?.envios || []) : []
   const maletasActivas = hasSimulationStarted ? (simulationState?.maletas || []) : []
 
-  const flightStats = useMemo(() => vuelos.reduce((stats, vuelo) => {
-    const visibleInSample = Boolean(vuelo.editable) || shouldDisplayFlight(vuelo.id) || vuelo.id === selectedVuelo?.id
-    if (vuelo.estado === 'CULMINADO' && visibleInSample) stats.culminados++
-    else if (vuelo.estado === 'ACTIVO' && visibleInSample) stats.enTransito++
-    else if (vuelo.estado === 'CANCELADO') stats.cancelados++
-    if (vuelo.estado === 'ACTIVO' && visibleInSample && vuelo.cargaActual <= 0) stats.vaciosEnTransito++
-    return stats
-  }, { culminados: 0, enTransito: 0, cancelados: 0, vaciosEnTransito: 0 }), [vuelos, selectedVuelo?.id])
+  const rawSimulationFlights = simulationState?.vuelos ?? EMPTY_FLIGHTS
+  const rawSimulationAirports = simulationState?.aeropuertos ?? aeropuertosFallback
 
-  const vuelosCulminados = flightStats.culminados
-  const vuelosEnTransitoCount = flightStats.enTransito
-  const vuelosCancelados = flightStats.cancelados
+  const flightStats = useMemo(() => rawSimulationFlights.reduce((stats, vuelo) => {
+    if (vuelo.estado === 'ACTIVO' && vuelo.cargaActual <= 0) stats.vaciosEnTransito++
+    return stats
+  }, { vaciosEnTransito: 0 }), [rawSimulationFlights])
+
+  const vuelosCulminados = simulationState?.vuelosCulminados ?? 0
+  const vuelosEnTransitoCount = simulationState?.vuelosEnTransito ?? 0
+  const vuelosCancelados = simulationState?.vuelosCancelados ?? 0
   const vuelosVaciosEnTransito = flightStats.vaciosEnTransito
   const vuelosVaciosEnTransitoPct = vuelosEnTransitoCount > 0
     ? ((vuelosVaciosEnTransito / vuelosEnTransitoCount) * 100).toFixed(2)
     : '0.00'
 
   const occupancy = useMemo(() => {
-    const flota = vuelos.reduce((acc, v) => ({
+    const flota = rawSimulationFlights.reduce((acc, v) => ({
       carga: acc.carga + v.cargaActual,
       capacidad: acc.capacidad + v.capacidad,
     }), { carga: 0, capacidad: 0 })
-    const aeropuertosOcu = aeropuertos.reduce((acc, a) => ({
+    const aeropuertosOcu = rawSimulationAirports.reduce((acc, a) => ({
       ocupacion: acc.ocupacion + a.ocupacionActual,
       capacidad: acc.capacidad + a.capacidadMaxima,
     }), { ocupacion: 0, capacidad: 0 })
     return { flota, aeropuertos: aeropuertosOcu }
-  }, [vuelos, aeropuertos])
+  }, [rawSimulationFlights, rawSimulationAirports])
 
   function ocupColor(ratio: number): string {
     if (ratio <= 0) return 'bg-sky-500'
