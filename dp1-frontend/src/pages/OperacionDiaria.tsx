@@ -8,6 +8,8 @@ import VueloListPanel from '../components/VueloListPanel'
 import { AIRPORTS_DATA } from '../data/airportsData'
 import type { VueloDTO, AeropuertoDTO, EnvioEstado, MaletaEstado } from '../types'
 
+const SHARED_OPERATION_POLL_MS = 5000
+
 const aeropuertosFallback: AeropuertoDTO[] = Object.values(AIRPORTS_DATA).map((a) => ({
   codigoOACI: a.codigoOACI,
   latitud: a.latitud,
@@ -293,14 +295,22 @@ export default function OperacionDiaria() {
     ))
   }, [])
 
-  const refreshOperacionContextData = useCallback(async () => {
-    const [aeropuertosData, vuelosData] = await Promise.all([
+  const refreshOperacionSharedData = useCallback(async () => {
+    const [aeropuertosData, vuelosData, enviosData, maletasData] = await Promise.all([
       cargaArchivosService.obtenerAeropuertos('OPERACION'),
       cargaArchivosService.obtenerVuelos('OPERACION'),
+      cargaArchivosService.listarEnvios(undefined, undefined, undefined),
+      cargaArchivosService.listarMaletas(undefined, undefined, undefined),
     ])
     setAeropuertosEstaticos(aeropuertosData.length > 0 ? aeropuertosData : aeropuertosFallback)
     setVuelosOriginales(vuelosData)
+    setTodosEnvios(enviosData.envios)
+    setTodasMaletas(maletasData.maletas)
   }, [])
+
+  const refreshOperacionContextData = useCallback(async () => {
+    await refreshOperacionSharedData()
+  }, [refreshOperacionSharedData])
 
   // Cargar aeropuertos y vuelos del dataset
   useEffect(() => {
@@ -308,13 +318,17 @@ export default function OperacionDiaria() {
     const load = async () => {
       try {
         setLoading(true)
-        const [aeropuertosData, vuelosData] = await Promise.all([
+        const [aeropuertosData, vuelosData, enviosData, maletasData] = await Promise.all([
           cargaArchivosService.obtenerAeropuertos('OPERACION'),
           cargaArchivosService.obtenerVuelos('OPERACION'),
+          cargaArchivosService.listarEnvios(undefined, undefined, undefined),
+          cargaArchivosService.listarMaletas(undefined, undefined, undefined),
         ])
         if (cancelled) return
         setAeropuertosEstaticos(aeropuertosData.length > 0 ? aeropuertosData : aeropuertosFallback)
         setVuelosOriginales(vuelosData)
+        setTodosEnvios(enviosData.envios)
+        setTodasMaletas(maletasData.maletas)
         setDataLoaded(true)
         setError(null)
       } catch (err: any) {
@@ -361,42 +375,34 @@ export default function OperacionDiaria() {
   useEffect(() => {
     if (!dataLoaded) return
 
-    const pollVuelos = async () => {
+    let cancelled = false
+
+    const pollSharedState = async () => {
       try {
-        const vuelosData = await cargaArchivosService.obtenerVuelos('OPERACION')
+        const [aeropuertosData, vuelosData, enviosData, maletasData] = await Promise.all([
+          cargaArchivosService.obtenerAeropuertos('OPERACION'),
+          cargaArchivosService.obtenerVuelos('OPERACION'),
+          cargaArchivosService.listarEnvios(undefined, undefined, undefined),
+          cargaArchivosService.listarMaletas(undefined, undefined, undefined),
+        ])
+        if (cancelled) return
+        setAeropuertosEstaticos(aeropuertosData.length > 0 ? aeropuertosData : aeropuertosFallback)
         setVuelosOriginales(vuelosData)
+        setTodosEnvios(enviosData.envios)
+        setTodasMaletas(maletasData.maletas)
       } catch {
-        // ignore polling errors
+        // ignore polling errors to keep the current snapshot on screen
       }
     }
 
-    const pollEnvios = async () => {
-      try {
-        const res = await cargaArchivosService.listarEnvios(undefined, undefined, undefined)
-        setTodosEnvios(res.envios)
-      } catch {
-        // ignore
-      }
-    }
-
-    const pollMaletas = async () => {
-      try {
-        const res = await cargaArchivosService.listarMaletas(undefined, undefined, undefined)
-        setTodasMaletas(res.maletas)
-      } catch {
-        // ignore
-      }
-    }
-
-    pollVuelos()
-    pollEnvios()
-    pollMaletas()
+    pollSharedState()
     const interval = setInterval(() => {
-      pollVuelos()
-      pollEnvios()
-      pollMaletas()
-    }, 15000)
-    return () => clearInterval(interval)
+      void pollSharedState()
+    }, SHARED_OPERATION_POLL_MS)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
   }, [dataLoaded])
 
   useEffect(() => {
@@ -605,7 +611,7 @@ export default function OperacionDiaria() {
               includeCompleted
               includeProgrammed
               onVisibleFlightsChange={handleVisibleFlightsChange}
-              onDataChanged={refreshOperacionContextData}
+              onDataChanged={refreshOperacionSharedData}
               onFlightStatusChanged={handleFlightStatusChanged}
               tzOffset={mapTz}
               onSelectedVueloClear={() => setSelectedVuelo(null)}
