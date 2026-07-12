@@ -6,10 +6,11 @@ import { buildAirportLookup, getAirportCityResolved, getAirportCountryResolved, 
 import { TIMEZONE_OPTIONS } from '../utils/timezoneFormat'
 import { shouldDisplayFlight } from '../utils/flightVisibility'
 
-function tooltipForFlight(v: VueloDTO, airportLookup: Map<string, AirportLookupData>): string {
+function tooltipForFlight(v: VueloDTO, airportLookup: Map<string, AirportLookupData>, referenceTime?: Date): string {
   const origen = getAirportCityResolved(v.origen, airportLookup) || v.origen
   const destino = getAirportCityResolved(v.destino, airportLookup) || v.destino
-  return `<b>${v.id}</b><br>${origen} → ${destino}<br>Progreso: ${Math.round(calcularProgresoLocal(v, new Date()))}%<br>Maletas: ${v.cargaActual}/${v.capacidad}`
+  const progreso = referenceTime ? calcularProgresoLocal(v, referenceTime) : calcularProgresoLocal(v, new Date())
+  return `<b>${v.id}</b><br>${origen} → ${destino}<br>Progreso: ${Math.round(progreso)}%<br>Maletas: ${v.cargaActual}/${v.capacidad}`
 }
 
 interface Props {
@@ -479,7 +480,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         ? (simulationNow ? calcularProgresoEnSimulacion(v, simulationNow) : v.progresoVuelo)
         : calcularProgresoLocal(v, realNow!)
       const isActive = simulationMode
-        ? v.estado === 'ACTIVO'
+        ? v.estado === 'ACTIVO' && progresoLocal > 0 && progresoLocal < 100
         : progresoLocal > 0 && progresoLocal < 100
       const isVisible = shouldKeepFlightVisibleOnMap(v, simulationMode, selectedVueloId)
       if (!isActive || !isVisible) {
@@ -820,7 +821,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
 
     const displayFlights = Array.from(persistentFlightsRef.current.values()).filter((v) => {
       const progreso = simulationMode
-        ? v.progresoVuelo
+        ? (simulationNow ? calcularProgresoEnSimulacion(v, simulationNow) : v.progresoVuelo)
         : calcularProgresoLocal(v, realNow)
       const passesPanelFilter = !filteredFlightIds || filteredFlightIds.has(v.id) || v.id === selectedVueloIdRef.current
       return progreso > 0 && progreso < 100 && passesPanelFilter
@@ -842,7 +843,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       const from: [number, number] = [v.latOrigen, v.lonOrigen]
       const to: [number, number] = [v.latDestino, v.lonDestino]
       const isSelected = v.id === selectedVueloIdRef.current
-      const tooltipText = tooltipForFlight(v, airportLookup)
+      const tooltipText = tooltipForFlight(v, airportLookup, simulationMode ? simulationNow ?? undefined : realNow ?? undefined)
       const pts = bezierPoints(from, to, ROUTE_POINT_COUNT)
       const progresoActual = simulationMode
         ? (simulationNow ? calcularProgresoEnSimulacion(v, simulationNow) : v.progresoVuelo)
@@ -940,7 +941,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         if (id === selectedVueloIdRef.current) {
           updateSelectedFlightRouteOverlay(id, currentProgress)
         }
-        if (!simulationMode && currentProgress >= 100) {
+        if (currentProgress >= 100) {
           markerLayerRef.current?.removeLayer(mk)
           flightMarkersRef.current.delete(id)
           flightAngleRef.current.delete(id)

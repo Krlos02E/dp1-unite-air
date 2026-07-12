@@ -12,6 +12,7 @@ import { formatDateTime } from '../utils/dateFormat'
 import { AIRPORTS_DATA } from '../data/airportsData'
 import type { VueloDTO, AeropuertoDTO, SimulationState, EnvioEstado, MaletaEstado } from '../types'
 import { shouldDisplayFlight } from '../utils/flightVisibility'
+import { broadcastSimMessage, listenSimMessages } from '../utils/broadcast'
 
 const SIM_CONFIG_KEY = 'uniteair_simConfig'
 const SIM_ACTIVE_CONFIG_KEY = 'uniteair_activeSimConfig'
@@ -51,6 +52,7 @@ export default function Simulacion() {
   const algoritmo = 'ALNS'
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [fechaHoraActual, setFechaHoraActual] = useState('')
 
   // Modals
   const [selectedVuelo, setSelectedVuelo] = useState<VueloDTO | null>(null)
@@ -331,6 +333,56 @@ export default function Simulacion() {
     return () => { cancelled = true }
   }, [startPolling, resetSimulation])
 
+  // Sincronización entre pestañas: escuchar inicio/detención de simulación
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === SIM_ACTIVE_CONFIG_KEY && e.newValue) {
+        try {
+          const cfg = JSON.parse(e.newValue)
+          if (cfg?.sessionId && cfg.sessionId !== sessionId) {
+            setSessionId(cfg.sessionId)
+            setFechaInicio(cfg.fechaInicio || '')
+            setHoraInicio(cfg.horaInicio || '')
+            startPolling(cfg.sessionId)
+          }
+        } catch {
+          // ignore parse errors
+        }
+      }
+      if (e.key === SIM_STOPPED_KEY && e.newValue) {
+        resetSimulation()
+        setSessionId('')
+        setResultSnapshot(null)
+        hasShownResults.current = false
+      }
+    }
+
+    window.addEventListener('storage', handleStorage)
+
+    const unlisten = listenSimMessages((msg) => {
+      if (msg.type === 'STARTED' && msg.payload?.sessionId) {
+        const cfg = getActiveConfigFromStorage()
+        if (cfg?.sessionId === msg.payload.sessionId && cfg.sessionId !== sessionId) {
+          setSessionId(cfg.sessionId)
+          setFechaInicio(cfg.fechaInicio)
+          setHoraInicio(cfg.horaInicio)
+          startPolling(cfg.sessionId, undefined, msg.payload.startedAt, msg.payload.elapsedRealtimeSeconds)
+        }
+      }
+      if (msg.type === 'STOPPED') {
+        resetSimulation()
+        setSessionId('')
+        setResultSnapshot(null)
+        hasShownResults.current = false
+      }
+    })
+
+    return () => {
+      window.removeEventListener('storage', handleStorage)
+      unlisten()
+    }
+  }, [sessionId, startPolling, resetSimulation])
+
   const vuelos = useMemo(() => {
     if (!hasSimulationStarted) return EMPTY_FLIGHTS
 
@@ -341,8 +393,24 @@ export default function Simulacion() {
     simulationState?.vuelos?.forEach((vuelo) => {
       combinados.set(vuelo.id, vuelo)
     })
+
+    // Fallback visual durante PLANIFICANDO: asegurar estado ACTIVO y carga estimada
+    // para que los aviones no desaparezcan ni se vean azules (vacíos) en nuevas pestañas
+    if (simulationState?.status === 'PLANIFICANDO') {
+      combinados.forEach((vuelo) => {
+        let updated = vuelo
+        if (!updated.estado || updated.estado === 'PROGRAMADO') {
+          updated = { ...updated, estado: 'ACTIVO' as const }
+        }
+        if (updated.cargaActual === 0 && updated.capacidad > 0) {
+          updated = { ...updated, cargaActual: Math.max(1, Math.round(updated.capacidad * 0.5)) }
+        }
+        combinados.set(vuelo.id, updated)
+      })
+    }
+
     return Array.from(combinados.values())
-  }, [hasSimulationStarted, simulationState?.vuelos, vuelosEstaticos])
+  }, [hasSimulationStarted, simulationState?.vuelos, vuelosEstaticos, simulationState?.status])
 
   // Keep selected flight info synced with latest poll data
   useEffect(() => {
@@ -365,23 +433,7 @@ export default function Simulacion() {
     }
   }, [simulationState])
 
-  // Detener simulación al cerrar la pestaña
-  useEffect(() => {
-    const API_BASE = import.meta.env.VITE_API_URL || '/api'
-    const handleBeforeUnload = () => {
-      if (sessionId) {
-        const url = `${API_BASE}/simulacion/detener/${sessionId}`
-        navigator.sendBeacon?.(url)
-        try {
-          fetch(url, { method: 'POST', keepalive: true, mode: 'no-cors' })
-        } catch {
-          // ignore
-        }
-      }
-    }
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [sessionId])
+  // (eliminado: beforeunload ya no detiene la simulación, para permitir multi-pestaña)
 
   function formatElapsed(seconds: number): string {
     const h = Math.floor(seconds / 3600)
@@ -389,6 +441,23 @@ export default function Simulacion() {
     const s = seconds % 60
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
   }
+
+  function formatCurrentDateTime(date: Date): string {
+    const d = date.getDate().toString().padStart(2, '0')
+    const mo = (date.getMonth() + 1).toString().padStart(2, '0')
+    const y = date.getFullYear()
+    const h = date.getHours().toString().padStart(2, '0')
+    const min = date.getMinutes().toString().padStart(2, '0')
+    return `${d}/${mo}/${y} ${h}:${min}`
+  }
+
+  // Reloj actual a nivel de minuto
+  useEffect(() => {
+    const tick = () => setFechaHoraActual(formatCurrentDateTime(new Date()))
+    tick()
+    const timer = setInterval(tick, 1000)
+    return () => clearInterval(timer)
+  }, [])
 
   const simulatedElapsedSeconds = useMemo(() => {
     if (!simulationState?.simulationTime || !fechaInicio || !horaInicio) return 0
@@ -453,6 +522,11 @@ export default function Simulacion() {
       setResultSnapshot(null)
       setSessionId(state.sessionId)
       startPolling(state.sessionId, undefined, state.startedAt, state.elapsedRealtimeSeconds)
+      broadcastSimMessage('STARTED', {
+        sessionId: state.sessionId,
+        startedAt: state.startedAt,
+        elapsedRealtimeSeconds: state.elapsedRealtimeSeconds,
+      })
     } catch (err: any) {
       const msg = err?.response?.data?.logs?.[0]?.mensaje
         || err?.response?.data?.message
@@ -478,6 +552,7 @@ export default function Simulacion() {
     clearConfigStorage()
     clearActiveConfigStorage()
     localStorage.setItem(SIM_STOPPED_KEY, '1')
+    broadcastSimMessage('STOPPED')
     hasShownResults.current = false
     setResultSnapshot(null)
     setShowResultados(false)
@@ -551,68 +626,53 @@ export default function Simulacion() {
   }
 
   return (
-    <div className="flex flex-col gap-1">
-      {/* Barra superior de parámetros + tiempos */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl px-3 py-1.5 flex flex-wrap items-center gap-x-2 gap-y-1.5">
+    <div className="flex flex-col h-[calc(100vh-4rem)]">
+      {/* Barra superior de parámetros + tiempos — centrada, sin recuadros */}
+      <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 px-4 py-1">
         <div className="flex items-center gap-2">
-          <span className="text-[13px] text-gray-400 font-medium">Escenario:</span>
-          <span className="text-[13px] text-gray-200 font-semibold">{DURACION_FIJA} días</span>
+          <span className="text-[11px] uppercase tracking-wider text-gray-500 font-semibold">Escenario</span>
+          <span className="text-sm font-bold text-white">{DURACION_FIJA} días</span>
         </div>
 
         <div className="flex items-center gap-2">
-          <label className="text-[13px] text-gray-400 font-medium">Fecha inicio:</label>
+          <label className="text-[11px] uppercase tracking-wider text-gray-500 font-semibold">Inicio</label>
           <input
             type="date"
             value={fechaInicio}
             onChange={(e) => setFechaInicio(e.target.value)}
-            className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-0.5 text-[13px] text-gray-200 focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            className="bg-gray-800/80 border border-gray-600 rounded-lg px-2 py-1 text-xs text-gray-100 focus:outline-none focus:ring-2 focus:ring-sky-500/60 focus:border-sky-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer hover:bg-gray-800 transition-colors"
             disabled={!!sessionId && !isError}
           />
-        </div>
-
-        <div className="flex items-center gap-2">
-          <label className="text-[13px] text-gray-400 font-medium">Hora inicio:</label>
           <input
             type="time"
             value={horaInicio}
             onChange={(e) => setHoraInicio(e.target.value)}
-            className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-0.5 text-[13px] text-gray-200 focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            className="bg-gray-800/80 border border-gray-600 rounded-lg px-2 py-1 text-xs text-gray-100 focus:outline-none focus:ring-2 focus:ring-sky-500/60 focus:border-sky-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer hover:bg-gray-800 transition-colors"
             disabled={!!sessionId && !isError}
           />
         </div>
 
         {/* Tiempos de simulación */}
         {simulationState && (
-          <div className="flex items-center gap-1.5 ml-0.5">
-            <div className="flex flex-col bg-sky-950/40 border border-sky-800/40 rounded-lg px-2 py-0.5">
-              <span className="text-[10px] text-sky-300/80 leading-tight">Tiempo real transcurrido</span>
-              <span className="font-mono text-xs text-sky-200 leading-tight">{formatElapsed(elapsedRealSeconds)}</span>
-            </div>
-            <div className="flex flex-col bg-sky-950/40 border border-sky-800/40 rounded-lg px-2 py-0.5">
-              <span className="text-[10px] text-sky-300/80 leading-tight">Tiempo simulado transcurrido</span>
-              <span className="font-mono text-xs text-sky-200 leading-tight">{formatElapsed(simulatedElapsedSeconds)}</span>
-            </div>
-            <div className="flex flex-col bg-sky-950/40 border border-sky-800/40 rounded-lg px-2 py-0.5">
-              <span className="text-[10px] text-sky-300/80 leading-tight">Fecha actual simulación</span>
-              <span className="font-mono text-xs text-sky-200 leading-tight">{formatDateTime(simulationState?.simulationTime)}</span>
-            </div>
-            <div className="flex flex-col bg-sky-950/40 border border-sky-800/40 rounded-lg px-2 py-0.5">
-              <span className="text-[10px] text-sky-300/80 leading-tight">Día</span>
-              <span className="font-mono text-xs text-sky-200 leading-tight">{Math.ceil((simulationState.progreso / 100) * DURACION_FIJA)}</span>
-            </div>
-            <div className="flex flex-col w-[220px]">
-              <div className="w-full bg-gray-800 rounded-full h-2">
+          <div className="flex items-center gap-6">
+            <span className="text-[11px] text-sky-400/80 font-medium">Fecha y hora actual <span className="font-mono text-xs text-white font-semibold">{fechaHoraActual}</span></span>
+            <span className="text-[11px] text-sky-400/80 font-medium">Tiempo real transcurrido <span className="font-mono text-xs text-white font-semibold">{formatElapsed(elapsedRealSeconds)}</span></span>
+            <span className="text-[11px] text-emerald-400/80 font-medium">Fecha y hora simulación <span className="font-mono text-xs text-white font-semibold">{formatDateTime(simulationState?.simulationTime)}</span></span>
+            <span className="text-[11px] text-emerald-400/80 font-medium">Tiempo simulado transcurrido <span className="font-mono text-xs text-white font-semibold">{formatElapsed(simulatedElapsedSeconds)}</span></span>
+            <span className="text-[11px] text-emerald-400/80 font-medium">Día <span className="font-mono text-xs text-white font-semibold">{Math.min(DURACION_FIJA, Math.floor(simulatedElapsedSeconds / 86400) + 1)}/5</span></span>
+            <div className="flex items-center gap-2">
+              <div className="w-48 bg-gray-800 rounded-full h-1.5 overflow-hidden">
                 <div
-                  className="bg-emerald-500 h-2 rounded-full transition-all"
+                  className="bg-emerald-500 h-1.5 rounded-full transition-all"
                   style={{ width: `${simulationState.progreso}%` }}
                 />
               </div>
-              <p className="text-right text-[10px] text-gray-500 mt-0.5">{simulationState.progreso}%</p>
+              <span className="text-xs font-mono font-bold text-white">{simulationState.progreso}%</span>
             </div>
           </div>
         )}
 
-        <div className="flex items-center gap-2 ml-1">
+        <div className="flex items-center gap-2 ml-auto">
           {error && (
             <span className="text-xs text-red-400 font-medium">{error}</span>
           )}
@@ -621,7 +681,7 @@ export default function Simulacion() {
               {!isCompleted && (
                 <button
                   onClick={() => setShowStopConfirm(true)}
-                  className="px-3 py-1.5 rounded-lg font-medium text-sm bg-red-600 hover:bg-red-700 text-white transition-colors cursor-pointer"
+                  className="px-3 py-1 rounded-lg font-medium text-xs bg-red-600 hover:bg-red-500 text-white transition-colors cursor-pointer"
                 >
                   Detener
                 </button>
@@ -629,7 +689,7 @@ export default function Simulacion() {
               {isCompleted && (
                 <button
                   onClick={handleNuevaSimulacion}
-                  className="px-3 py-1.5 rounded-lg font-medium text-sm bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
+                  className="px-3 py-1 rounded-lg font-medium text-xs bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
                 >
                   Nueva Simulación
                 </button>
@@ -639,7 +699,7 @@ export default function Simulacion() {
             <button
               onClick={handleIniciar}
               disabled={loading}
-              className="px-5 py-1.5 rounded-lg font-medium text-sm bg-sky-600 hover:bg-sky-700 text-white transition-colors disabled:bg-gray-600 cursor-pointer"
+              className="px-4 py-1 rounded-lg font-medium text-xs bg-sky-600 hover:bg-sky-500 text-white transition-colors disabled:bg-gray-600 cursor-pointer"
             >
               {loading ? 'Iniciando...' : 'Iniciar'}
             </button>
@@ -648,7 +708,7 @@ export default function Simulacion() {
       </div>
 
       {/* Mapa + Panel lateral (como OperacionDiaria) */}
-      <div className="flex gap-2 h-[calc(100vh-10rem)]">
+      <div className="flex gap-2 flex-1 min-h-0">
         <div className="relative flex-1 bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
           <MapaAeropuertos
             aeropuertos={aeropuertos}
