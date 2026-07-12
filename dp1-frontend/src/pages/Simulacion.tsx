@@ -362,7 +362,7 @@ export default function Simulacion() {
     const unlisten = listenSimMessages((msg) => {
       if (msg.type === 'STARTED' && msg.payload?.sessionId) {
         const cfg = getActiveConfigFromStorage()
-        if (cfg?.sessionId === msg.payload.sessionId && cfg.sessionId !== sessionId) {
+        if (cfg && cfg.sessionId === msg.payload.sessionId && cfg.sessionId !== sessionId) {
           setSessionId(cfg.sessionId)
           setFechaInicio(cfg.fechaInicio)
           setHoraInicio(cfg.horaInicio)
