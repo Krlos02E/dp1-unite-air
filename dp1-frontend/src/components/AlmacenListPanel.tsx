@@ -155,6 +155,8 @@ export default function AlmacenListPanel({
   const [codePatternFilter, setCodePatternFilter] = useState('')
   const [continentFilter, setContinentFilter] = useState('todos')
   const [occupationFilter, setOccupationFilter] = useState<OccupationFilter>('todos')
+  const [searchCollapsed, setSearchCollapsed] = useState(false)
+  const [filtersCollapsed, setFiltersCollapsed] = useState(false)
   const [sortField, setSortField] = useState<SortField>('ocupacion')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [almacenesDB, setAlmacenesDB] = useState<AlmacenDTO[]>([])
@@ -383,74 +385,84 @@ export default function AlmacenListPanel({
         </div>
         <div className="space-y-1.5">
           <div>
-            <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-violet-300">Búsqueda temporal</p>
-            <div className="flex gap-1.5">
-              <select
-                value={searchScope}
-                onChange={(e) => setSearchScope(e.target.value as SearchScope)}
-                className="w-[88px] bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
-              >
-                <option value="todos">Todo</option>
-                <option value="codigo">Código</option>
-                <option value="ciudad">Ciudad</option>
-                <option value="pais">País</option>
-              </select>
-              <input
-                type="text"
-                placeholder="Buscar temporalmente..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
-              />
-            </div>
+            <button onClick={() => setSearchCollapsed((v) => !v)} className="flex w-full items-center justify-between gap-2 mb-1 cursor-pointer">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-violet-300">Búsqueda temporal</p>
+              <span className={`text-gray-500 text-[10px] transition-transform ${searchCollapsed ? '' : 'rotate-180'}`}>▼</span>
+            </button>
+            {!searchCollapsed && (
+              <div className="flex gap-1.5">
+                <select
+                  value={searchScope}
+                  onChange={(e) => setSearchScope(e.target.value as SearchScope)}
+                  className="w-[88px] bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
+                >
+                  <option value="todos">Todo</option>
+                  <option value="codigo">Código</option>
+                  <option value="ciudad">Ciudad</option>
+                  <option value="pais">País</option>
+                </select>
+                <input
+                  type="text"
+                  placeholder="Buscar temporalmente..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
+                />
+              </div>
+            )}
           </div>
           <div className="pt-2 border-t border-gray-800/80">
-            <div className="mb-1.5 flex items-center justify-between">
+            <button onClick={() => setFiltersCollapsed((v) => !v)} className="flex w-full items-center justify-between gap-2 mb-1 cursor-pointer">
               <p className="text-[10px] font-medium uppercase tracking-wide text-violet-300">Filtros persistentes</p>
-              {hasFilters && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCodePatternFilter('')
-                    setContinentFilter('todos')
-                    setOccupationFilter('todos')
-                  }}
-                  className="text-[9px] text-sky-400 hover:text-sky-300"
-                >
-                  Limpiar filtros
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-1.5">
-              <input
-                type="text"
-                value={codePatternFilter}
-                onChange={(e) => setCodePatternFilter(e.target.value)}
-                placeholder="Filtro código/patrón"
-                className="col-span-2 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
-              />
-              <select
-                value={continentFilter}
-                onChange={(e) => setContinentFilter(e.target.value)}
-                className="bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
-              >
-                <option value="todos">Todos los continentes</option>
-                {continentOptions.map((continent) => (
-                  <option key={continent} value={continent}>{continent}</option>
-                ))}
-              </select>
-              <select
-                value={occupationFilter}
-                onChange={(e) => setOccupationFilter(e.target.value as OccupationFilter)}
-                className="bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
-              >
-                <option value="todos">Todos los semáforos</option>
-                <option value="vacio">Vacío</option>
-                <option value="normal">Estándar</option>
-                <option value="alerta">Alerta</option>
-                <option value="critico">Crítico</option>
-              </select>
-            </div>
+              <span className={`text-gray-500 text-[10px] transition-transform ${filtersCollapsed ? '' : 'rotate-180'}`}>▼</span>
+            </button>
+            {!filtersCollapsed && (
+              <div className="space-y-1.5">
+                {hasFilters && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCodePatternFilter('')
+                      setContinentFilter('todos')
+                      setOccupationFilter('todos')
+                    }}
+                    className="text-[9px] text-sky-400 hover:text-sky-300"
+                  >
+                    Limpiar filtros
+                  </button>
+                )}
+                <div className="grid grid-cols-2 gap-1.5">
+                  <input
+                    type="text"
+                    value={codePatternFilter}
+                    onChange={(e) => setCodePatternFilter(e.target.value)}
+                    placeholder="Filtro código/patrón"
+                    className="col-span-2 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
+                  />
+                  <select
+                    value={continentFilter}
+                    onChange={(e) => setContinentFilter(e.target.value)}
+                    className="bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
+                  >
+                    <option value="todos">Todos los continentes</option>
+                    {continentOptions.map((continent) => (
+                      <option key={continent} value={continent}>{continent}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={occupationFilter}
+                    onChange={(e) => setOccupationFilter(e.target.value as OccupationFilter)}
+                    className="bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
+                  >
+                    <option value="todos">Todos los semáforos</option>
+                    <option value="vacio">Vacío</option>
+                    <option value="normal">Estándar</option>
+                    <option value="alerta">Alerta</option>
+                    <option value="critico">Crítico</option>
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
         </div>
         {deleteError && (

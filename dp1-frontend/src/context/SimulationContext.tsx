@@ -9,6 +9,7 @@ interface ActiveSimulationInfo {
   progreso?: number
   startedAt?: string
   simulationStartedAt?: string
+  fechaInicio?: string
   elapsedRealtimeSeconds?: number
 }
 
@@ -38,7 +39,7 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   const [activeSimulation, setActiveSimulation] = useState<ActiveSimulationInfo | null>(null)
   const [checkingActiveSimulation, setCheckingActiveSimulation] = useState(true)
   const [isRunning, setIsRunning] = useState(false)
-  const [pollingInterval, setPollingInterval] = useState(1500)
+  const [pollingInterval, setPollingInterval] = useState(2500)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const pollingActiveRef = useRef(false)
   const pollErrorCountRef = useRef(0)

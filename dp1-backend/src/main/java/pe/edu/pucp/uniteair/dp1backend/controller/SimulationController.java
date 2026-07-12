@@ -55,7 +55,8 @@ public class SimulationController {
                 "progreso", state.getProgreso(),
                 "startedAt", state.getStartedAt(),
                 "simulationStartedAt", activeSession.getFechaInicio(),
-                "elapsedRealtimeSeconds", Math.max(0, elapsed)
+                "elapsedRealtimeSeconds", Math.max(0, elapsed),
+                "fechaInicio", state.getFechaInicio()
         ));
     }
 

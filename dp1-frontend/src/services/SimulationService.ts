@@ -26,7 +26,16 @@ class SimulationService extends HttpClient {
     return this.get<SimulationState>(`/simulacion/${sessionId}/poll`)
   }
 
-  activa(): Promise<{ activa: boolean; sessionId?: string; status?: string; progreso?: number; startedAt?: string; simulationStartedAt?: string; elapsedRealtimeSeconds?: number }> {
+  activa(): Promise<{
+    activa: boolean
+    sessionId?: string
+    status?: string
+    progreso?: number
+    startedAt?: string
+    elapsedRealtimeSeconds?: number
+    simulationStartedAt?: string
+    fechaInicio?: string
+  }> {
     return this.get(`/simulacion/activa`)
   }
 
