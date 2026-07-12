@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, NavLink, useLocation } from 'react-router-dom'
 import { SimulationProvider, useSimulation } from './context/SimulationContext'
 import GestionEnvios from './pages/GestionEnvios'
 import OperacionDiaria from './pages/OperacionDiaria'
@@ -6,7 +7,12 @@ import Simulacion from './pages/Simulacion'
 import Colapso from './pages/Colapso'
 import { simulationService } from './services/SimulationService'
 
-type Page = 'carga' | 'operacion-diaria' | 'simulacion' | 'colapso'
+const NAV_ITEMS = [
+  { path: '/gestion-envios', label: 'Gestión de Envíos' },
+  { path: '/operacion-diaria', label: 'Operación diaria' },
+  { path: '/simulacion', label: 'Simulación del Periodo' },
+  { path: '/colapso', label: 'Colapso' },
+] as const
 
 function App() {
   const [checking, setChecking] = useState(true)
@@ -16,16 +22,18 @@ function App() {
   }, [])
 
   return (
-    <SimulationProvider>
-      <AppContent checking={checking} />
-    </SimulationProvider>
+    <BrowserRouter>
+      <SimulationProvider>
+        <AppContent checking={checking} />
+      </SimulationProvider>
+    </BrowserRouter>
   )
 }
 
 function AppContent({ checking }: { checking: boolean }) {
-  const [page, setPage] = useState<Page>('operacion-diaria')
   const [showBlockModal, setShowBlockModal] = useState(false)
   const { simulationState, isRunning } = useSimulation()
+  const location = useLocation()
 
   const isFinished =
     simulationState?.status === 'COMPLETADA' ||
@@ -35,23 +43,21 @@ function AppContent({ checking }: { checking: boolean }) {
 
   const isSimBlocking = isRunning && !isFinished
 
-  const handleNav = (p: Page) => () => {
-    if (isSimBlocking && p !== 'simulacion') {
+  const handleNavClick = (e: React.MouseEvent, path: string) => {
+    if (isSimBlocking && path !== '/simulacion') {
+      e.preventDefault()
       setShowBlockModal(true)
-    } else {
-      setPage(p)
     }
   }
 
-  const navButtonClass = (p: Page) => {
-    const isActive = page === p
-    const isBlocked = isSimBlocking && p !== 'simulacion'
+  const navLinkClass = (isActive: boolean, path: string) => {
+    const isBlocked = isSimBlocking && path !== '/simulacion'
     return `text-sm sm:text-base shrink-0 transition-colors ${
       isBlocked
         ? 'text-gray-600 cursor-not-allowed'
         : isActive
-          ? 'text-sky-400 font-bold cursor-pointer'
-          : 'hover:text-sky-300 cursor-pointer'
+          ? 'text-sky-400 font-bold'
+          : 'hover:text-sky-300'
     }`
   }
 
@@ -65,25 +71,26 @@ function AppContent({ checking }: { checking: boolean }) {
         <>
           <nav className="bg-gray-900 border-b border-gray-800 px-4 sm:px-5 py-1 flex items-center gap-3 sm:gap-5 overflow-x-auto">
             <h1 className="text-base sm:text-lg font-bold text-sky-400 shrink-0">UniteAir</h1>
-            <button onClick={handleNav('carga')} className={navButtonClass('carga')}>
-              Gestión de Envíos
-            </button>
-            <button onClick={handleNav('operacion-diaria')} className={navButtonClass('operacion-diaria')}>
-              Operación diaria
-            </button>
-            <button onClick={handleNav('simulacion')} className={navButtonClass('simulacion')}>
-              Simulación del Periodo
-            </button>
-            <button onClick={handleNav('colapso')} className={navButtonClass('colapso')}>
-              Colapso
-            </button>
+            {NAV_ITEMS.map(({ path, label }) => (
+              <NavLink
+                key={path}
+                to={path}
+                onClick={(e) => handleNavClick(e, path)}
+                className={({ isActive }) => navLinkClass(isActive, path)}
+              >
+                {label}
+              </NavLink>
+            ))}
           </nav>
 
           <main className="px-3 sm:px-5 pt-1 pb-4 sm:pb-5 flex-1">
-            {page === 'carga' && <GestionEnvios />}
-            {page === 'operacion-diaria' && <OperacionDiaria />}
-            {page === 'simulacion' && <Simulacion />}
-            {page === 'colapso' && <Colapso />}
+            <Routes>
+              <Route path="/" element={<Navigate to="/operacion-diaria" replace />} />
+              <Route path="/gestion-envios" element={<GestionEnvios />} />
+              <Route path="/operacion-diaria" element={<OperacionDiaria />} />
+              <Route path="/simulacion" element={<Simulacion />} />
+              <Route path="/colapso" element={<Colapso />} />
+            </Routes>
           </main>
 
           {showBlockModal && (
