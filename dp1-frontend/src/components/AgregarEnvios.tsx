@@ -3,6 +3,8 @@ import { cargaArchivosService } from '../services/CargaArchivosService'
 import { getAirportCity, getAirportTimezone } from '../data/airportsData'
 import type { AeropuertoDTO, EnvioIncremental } from '../types'
 
+const SHARED_ENVIOS_POLL_MS = 5000
+
 export default function AgregarEnvios() {
   const [aeropuertos, setAeropuertos] = useState<AeropuertoDTO[]>([])
   const [enviosExistentes, setEnviosExistentes] = useState<EnvioIncremental[]>([])
@@ -36,6 +38,33 @@ export default function AgregarEnvios() {
   useEffect(() => {
     cargarDatos()
   }, [cargarDatos])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const pollSharedEnvios = async () => {
+      try {
+        const [aeropuertosData, enviosData] = await Promise.all([
+          cargaArchivosService.obtenerAeropuertos(),
+          cargaArchivosService.obtenerEnviosIncrementales(),
+        ])
+        if (cancelled) return
+        setAeropuertos(aeropuertosData)
+        setEnviosExistentes(enviosData.envios || [])
+      } catch {
+        // ignore polling errors and keep last visible snapshot
+      }
+    }
+
+    const intervalId = window.setInterval(() => {
+      void pollSharedEnvios()
+    }, SHARED_ENVIOS_POLL_MS)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(intervalId)
+    }
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -76,8 +105,7 @@ export default function AgregarEnvios() {
         setFecha('')
         setHora('')
         setCantidad('')
-        const enviosData = await cargaArchivosService.obtenerEnviosIncrementales()
-        setEnviosExistentes(enviosData.envios || [])
+        await cargarDatos()
       } else {
         setMensaje({ tipo: 'error', texto: result.message })
       }

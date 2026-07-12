@@ -340,11 +340,12 @@ export default function AlmacenListPanel({
     }
     const updated = await cargaArchivosService.obtenerAlmacenes(contexto)
     setAlmacenesDB(updated)
-    if (contexto === 'OPERACION' && onDataChanged) {
-      await scheduleOperationalRefresh('Cambios guardados. El mapa y el detalle operativo se actualizarán después de la próxima replanificación programada.')
-    } else if (onDataChanged) {
+    if (onDataChanged) {
       const refreshedAeropuertos = await cargaArchivosService.obtenerAeropuertos(contexto)
       await onDataChanged(refreshedAeropuertos)
+      if (contexto === 'OPERACION') {
+        await scheduleOperationalRefresh('Cambios guardados. El mapa y el detalle operativo se actualizarán después de la próxima replanificación programada.')
+      }
     }
   }
 
@@ -353,11 +354,12 @@ export default function AlmacenListPanel({
       await cargaArchivosService.eliminarAlmacen(codigo, contexto)
       const updated = await cargaArchivosService.obtenerAlmacenes(contexto)
       setAlmacenesDB(updated)
-      if (contexto === 'OPERACION' && onDataChanged) {
-        await scheduleOperationalRefresh('El almacén se eliminó. El mapa y el detalle operativo se actualizarán después de la próxima replanificación programada.')
-      } else if (onDataChanged) {
+      if (onDataChanged) {
         const refreshedAeropuertos = await cargaArchivosService.obtenerAeropuertos(contexto)
         await onDataChanged(refreshedAeropuertos)
+        if (contexto === 'OPERACION') {
+          await scheduleOperationalRefresh('El almacén se eliminó. El mapa y el detalle operativo se actualizarán después de la próxima replanificación programada.')
+        }
       }
       setDeleteConfirm(null)
       setDeleteError(null)

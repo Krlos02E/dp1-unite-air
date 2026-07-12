@@ -416,11 +416,10 @@ function VueloListPanel({
       await cargaArchivosService.crearProgramacionVuelo(data, contexto)
     }
     await refreshProgramaciones()
+    setFlightMessage({ tipo: 'success', texto: 'UT guardada correctamente' })
+    await onDataChanged?.()
     if (contexto === 'OPERACION' && onDataChanged) {
       await scheduleOperationalRefresh('UT guardada. Los vuelos operativos se actualizarán después de la próxima replanificación programada.')
-    } else {
-      setFlightMessage({ tipo: 'success', texto: 'UT guardada correctamente' })
-      await onDataChanged?.()
     }
   }
 
@@ -428,11 +427,10 @@ function VueloListPanel({
     if (!contexto) return
     await cargaArchivosService.eliminarProgramacionVuelo(id, contexto)
     await refreshProgramaciones()
+    setFlightMessage({ tipo: 'success', texto: 'UT eliminada correctamente' })
+    await onDataChanged?.()
     if (contexto === 'OPERACION' && onDataChanged) {
       await scheduleOperationalRefresh('UT eliminada. Los vuelos operativos se actualizarán después de la próxima replanificación programada.')
-    } else {
-      setFlightMessage({ tipo: 'success', texto: 'UT eliminada correctamente' })
-      await onDataChanged?.()
     }
     setDeletingProgramacionId(null)
   }
