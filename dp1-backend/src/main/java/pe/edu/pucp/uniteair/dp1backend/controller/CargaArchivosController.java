@@ -19,6 +19,7 @@ import tasf.model.Paquete;
 import tasf.model.Vuelo;
 
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -101,7 +102,7 @@ public class CargaArchivosController {
             }
         }
 
-        Dataset dataset = datasetContextService.construirDatasetEfectivo(contexto, cargaArchivosService.obtenerUltimoDataset());
+        Dataset dataset = construirDatasetEfectivoParaContexto(contexto);
         if (dataset == null) {
             return ResponseEntity.ok(List.of());
         }
@@ -250,7 +251,7 @@ public class CargaArchivosController {
             boolean esSimulacion,
             LocalDateTime referenciaUtc
     ) {
-        Dataset dataset = datasetContextService.construirDatasetEfectivo(contexto, cargaArchivosService.obtenerUltimoDataset());
+        Dataset dataset = construirDatasetEfectivoParaContexto(contexto);
         if (dataset == null) {
             return List.of();
         }
@@ -374,5 +375,44 @@ public class CargaArchivosController {
             return null;
         }
         return simulationCache.get(sessionId);
+    }
+
+    private Dataset construirDatasetEfectivoParaContexto(AlmacenContexto contexto) {
+        Dataset base = cargaArchivosService.obtenerUltimoDataset();
+        if (base == null) {
+            return null;
+        }
+
+        if (contexto != AlmacenContexto.SIMULACION) {
+            return datasetContextService.construirDatasetEfectivo(contexto, base);
+        }
+
+        SimulationState estadoSimulacion = obtenerEstadoSimulacionActivo();
+        if (estadoSimulacion == null) {
+            return datasetContextService.construirDatasetEfectivo(contexto, base);
+        }
+
+        LocalDateTime fechaInicioSesion = estadoSimulacion.getFechaInicio() != null
+                ? estadoSimulacion.getFechaInicio()
+                : estadoSimulacion.getSimulationTime();
+        LocalDateTime tiempoReferencia = estadoSimulacion.getSimulationTime() != null
+                ? estadoSimulacion.getSimulationTime()
+                : fechaInicioSesion;
+
+        if (fechaInicioSesion == null || tiempoReferencia == null) {
+            return datasetContextService.construirDatasetEfectivo(contexto, base);
+        }
+
+        int diasVentana = (int) ChronoUnit.DAYS.between(
+                fechaInicioSesion.toLocalDate(),
+                tiempoReferencia.toLocalDate()
+        ) + 3;
+
+        return datasetContextService.construirDatasetEfectivo(
+                contexto,
+                base,
+                fechaInicioSesion.toLocalDate(),
+                Math.max(diasVentana, 1)
+        );
     }
 }

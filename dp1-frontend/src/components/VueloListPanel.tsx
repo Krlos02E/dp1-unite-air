@@ -8,6 +8,7 @@ import {
 } from '../data/airportsData'
 import { cargaArchivosService } from '../services/CargaArchivosService'
 import {
+  formatDateInTimezone,
   formatLocalClockTimeInTimezone,
   formatTimeInTimezone,
   parseUtcOffsetLabel,
@@ -444,6 +445,10 @@ function VueloListPanel({
     await refreshProgramaciones()
     setFlightMessage({ tipo: 'success', texto: 'UT guardada correctamente' })
     await onDataChanged?.()
+    if (contexto === 'SIMULACION' && includeProgrammed) {
+      setFilterEstado('PROGRAMADO')
+      setProgramacionesExpanded(true)
+    }
     if (contexto === 'OPERACION' && onDataChanged) {
       await scheduleOperationalRefresh('UT guardada. Los vuelos operativos se actualizarán después de la próxima replanificación programada.')
     }
@@ -565,7 +570,10 @@ function VueloListPanel({
             ) : programacionesFiltradas.length === 0 ? (
               <p className="mt-1 text-[10px] text-gray-500">No hay UT creadas por interfaz que coincidan con el filtro actual.</p>
             ) : (
-              <div className="mt-2 max-h-44 space-y-1.5 overflow-y-auto pr-1">
+              <div
+                className="mt-2 max-h-44 space-y-1.5 overflow-y-scroll pr-1"
+                style={{ scrollbarGutter: 'stable' }}
+              >
                 {programacionesFiltradas.map((programacion) => (
                   <div key={programacion.id} className="rounded-md border border-gray-800 bg-gray-900/80 px-2 py-1.5">
                     <div className="flex items-start justify-between gap-2">
@@ -911,7 +919,11 @@ function VueloListPanel({
                       <span className="font-medium text-violet-200">{origenPais}</span>
                       <span className="text-gray-500 mx-0.5">→</span>
                       <span className="font-medium text-violet-200">{destinoPais}</span>
-                      <span className="text-[10px] text-gray-500 ml-1">· {formatTimeInTimezone(v.salidaUtc, tzOffset)} - {formatTimeInTimezone(v.llegadaUtc, tzOffset)}</span>
+                    </div>
+                    <div className="mt-0.5 text-[10px] text-gray-500">
+                      Salida: {formatDateInTimezone(v.salidaUtc, tzOffset)} {formatTimeInTimezone(v.salidaUtc, tzOffset)}
+                      {' · '}
+                      Llegada: {formatDateInTimezone(v.llegadaUtc, tzOffset)} {formatTimeInTimezone(v.llegadaUtc, tzOffset)}
                     </div>
                     {v.estado && (
                       <span className={`text-[9px] font-medium px-1 py-0.5 rounded-full ${estadoColor[v.estado] || 'text-gray-500'}`}>

@@ -10,6 +10,8 @@ import pe.edu.pucp.uniteair.dp1backend.entity.AlmacenContexto;
 import pe.edu.pucp.uniteair.dp1backend.repository.SimulationSessionRepository;
 import pe.edu.pucp.uniteair.dp1backend.service.AlmacenService;
 import pe.edu.pucp.uniteair.dp1backend.service.CargaArchivosService;
+import pe.edu.pucp.uniteair.dp1backend.service.ContextSyncStateService;
+import pe.edu.pucp.uniteair.dp1backend.service.DatasetContextService;
 import tasf.config.Config_Simulacion;
 import tasf.core.AsignacionPaquete;
 import tasf.core.Dataset;
@@ -26,6 +28,7 @@ import tasf.strategy.TwoPhaseOrchestrator;
 import tasf.strategy.PlanificadorRutasStrategy;
 import tasf.strategy.alns.ALNS_RutasPlanner;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
@@ -47,6 +50,8 @@ public class SimulationEngine {
     private final SimulationSessionRepository sessionRepository;
     private final CargaArchivosService cargaArchivosService;
     private final AlmacenService almacenService;
+    private final DatasetContextService datasetContextService;
+    private final ContextSyncStateService contextSyncStateService;
     private final Map<String, CompletableFuture<Void>> activeSimulations = new ConcurrentHashMap<>();
     private final Map<String, Boolean> cancellationFlags = new ConcurrentHashMap<>();
     private final Map<String, Boolean> pauseFlags = new ConcurrentHashMap<>();
@@ -55,6 +60,8 @@ public class SimulationEngine {
     private final Map<String, List<AeropuertoDTO>> airportBaseCache = new ConcurrentHashMap<>();
     private final Map<String, Map<String, double[]>> flightCoordCache = new ConcurrentHashMap<>();
     private final Map<String, Map<String, Long>> flightDurationCache = new ConcurrentHashMap<>();
+    private final Map<String, Dataset> sessionDatasetCache = new ConcurrentHashMap<>();
+    private final Map<String, Long> sessionContextVersionCache = new ConcurrentHashMap<>();
 
     private record ReplanificacionResultado(
             Map<String, Ruta> rutas,
@@ -74,11 +81,15 @@ public class SimulationEngine {
     public SimulationEngine(SimulationCache simulationCache,
                             SimulationSessionRepository sessionRepository,
                             CargaArchivosService cargaArchivosService,
-                            AlmacenService almacenService) {
+                            AlmacenService almacenService,
+                            DatasetContextService datasetContextService,
+                            ContextSyncStateService contextSyncStateService) {
         this.simulationCache = simulationCache;
         this.sessionRepository = sessionRepository;
         this.cargaArchivosService = cargaArchivosService;
         this.almacenService = almacenService;
+        this.datasetContextService = datasetContextService;
+        this.contextSyncStateService = contextSyncStateService;
     }
 
     public void pausarSimulacion(String sessionId) {
@@ -127,6 +138,8 @@ public class SimulationEngine {
 
                 // Precalculate airport and flight coordinate caches once per session
                 precalcularCaches(sessionId, dataset);
+                sessionDatasetCache.put(sessionId, dataset);
+                sessionContextVersionCache.put(sessionId, obtenerVersionContextoSimulacion());
 
                 // Variables compartidas entre hilos
                 final int[] stepRef = {0};
@@ -156,8 +169,9 @@ public class SimulationEngine {
                     System.out.println("[2/4] Algoritmo: " + algoritmo);
                     System.out.println("[3/4] Algoritmo ejecutando...");
                     long tPlanStart = System.nanoTime();
+                    Dataset datasetActual = obtenerDatasetSesionActualizado(sessionId, dataset);
                     List<Paquete> paquetesIniciales = filtrarPaquetesPendientesEnVentana(
-                            dataset,
+                            datasetActual,
                             config,
                             Collections.emptyMap(),
                             Collections.emptySet(),
@@ -166,17 +180,17 @@ public class SimulationEngine {
                             ROLLING_LOOKAHEAD_MINUTES
                     );
                     LocalDateTime finVentanaInicial = fechaInicio.plusMinutes(ROLLING_LOOKAHEAD_MINUTES);
-                    Dataset datasetInicial = construirDatasetPlanificacion(sessionId, dataset, paquetesIniciales, fechaInicio);
+                    Dataset datasetInicial = construirDatasetPlanificacion(sessionId, datasetActual, paquetesIniciales, fechaInicio);
                     System.out.println("[VENTANA] Inicio=" + fechaInicio
                             + " fin=" + finVentanaInicial
                             + " paquetesEnVentana=" + paquetesIniciales.size()
-                            + " de datasetCompleto=" + dataset.getPaquetes().size()
+                            + " de datasetCompleto=" + datasetActual.getPaquetes().size()
                             + " vuelosPlanificacion=" + datasetInicial.getVuelos().size()
                             + " ventanaVuelos=[" + fechaInicio.minusHours(FLIGHT_WINDOW_LOOKBACK_HOURS)
                             + ", " + finVentanaInicial.plusHours(FLIGHT_WINDOW_FORWARD_BUFFER_HOURS) + "]");
-                    dataset.getPaquetes().stream().limit(5).forEach(paquete ->
+                    datasetActual.getPaquetes().stream().limit(5).forEach(paquete ->
                             System.out.println("[SimulationEngine] paquete dataset id=" + paquete.getId()
-                                    + " creacion=" + PlanificacionUtils.getCreacionUtc(paquete, dataset, config)));
+                                    + " creacion=" + PlanificacionUtils.getCreacionUtc(paquete, datasetActual, config)));
                     Solucion sol = paquetesIniciales.isEmpty()
                             ? new Solucion("VentanaRodante-" + algoritmo)
                             : orchestrator.ejecutarFlujoCompleto(datasetInicial, config);
@@ -199,10 +213,11 @@ public class SimulationEngine {
                 }
 
                 Map<String, Ruta> rutas = new HashMap<>(solucion.getRutasAsignadas());
+                Dataset datasetActual = obtenerDatasetSesionActualizado(sessionId, dataset);
                 asignacionesSplit.clear();
                 asignacionesSplit.putAll(solucion.getAsignacionesSplit());
                 Set<String> noAsignados = calcularNoAsignadosEnVentana(
-                        dataset,
+                        datasetActual,
                         config,
                         rutas,
                         fechaInicio,
@@ -211,17 +226,17 @@ public class SimulationEngine {
                         ROLLING_LOOKAHEAD_MINUTES
                 );
                 boolean hayColapso = !noAsignados.isEmpty();
-                MaletasResumen resumenInicial = calcularResumenMaletas(dataset, rutas, fechaInicio, fechaInicio);
+                MaletasResumen resumenInicial = calcularResumenMaletas(datasetActual, rutas, fechaInicio, fechaInicio);
                 maletasEntregadas = resumenInicial.entregadas();
                 maletasEnTransito = resumenInicial.enTransito();
 
                 // Construir EstadoOperacional de referencia con las rutas asignadas
                 // Esto es la fuente de verdad para carga de vuelos y ocupacion de aeropuertos
-                EstadoOperacional estadoRef = PlanificacionUtils.construirEstadoConAsignaciones(rutas, dataset, config);
+                EstadoOperacional estadoRef = PlanificacionUtils.construirEstadoConAsignaciones(rutas, datasetActual, config);
 
                 // Poblar cargaVuelo desde el estado operacional (fuente de verdad)
                 cargaVuelo.clear();
-                for (Vuelo v : dataset.getVuelos()) {
+                for (Vuelo v : datasetActual.getVuelos()) {
                     int carga = estadoRef.getCargaVuelo(v.getId());
                     if (carga > 0) {
                         cargaVuelo.put(v.getId(), carga);
@@ -234,7 +249,7 @@ public class SimulationEngine {
 
                 System.out.println("=== Ejecucion Completada ===");
                 System.out.printf("Paquetes totales: %d, rutas asignadas: %d%n",
-                        dataset.getPaquetes().size(), rutas.size());
+                        datasetActual.getPaquetes().size(), rutas.size());
                 System.out.println("Asignados: " + rutas.size() + " | Sin asignar: " + noAsignados.size());
                 System.out.println("Colapso: " + (hayColapso ? "SI" : "NO"));
                 System.out.println("Costo total: " + (long) solucion.getCostoTotal());
@@ -279,7 +294,7 @@ public class SimulationEngine {
                 int stepActual = stepRef[0];
                 final CompletableFuture<ReplanificacionResultado>[] replanFutureRef = new CompletableFuture[]{null};
 
-                MaletasResumen resumenInicio = calcularResumenMaletas(dataset, rutas, simTimeActual, fechaInicio);
+                MaletasResumen resumenInicio = calcularResumenMaletas(datasetActual, rutas, simTimeActual, fechaInicio);
                 maletasEntregadas = resumenInicio.entregadas();
                 maletasEnTransito = resumenInicio.enTransito();
                 for (Map.Entry<String, Ruta> entry : rutas.entrySet()) {
@@ -297,6 +312,7 @@ public class SimulationEngine {
                     esperarSiPausada(sessionId);
 
                     LocalDateTime simTime = fechaInicio.plusMinutes((long) step * SIMULATION_STEP_MINUTES);
+                    datasetActual = obtenerDatasetSesionActualizado(sessionId, dataset);
 
                     CompletableFuture<ReplanificacionResultado> replanFuture = replanFutureRef[0];
                     if (replanFuture != null && replanFuture.isDone()) {
@@ -308,9 +324,9 @@ public class SimulationEngine {
                             asignacionesSplit.clear();
                             asignacionesSplit.putAll(resultado.splits());
 
-                            estadoRef = PlanificacionUtils.construirEstadoConAsignaciones(rutas, dataset, config);
+                            estadoRef = PlanificacionUtils.construirEstadoConAsignaciones(rutas, datasetActual, config);
                             cargaVuelo.clear();
-                            for (Vuelo v : dataset.getVuelos()) {
+                            for (Vuelo v : datasetActual.getVuelos()) {
                                 int carga = estadoRef.getCargaVuelo(v.getId());
                                 if (carga > 0) cargaVuelo.put(v.getId(), carga);
                             }
@@ -370,13 +386,14 @@ public class SimulationEngine {
                         final Set<String> rutasEntregadasSnapshot = new HashSet<>(rutasEntregadas);
                         final Map<String, AsignacionPaquete> splitsSnapshot = new HashMap<>(asignacionesSplit);
                         final LocalDateTime simTimeReplan = simTime;
+                        final Dataset datasetReplan = datasetActual;
                         System.out.println("[Simulacion] Re-plan async iniciado t=" + simTimeReplan
                                 + " ventana=+" + ROLLING_LOOKAHEAD_MINUTES + "min");
                         replanFutureRef[0] = CompletableFuture.supplyAsync(() ->
                                 replanificarVentanaRodante(
                                         sessionId,
                                         orchestrator,
-                                        dataset,
+                                        datasetReplan,
                                         config,
                                         rutasSnapshot,
                                         rutasEntregadasSnapshot,
@@ -388,7 +405,7 @@ public class SimulationEngine {
                     }
 
 
-                    for (Aeropuerto a : dataset.getAeropuertos().values()) {
+                    for (Aeropuerto a : datasetActual.getAeropuertos().values()) {
                         int ocup = estadoRef.getOcupacionHora(a.getCodigoOACI(), simTime);
                         ocupacionAeropuerto.put(a.getCodigoOACI(), ocup);
                     }
@@ -403,7 +420,7 @@ public class SimulationEngine {
                                 .build());
                     }
 
-                    actualizarEstadoEnCache(sessionId, simTime, dataset, cargaVuelo, ocupacionAeropuerto,
+                    actualizarEstadoEnCache(sessionId, simTime, datasetActual, cargaVuelo, ocupacionAeropuerto,
                             maletasEntregadas, maletasEnTransito, step * SIMULATION_STEP_MINUTES, duracionMinutos, false, null, logs, "EJECUTANDO", fechaInicio, rutas, rutasAnteriores, asignacionesSplit);
 
                     long sleepMs = (long) ((15000.0 * SIMULATION_STEP_MINUTES / 60.0) / Math.max(0.5, velocidad));
@@ -468,6 +485,8 @@ public class SimulationEngine {
                 airportBaseCache.remove(sessionId);
                 flightCoordCache.remove(sessionId);
                 flightDurationCache.remove(sessionId);
+                sessionDatasetCache.remove(sessionId);
+                sessionContextVersionCache.remove(sessionId);
             }
         });
 
@@ -912,6 +931,48 @@ public class SimulationEngine {
         airportBaseCache.remove(sessionId);
         flightCoordCache.remove(sessionId);
         flightDurationCache.remove(sessionId);
+        sessionDatasetCache.remove(sessionId);
+        sessionContextVersionCache.remove(sessionId);
+    }
+
+    private long obtenerVersionContextoSimulacion() {
+        Object version = contextSyncStateService.snapshot(AlmacenContexto.SIMULACION).get("version");
+        return version instanceof Number ? ((Number) version).longValue() : 0L;
+    }
+
+    private Dataset obtenerDatasetSesionActualizado(String sessionId, Dataset fallbackDataset) {
+        long currentVersion = obtenerVersionContextoSimulacion();
+        Dataset cachedDataset = sessionDatasetCache.get(sessionId);
+        Long cachedVersion = sessionContextVersionCache.get(sessionId);
+        if (cachedDataset != null && cachedVersion != null && cachedVersion == currentVersion) {
+            return cachedDataset;
+        }
+
+        var session = sessionRepository.findById(sessionId).orElse(null);
+        Dataset baseDataset = cargaArchivosService.obtenerUltimoDataset();
+        if (session == null || baseDataset == null) {
+            Dataset safeFallback = cachedDataset != null ? cachedDataset : fallbackDataset;
+            if (safeFallback != null) {
+                sessionDatasetCache.put(sessionId, safeFallback);
+                sessionContextVersionCache.put(sessionId, currentVersion);
+            }
+            return safeFallback;
+        }
+
+        LocalDate fechaBase = session.getFechaInicio() != null
+                ? session.getFechaInicio().toLocalDate()
+                : LocalDate.now();
+        int diasVentana = Math.max(session.getDuracionDias() + FLIGHT_WINDOW_FORWARD_BUFFER_HOURS / 24, 1);
+        Dataset effectiveDataset = datasetContextService.construirDatasetEfectivo(
+                AlmacenContexto.SIMULACION,
+                baseDataset,
+                fechaBase,
+                diasVentana
+        );
+        precalcularCaches(sessionId, effectiveDataset);
+        sessionDatasetCache.put(sessionId, effectiveDataset);
+        sessionContextVersionCache.put(sessionId, currentVersion);
+        return effectiveDataset;
     }
 
     private void actualizarSesionColapsada(String sessionId, String motivo, int hora, int totalHoras) {
