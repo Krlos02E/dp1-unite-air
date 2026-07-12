@@ -127,6 +127,8 @@ export default function EnvioListPanel({
   const [originFilter, setOriginFilter] = useState('')
   const [destinationFilter, setDestinationFilter] = useState('')
   const [idFilter, setIdFilter] = useState('')
+  const [searchCollapsed, setSearchCollapsed] = useState(false)
+  const [filtersCollapsed, setFiltersCollapsed] = useState(false)
   const [envios, setEnvios] = useState<EnvioEstado[]>([])
   const [loading, setLoading] = useState(false)
   const [showAll, setShowAll] = useState(false)
@@ -266,125 +268,133 @@ export default function EnvioListPanel({
         <h3 className="text-sm font-semibold text-violet-200 mb-2">Envíos</h3>
         <div className="space-y-1.5">
           <div>
-            <div className="mb-1.5 flex items-center justify-between">
+            <button onClick={() => setSearchCollapsed((v) => !v)} className="flex w-full items-center justify-between gap-2 mb-1.5 cursor-pointer">
               <p className="text-[10px] font-medium uppercase tracking-wide text-violet-300">Búsqueda en panel</p>
-              {hasPanelSearch && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearchOrigin('')
-                    setSearchDestination('')
-                    setSearchId('')
-                  }}
-                  className="text-[9px] text-sky-400 hover:text-sky-300"
-                >
-                  Limpiar
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-1 gap-1.5">
-              <div className="flex gap-1.5">
-                <select
-                  value={searchOriginMatchBy}
-                  onChange={(e) => setSearchOriginMatchBy(e.target.value as FilterMatchBy)}
-                  className="w-[92px] bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
-                >
-                  <option value="codigo">Código</option>
-                  <option value="ciudad">Ciudad</option>
-                  <option value="pais">País</option>
-                </select>
+              <span className={`text-gray-500 text-[10px] transition-transform ${searchCollapsed ? '' : 'rotate-180'}`}>▼</span>
+            </button>
+            {!searchCollapsed && (
+              <div className="space-y-1.5">
+                <div className="flex gap-1.5">
+                  <select
+                    value={searchOriginMatchBy}
+                    onChange={(e) => setSearchOriginMatchBy(e.target.value as FilterMatchBy)}
+                    className="w-[92px] bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
+                  >
+                    <option value="codigo">Código</option>
+                    <option value="ciudad">Ciudad</option>
+                    <option value="pais">País</option>
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="Búsqueda por origen"
+                    value={searchOrigin}
+                    onChange={(e) => setSearchOrigin(e.target.value)}
+                    className="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+                <div className="flex gap-1.5">
+                  <select
+                    value={searchDestinationMatchBy}
+                    onChange={(e) => setSearchDestinationMatchBy(e.target.value as FilterMatchBy)}
+                    className="w-[92px] bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
+                  >
+                    <option value="codigo">Código</option>
+                    <option value="ciudad">Ciudad</option>
+                    <option value="pais">País</option>
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="Búsqueda por destino"
+                    value={searchDestination}
+                    onChange={(e) => setSearchDestination(e.target.value)}
+                    className="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
+                  />
+                </div>
                 <input
                   type="text"
-                  placeholder="Búsqueda por origen"
-                  value={searchOrigin}
-                  onChange={(e) => setSearchOrigin(e.target.value)}
-                  className="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
+                  placeholder="Búsqueda por ID"
+                  value={searchId}
+                  onChange={(e) => setSearchId(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
                 />
+                {hasPanelSearch && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchOrigin('')
+                      setSearchDestination('')
+                      setSearchId('')
+                    }}
+                    className="text-[9px] text-sky-400 hover:text-sky-300"
+                  >
+                    Limpiar
+                  </button>
+                )}
               </div>
-              <div className="flex gap-1.5">
-                <select
-                  value={searchDestinationMatchBy}
-                  onChange={(e) => setSearchDestinationMatchBy(e.target.value as FilterMatchBy)}
-                  className="w-[92px] bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
-                >
-                  <option value="codigo">Código</option>
-                  <option value="ciudad">Ciudad</option>
-                  <option value="pais">País</option>
-                </select>
-                <input
-                  type="text"
-                  placeholder="Búsqueda por destino"
-                  value={searchDestination}
-                  onChange={(e) => setSearchDestination(e.target.value)}
-                  className="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
-                />
-              </div>
-              <input
-                type="text"
-                placeholder="Búsqueda por ID"
-                value={searchId}
-                onChange={(e) => setSearchId(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
-              />
-            </div>
+            )}
           </div>
           <div className="pt-2 border-t border-gray-800/80">
-            <div className="mb-1.5 flex items-center justify-between">
+            <button onClick={() => setFiltersCollapsed((v) => !v)} className="flex w-full items-center justify-between gap-2 mb-1.5 cursor-pointer">
               <p className="text-[10px] font-medium uppercase tracking-wide text-violet-300">Filtros persistentes</p>
-              {hasFilters && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOriginFilter('')
-                    setDestinationFilter('')
-                    setIdFilter('')
-                  }}
-                  className="text-[9px] text-sky-400 hover:text-sky-300"
-                >
-                  Limpiar filtros
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-1.5">
-              <select
-                value={filterScope}
-                onChange={(e) => setFilterScope(e.target.value as FilterScope)}
-                className="bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
-              >
-                <option value="directo">Filtrar en tramo</option>
-                <option value="ruta">Filtrar en ruta</option>
-              </select>
-              <select
-                value={filterMatchBy}
-                onChange={(e) => setFilterMatchBy(e.target.value as FilterMatchBy)}
-                className="bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
-              >
-                <option value="codigo">Código</option>
-                <option value="ciudad">Ciudad</option>
-                <option value="pais">País</option>
-              </select>
-              <input
-                type="text"
-                value={originFilter}
-                onChange={(e) => setOriginFilter(e.target.value)}
-                placeholder="Filtrar origen"
-                className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
-              />
-              <input
-                type="text"
-                value={destinationFilter}
-                onChange={(e) => setDestinationFilter(e.target.value)}
-                placeholder="Filtrar destino"
-                className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
-              />
-              <input
-                type="text"
-                value={idFilter}
-                onChange={(e) => setIdFilter(e.target.value)}
-                placeholder="Filtrar ID"
-                className="col-span-2 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
-              />
-            </div>
+              <span className={`text-gray-500 text-[10px] transition-transform ${filtersCollapsed ? '' : 'rotate-180'}`}>▼</span>
+            </button>
+            {!filtersCollapsed && (
+              <div className="space-y-1.5">
+                {hasFilters && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOriginFilter('')
+                      setDestinationFilter('')
+                      setIdFilter('')
+                    }}
+                    className="text-[9px] text-sky-400 hover:text-sky-300"
+                  >
+                    Limpiar filtros
+                  </button>
+                )}
+                <div className="grid grid-cols-2 gap-1.5">
+                  <select
+                    value={filterScope}
+                    onChange={(e) => setFilterScope(e.target.value as FilterScope)}
+                    className="bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
+                  >
+                    <option value="directo">Filtrar en tramo</option>
+                    <option value="ruta">Filtrar en ruta</option>
+                  </select>
+                  <select
+                    value={filterMatchBy}
+                    onChange={(e) => setFilterMatchBy(e.target.value as FilterMatchBy)}
+                    className="bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
+                  >
+                    <option value="codigo">Código</option>
+                    <option value="ciudad">Ciudad</option>
+                    <option value="pais">País</option>
+                  </select>
+                  <input
+                    type="text"
+                    value={originFilter}
+                    onChange={(e) => setOriginFilter(e.target.value)}
+                    placeholder="Filtrar origen"
+                    className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
+                  />
+                  <input
+                    type="text"
+                    value={destinationFilter}
+                    onChange={(e) => setDestinationFilter(e.target.value)}
+                    placeholder="Filtrar destino"
+                    className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
+                  />
+                  <input
+                    type="text"
+                    value={idFilter}
+                    onChange={(e) => setIdFilter(e.target.value)}
+                    placeholder="Filtrar ID"
+                    className="col-span-2 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

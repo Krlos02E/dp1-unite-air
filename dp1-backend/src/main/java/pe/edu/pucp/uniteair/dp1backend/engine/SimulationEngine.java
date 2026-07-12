@@ -257,7 +257,7 @@ public class SimulationEngine {
                             .tipo("COLAPSO")
                             .mensaje(motivo)
                             .build());
-                    actualizarEstadoColapsado(sessionId, fechaInicio, motivo, logs);
+                    actualizarEstadoColapsado(sessionId, fechaInicio, fechaInicio, motivo, logs);
                     actualizarSesionColapsada(sessionId, motivo, 0, duracionMinutos);
                     return;
                 }
@@ -424,6 +424,7 @@ public class SimulationEngine {
                                 .status("COMPLETADA")
                                 .startedAt(finalState.getStartedAt())
                                 .simulationTime(finalState.getSimulationTime())
+                                .fechaInicio(finalState.getFechaInicio())
                                 .vuelos(finalState.getVuelos())
                                 .aeropuertos(finalState.getAeropuertos())
                                 .maletasEntregadas(finalState.getMaletasEntregadas())
@@ -1250,6 +1251,7 @@ public class SimulationEngine {
                 .status(status)
                 .startedAt(startedAt)
                 .simulationTime(simTime)
+                .fechaInicio(fechaInicio)
                 .vuelos(vuelosDTO)
                 .aeropuertos(aeropuertosDTO)
                 .maletasEntregadas(maletasEntregadas)
@@ -1290,12 +1292,13 @@ public class SimulationEngine {
         }
     }
 
-    private void actualizarEstadoColapsado(String sessionId, LocalDateTime simTime, String motivo, List<LogEntry> logs) {
+    private void actualizarEstadoColapsado(String sessionId, LocalDateTime simTime, LocalDateTime fechaInicio, String motivo, List<LogEntry> logs) {
         SimulationState updated = SimulationState.builder()
                 .sessionId(sessionId)
                 .status("COLAPSADA")
                 .startedAt(LocalDateTime.now())
                 .simulationTime(simTime)
+                .fechaInicio(fechaInicio)
                 .vuelos(new ArrayList<>())
                 .aeropuertos(new ArrayList<>())
                 .maletasEntregadas(0)

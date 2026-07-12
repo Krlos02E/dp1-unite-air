@@ -18,6 +18,7 @@ public class SimulationState {
     private String status;
     private LocalDateTime startedAt;
     private LocalDateTime simulationTime;
+    private LocalDateTime fechaInicio;
     private List<VueloDTO> vuelos;
     private List<AeropuertoDTO> aeropuertos;
     private int maletasEntregadas;

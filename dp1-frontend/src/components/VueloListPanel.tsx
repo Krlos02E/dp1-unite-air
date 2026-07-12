@@ -158,6 +158,8 @@ function VueloListPanel({
   const [searchCode, setSearchCode] = useState('')
   const [searchOriginMode, setSearchOriginMode] = useState<LocationMatchMode>('ciudad')
   const [searchDestinationMode, setSearchDestinationMode] = useState<LocationMatchMode>('ciudad')
+  const [searchCollapsed, setSearchCollapsed] = useState(false)
+  const [filtersCollapsed, setFiltersCollapsed] = useState(false)
   const [filterEstado, setFilterEstado] = useState<string>('ACTIVO')
   const [originFilter, setOriginFilter] = useState('')
   const [destinationFilter, setDestinationFilter] = useState('')
@@ -616,155 +618,167 @@ function VueloListPanel({
           ))}
         </div>
         <div className="mt-2 pt-2 border-t border-gray-800/80">
-          <div className="flex items-center justify-between mb-1.5">
+          <button onClick={() => setSearchCollapsed((v) => !v)} className="flex w-full items-center justify-between gap-2 mb-1.5 cursor-pointer">
             <span className="text-[10px] font-medium text-violet-300">Búsqueda en panel</span>
-            {hasPanelSearch && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchOrigin('')
-                  setSearchDestination('')
-                  setSearchCode('')
-                }}
-                className="text-[9px] text-sky-400 hover:text-sky-300 cursor-pointer"
-              >
-                Limpiar
-              </button>
+            <span className={`text-gray-500 text-[10px] transition-transform ${searchCollapsed ? '' : 'rotate-180'}`}>▼</span>
+          </button>
+          {!searchCollapsed && (
+            <div className="space-y-1.5">
+              <div className="grid grid-cols-1 gap-1.5">
+                <div className="flex gap-1.5">
+                  <select
+                    value={searchOriginMode}
+                    onChange={(e) => setSearchOriginMode(e.target.value as LocationMatchMode)}
+                    aria-label="Buscar origen por tipo"
+                    className="w-[92px] bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
+                  >
+                    <option value="codigo">Código</option>
+                    <option value="ciudad">Ciudad</option>
+                  </select>
+                  <input
+                    type="text"
+                    value={searchOrigin}
+                    onChange={(e) => setSearchOrigin(e.target.value)}
+                    aria-label="Buscar unidades de transporte por origen en el panel"
+                    placeholder="Búsqueda por origen"
+                    className="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-300 placeholder-gray-500 focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+                <div className="flex gap-1.5">
+                  <select
+                    value={searchDestinationMode}
+                    onChange={(e) => setSearchDestinationMode(e.target.value as LocationMatchMode)}
+                    aria-label="Buscar destino por tipo"
+                    className="w-[92px] bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
+                  >
+                    <option value="codigo">Código</option>
+                    <option value="ciudad">Ciudad</option>
+                  </select>
+                  <input
+                    type="text"
+                    value={searchDestination}
+                    onChange={(e) => setSearchDestination(e.target.value)}
+                    aria-label="Buscar unidades de transporte por destino en el panel"
+                    placeholder="Búsqueda por destino"
+                    className="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-300 placeholder-gray-500 focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+                <input
+                  type="text"
+                  value={searchCode}
+                  onChange={(e) => setSearchCode(e.target.value)}
+                  aria-label="Buscar unidades de transporte por código en el panel"
+                  placeholder="Búsqueda por código UT"
+                  className="min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-300 placeholder-gray-500 focus:outline-none focus:border-sky-500"
+                />
+              </div>
+              {hasPanelSearch && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchOrigin('')
+                    setSearchDestination('')
+                    setSearchCode('')
+                  }}
+                  className="text-[9px] text-sky-400 hover:text-sky-300 cursor-pointer"
+                >
+                  Limpiar
+                </button>
+              )}
+            </div>
+          )}
+          <div className="mt-2">
+            <button onClick={() => setFiltersCollapsed((v) => !v)} className="flex w-full items-center justify-between gap-2 mb-1.5 cursor-pointer">
+              <span className="text-[10px] font-medium text-violet-300">Filtros persistentes</span>
+              <span className={`text-gray-500 text-[10px] transition-transform ${filtersCollapsed ? '' : 'rotate-180'}`}>▼</span>
+            </button>
+            {!filtersCollapsed && (
+              <div className="space-y-1.5">
+                {hasPersistentFilters && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOriginFilter('')
+                      setDestinationFilter('')
+                      setCodeFilter('')
+                      setOccupationFilter('todos')
+                    }}
+                    className="text-[9px] text-sky-400 hover:text-sky-300 cursor-pointer"
+                  >
+                    Limpiar
+                  </button>
+                )}
+                <div className="grid grid-cols-1 gap-1.5">
+                  <select
+                    value={filterRouteScope}
+                    onChange={(e) => setFilterRouteScope(e.target.value as RouteFilterScope)}
+                    aria-label="Aplicar filtros de origen y destino en tramo o ruta"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
+                  >
+                    <option value="tramo">Filtrar en tramo</option>
+                    <option value="ruta">Filtrar en ruta</option>
+                  </select>
+                  <div className="flex gap-1.5">
+                    <select
+                      value={originFilterMode}
+                      onChange={(e) => setOriginFilterMode(e.target.value as LocationMatchMode)}
+                      aria-label="Filtrar origen por tipo"
+                      className="w-[92px] bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
+                    >
+                      <option value="codigo">Código</option>
+                      <option value="ciudad">Ciudad</option>
+                    </select>
+                    <input
+                      type="text"
+                      value={originFilter}
+                      onChange={(e) => setOriginFilter(e.target.value)}
+                      aria-label="Filtrar unidades de transporte por origen"
+                      placeholder="Filtrar origen"
+                      className="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-300 placeholder-gray-500 focus:outline-none focus:border-sky-500"
+                    />
+                  </div>
+                  <div className="flex gap-1.5">
+                    <select
+                      value={destinationFilterMode}
+                      onChange={(e) => setDestinationFilterMode(e.target.value as LocationMatchMode)}
+                      aria-label="Filtrar destino por tipo"
+                      className="w-[92px] bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
+                    >
+                      <option value="codigo">Código</option>
+                      <option value="ciudad">Ciudad</option>
+                    </select>
+                    <input
+                      type="text"
+                      value={destinationFilter}
+                      onChange={(e) => setDestinationFilter(e.target.value)}
+                      aria-label="Filtrar unidades de transporte por destino"
+                      placeholder="Filtrar destino"
+                      className="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-300 placeholder-gray-500 focus:outline-none focus:border-sky-500"
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    value={codeFilter}
+                    onChange={(e) => setCodeFilter(e.target.value)}
+                    aria-label="Filtrar unidades de transporte por código"
+                    placeholder="Filtrar código UT"
+                    className="min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-300 placeholder-gray-500 focus:outline-none focus:border-sky-500"
+                  />
+                  <select
+                    value={occupationFilter}
+                    onChange={(e) => setOccupationFilter(e.target.value as OccupationFilter)}
+                    aria-label="Filtrar unidades de transporte por semáforo"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
+                  >
+                    <option value="todos">Filtrar semáforo: Todos</option>
+                    <option value="vacio">Semáforo: Vacío</option>
+                    <option value="normal">Semáforo: Estándar</option>
+                    <option value="alerta">Semáforo: Alerta</option>
+                    <option value="critico">Semáforo: Crítico</option>
+                  </select>
+                </div>
+              </div>
             )}
-          </div>
-          <div className="grid grid-cols-1 gap-1.5">
-            <div className="flex gap-1.5">
-              <select
-                value={searchOriginMode}
-                onChange={(e) => setSearchOriginMode(e.target.value as LocationMatchMode)}
-                aria-label="Buscar origen por tipo"
-                className="w-[92px] bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
-              >
-                <option value="codigo">Código</option>
-                <option value="ciudad">Ciudad</option>
-              </select>
-              <input
-                type="text"
-                value={searchOrigin}
-                onChange={(e) => setSearchOrigin(e.target.value)}
-                aria-label="Buscar unidades de transporte por origen en el panel"
-                placeholder="Búsqueda por origen"
-                className="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-300 placeholder-gray-500 focus:outline-none focus:border-sky-500"
-              />
-            </div>
-            <div className="flex gap-1.5">
-              <select
-                value={searchDestinationMode}
-                onChange={(e) => setSearchDestinationMode(e.target.value as LocationMatchMode)}
-                aria-label="Buscar destino por tipo"
-                className="w-[92px] bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
-              >
-                <option value="codigo">Código</option>
-                <option value="ciudad">Ciudad</option>
-              </select>
-              <input
-                type="text"
-                value={searchDestination}
-                onChange={(e) => setSearchDestination(e.target.value)}
-                aria-label="Buscar unidades de transporte por destino en el panel"
-                placeholder="Búsqueda por destino"
-                className="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-300 placeholder-gray-500 focus:outline-none focus:border-sky-500"
-              />
-            </div>
-            <input
-              type="text"
-              value={searchCode}
-              onChange={(e) => setSearchCode(e.target.value)}
-              aria-label="Buscar unidades de transporte por código en el panel"
-              placeholder="Búsqueda por código UT"
-              className="min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-300 placeholder-gray-500 focus:outline-none focus:border-sky-500"
-            />
-          </div>
-          <div className="mt-2 flex items-center justify-between mb-1.5">
-            <span className="text-[10px] font-medium text-violet-300">Filtros persistentes</span>
-            {hasPersistentFilters && (
-              <button
-                type="button"
-                onClick={() => {
-                  setOriginFilter('')
-                  setDestinationFilter('')
-                  setCodeFilter('')
-                  setOccupationFilter('todos')
-                }}
-                className="text-[9px] text-sky-400 hover:text-sky-300 cursor-pointer"
-              >
-                Limpiar
-              </button>
-            )}
-          </div>
-          <div className="grid grid-cols-1 gap-1.5">
-            <select
-              value={filterRouteScope}
-              onChange={(e) => setFilterRouteScope(e.target.value as RouteFilterScope)}
-              aria-label="Aplicar filtros de origen y destino en tramo o ruta"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
-            >
-              <option value="tramo">Filtrar en tramo</option>
-              <option value="ruta">Filtrar en ruta</option>
-            </select>
-            <div className="flex gap-1.5">
-              <select
-                value={originFilterMode}
-                onChange={(e) => setOriginFilterMode(e.target.value as LocationMatchMode)}
-                aria-label="Filtrar origen por tipo"
-                className="w-[92px] bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
-              >
-                <option value="codigo">Código</option>
-                <option value="ciudad">Ciudad</option>
-              </select>
-              <input
-                type="text"
-                value={originFilter}
-                onChange={(e) => setOriginFilter(e.target.value)}
-                aria-label="Filtrar unidades de transporte por origen"
-                placeholder="Filtrar origen"
-                className="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-300 placeholder-gray-500 focus:outline-none focus:border-sky-500"
-              />
-            </div>
-            <div className="flex gap-1.5">
-              <select
-                value={destinationFilterMode}
-                onChange={(e) => setDestinationFilterMode(e.target.value as LocationMatchMode)}
-                aria-label="Filtrar destino por tipo"
-                className="w-[92px] bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
-              >
-                <option value="codigo">Código</option>
-                <option value="ciudad">Ciudad</option>
-              </select>
-              <input
-                type="text"
-                value={destinationFilter}
-                onChange={(e) => setDestinationFilter(e.target.value)}
-                aria-label="Filtrar unidades de transporte por destino"
-                placeholder="Filtrar destino"
-                className="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-300 placeholder-gray-500 focus:outline-none focus:border-sky-500"
-              />
-            </div>
-            <input
-              type="text"
-              value={codeFilter}
-              onChange={(e) => setCodeFilter(e.target.value)}
-              aria-label="Filtrar unidades de transporte por código"
-              placeholder="Filtrar código UT"
-              className="min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-300 placeholder-gray-500 focus:outline-none focus:border-sky-500"
-            />
-            <select
-              value={occupationFilter}
-              onChange={(e) => setOccupationFilter(e.target.value as OccupationFilter)}
-              aria-label="Filtrar unidades de transporte por semáforo"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] text-gray-300 focus:outline-none focus:border-sky-500"
-            >
-              <option value="todos">Filtrar semáforo: Todos</option>
-              <option value="vacio">Semáforo: Vacío</option>
-              <option value="normal">Semáforo: Estándar</option>
-              <option value="alerta">Semáforo: Alerta</option>
-              <option value="critico">Semáforo: Crítico</option>
-            </select>
           </div>
         </div>
       </div>

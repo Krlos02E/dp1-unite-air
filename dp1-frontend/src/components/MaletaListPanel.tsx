@@ -61,6 +61,7 @@ export default function MaletaListPanel({
 }: Props) {
   const [tab, setTab] = useState<Tab>('pendientes')
   const [search, setSearch] = useState('')
+  const [filtersCollapsed, setFiltersCollapsed] = useState(false)
   const [maletas, setMaletas] = useState<MaletaEstado[]>([])
   const [loading, setLoading] = useState(false)
   const [showAll, setShowAll] = useState(false)
@@ -164,26 +165,33 @@ export default function MaletaListPanel({
   return (
     <div className="w-96 flex-1 min-h-0 bg-gray-900 border border-gray-800 rounded-xl flex flex-col overflow-hidden">
       <div className="p-3 border-b border-gray-800">
-        <h3 className="text-sm font-semibold text-violet-200 mb-2">Maletas</h3>
-        {filterEnvioId && (
-          <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2 py-1.5">
-            <span className="truncate text-[10px] text-sky-300">Filtrando por envio {filterEnvioId}</span>
-            <button
-              type="button"
-              onClick={onClearEnvioFilter}
-              className="shrink-0 text-[10px] text-sky-400 hover:text-sky-300"
-            >
-              Limpiar
-            </button>
-          </div>
+        <button onClick={() => setFiltersCollapsed((v) => !v)} className="flex w-full items-center justify-between gap-2 mb-2 cursor-pointer">
+          <h3 className="text-sm font-semibold text-violet-200">Maletas</h3>
+          <span className={`text-gray-500 text-xs transition-transform ${filtersCollapsed ? '' : 'rotate-180'}`}>▼</span>
+        </button>
+        {!filtersCollapsed && (
+          <>
+            {filterEnvioId && (
+              <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2 py-1.5">
+                <span className="truncate text-[10px] text-sky-300">Filtrando por envio {filterEnvioId}</span>
+                <button
+                  type="button"
+                  onClick={onClearEnvioFilter}
+                  className="shrink-0 text-[10px] text-sky-400 hover:text-sky-300"
+                >
+                  Limpiar
+                </button>
+              </div>
+            )}
+            <input
+              type="text"
+              placeholder={filterEnvioId ? 'Buscar por ID de maleta...' : 'Buscar por ID de maleta o envío...'}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
+            />
+          </>
         )}
-        <input
-          type="text"
-          placeholder={filterEnvioId ? 'Buscar por ID de maleta...' : 'Buscar por ID de maleta o envío...'}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
-        />
       </div>
 
       <div className="border-b border-gray-800">
