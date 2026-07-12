@@ -551,68 +551,52 @@ export default function Simulacion() {
   }
 
   return (
-    <div className="flex flex-col gap-1">
-      {/* Barra superior de parámetros + tiempos */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl px-3 py-1.5 flex flex-wrap items-center gap-x-2 gap-y-1.5">
+    <div className="flex flex-col h-[calc(100vh-4rem)]">
+      {/* Barra superior de parámetros + tiempos — centrada, sin recuadros */}
+      <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 px-4 py-1">
         <div className="flex items-center gap-2">
-          <span className="text-[13px] text-gray-400 font-medium">Escenario:</span>
-          <span className="text-[13px] text-gray-200 font-semibold">{DURACION_FIJA} días</span>
+          <span className="text-[11px] uppercase tracking-wider text-gray-500 font-semibold">Escenario</span>
+          <span className="text-sm font-bold text-white">{DURACION_FIJA} días</span>
         </div>
 
         <div className="flex items-center gap-2">
-          <label className="text-[13px] text-gray-400 font-medium">Fecha inicio:</label>
+          <label className="text-[11px] uppercase tracking-wider text-gray-500 font-semibold">Inicio</label>
           <input
             type="date"
             value={fechaInicio}
             onChange={(e) => setFechaInicio(e.target.value)}
-            className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-0.5 text-[13px] text-gray-200 focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            className="bg-gray-800/80 border border-gray-600 rounded-lg px-2 py-1 text-xs text-gray-100 focus:outline-none focus:ring-2 focus:ring-sky-500/60 focus:border-sky-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer hover:bg-gray-800 transition-colors"
             disabled={!!sessionId && !isError}
           />
-        </div>
-
-        <div className="flex items-center gap-2">
-          <label className="text-[13px] text-gray-400 font-medium">Hora inicio:</label>
           <input
             type="time"
             value={horaInicio}
             onChange={(e) => setHoraInicio(e.target.value)}
-            className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-0.5 text-[13px] text-gray-200 focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            className="bg-gray-800/80 border border-gray-600 rounded-lg px-2 py-1 text-xs text-gray-100 focus:outline-none focus:ring-2 focus:ring-sky-500/60 focus:border-sky-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer hover:bg-gray-800 transition-colors"
             disabled={!!sessionId && !isError}
           />
         </div>
 
         {/* Tiempos de simulación */}
         {simulationState && (
-          <div className="flex items-center gap-1.5 ml-0.5">
-            <div className="flex flex-col bg-sky-950/40 border border-sky-800/40 rounded-lg px-2 py-0.5">
-              <span className="text-[10px] text-sky-300/80 leading-tight">Tiempo real transcurrido</span>
-              <span className="font-mono text-xs text-sky-200 leading-tight">{formatElapsed(elapsedRealSeconds)}</span>
-            </div>
-            <div className="flex flex-col bg-sky-950/40 border border-sky-800/40 rounded-lg px-2 py-0.5">
-              <span className="text-[10px] text-sky-300/80 leading-tight">Tiempo simulado transcurrido</span>
-              <span className="font-mono text-xs text-sky-200 leading-tight">{formatElapsed(simulatedElapsedSeconds)}</span>
-            </div>
-            <div className="flex flex-col bg-sky-950/40 border border-sky-800/40 rounded-lg px-2 py-0.5">
-              <span className="text-[10px] text-sky-300/80 leading-tight">Fecha actual simulación</span>
-              <span className="font-mono text-xs text-sky-200 leading-tight">{formatDateTime(simulationState?.simulationTime)}</span>
-            </div>
-            <div className="flex flex-col bg-sky-950/40 border border-sky-800/40 rounded-lg px-2 py-0.5">
-              <span className="text-[10px] text-sky-300/80 leading-tight">Día</span>
-              <span className="font-mono text-xs text-sky-200 leading-tight">{Math.ceil((simulationState.progreso / 100) * DURACION_FIJA)}</span>
-            </div>
-            <div className="flex flex-col w-[220px]">
-              <div className="w-full bg-gray-800 rounded-full h-2">
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] text-sky-400/80 font-medium">Real <span className="font-mono text-xs text-white font-semibold">{formatElapsed(elapsedRealSeconds)}</span></span>
+            <span className="text-[11px] text-sky-400/80 font-medium">Sim <span className="font-mono text-xs text-white font-semibold">{formatElapsed(simulatedElapsedSeconds)}</span></span>
+            <span className="text-[11px] text-emerald-400/80 font-medium">Fecha Sim <span className="font-mono text-xs text-white font-semibold">{formatDateTime(simulationState?.simulationTime)}</span></span>
+            <span className="text-[11px] text-violet-400/80 font-medium">Día <span className="font-mono text-xs text-white font-semibold">{Math.ceil((simulationState.progreso / 100) * DURACION_FIJA)}</span></span>
+            <div className="flex items-center gap-2">
+              <div className="w-24 bg-gray-800 rounded-full h-1.5 overflow-hidden">
                 <div
-                  className="bg-emerald-500 h-2 rounded-full transition-all"
+                  className="bg-emerald-500 h-1.5 rounded-full transition-all"
                   style={{ width: `${simulationState.progreso}%` }}
                 />
               </div>
-              <p className="text-right text-[10px] text-gray-500 mt-0.5">{simulationState.progreso}%</p>
+              <span className="text-xs font-mono font-bold text-white">{simulationState.progreso}%</span>
             </div>
           </div>
         )}
 
-        <div className="flex items-center gap-2 ml-1">
+        <div className="flex items-center gap-2 ml-auto">
           {error && (
             <span className="text-xs text-red-400 font-medium">{error}</span>
           )}
@@ -621,7 +605,7 @@ export default function Simulacion() {
               {!isCompleted && (
                 <button
                   onClick={() => setShowStopConfirm(true)}
-                  className="px-3 py-1.5 rounded-lg font-medium text-sm bg-red-600 hover:bg-red-700 text-white transition-colors cursor-pointer"
+                  className="px-3 py-1 rounded-lg font-medium text-xs bg-red-600 hover:bg-red-500 text-white transition-colors cursor-pointer"
                 >
                   Detener
                 </button>
@@ -629,7 +613,7 @@ export default function Simulacion() {
               {isCompleted && (
                 <button
                   onClick={handleNuevaSimulacion}
-                  className="px-3 py-1.5 rounded-lg font-medium text-sm bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
+                  className="px-3 py-1 rounded-lg font-medium text-xs bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
                 >
                   Nueva Simulación
                 </button>
@@ -639,7 +623,7 @@ export default function Simulacion() {
             <button
               onClick={handleIniciar}
               disabled={loading}
-              className="px-5 py-1.5 rounded-lg font-medium text-sm bg-sky-600 hover:bg-sky-700 text-white transition-colors disabled:bg-gray-600 cursor-pointer"
+              className="px-4 py-1 rounded-lg font-medium text-xs bg-sky-600 hover:bg-sky-500 text-white transition-colors disabled:bg-gray-600 cursor-pointer"
             >
               {loading ? 'Iniciando...' : 'Iniciar'}
             </button>
@@ -648,7 +632,7 @@ export default function Simulacion() {
       </div>
 
       {/* Mapa + Panel lateral (como OperacionDiaria) */}
-      <div className="flex gap-2 h-[calc(100vh-10rem)]">
+      <div className="flex gap-2 flex-1 min-h-0">
         <div className="relative flex-1 bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
           <MapaAeropuertos
             aeropuertos={aeropuertos}
