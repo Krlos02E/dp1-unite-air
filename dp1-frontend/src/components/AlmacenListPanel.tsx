@@ -421,7 +421,7 @@ export default function AlmacenListPanel({
               >
                 <option value="todos">Todos los semáforos</option>
                 <option value="vacio">Vacío</option>
-                <option value="normal">Normal</option>
+                <option value="normal">Estándar</option>
                 <option value="alerta">Alerta</option>
                 <option value="critico">Crítico</option>
               </select>

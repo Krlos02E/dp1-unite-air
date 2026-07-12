@@ -113,7 +113,7 @@ function occupationStatus(cargaActual: number, ocupPct: number) {
   if (ocupPct > 70) {
     return { label: 'Alerta', bar: 'bg-amber-500', text: 'text-amber-400', track: 'bg-gray-800' }
   }
-  return { label: 'Normal', bar: 'bg-emerald-500', text: 'text-emerald-400', track: 'bg-gray-800' }
+  return { label: 'Estándar', bar: 'bg-emerald-500', text: 'text-emerald-400', track: 'bg-gray-800' }
 }
 
 function occupationCategory(cargaActual: number, ocupPct: number): OccupationFilter {
@@ -606,7 +606,7 @@ function VueloListPanel({
         <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-2" aria-label="Semáforo de ocupación">
           {[
             ['bg-sky-500', 'Vacío'],
-            ['bg-emerald-500', 'Normal'],
+            ['bg-emerald-500', 'Estándar'],
             ['bg-amber-500', 'Alerta'],
             ['bg-red-500', 'Crítico'],
           ].map(([color, label]) => (
@@ -761,7 +761,7 @@ function VueloListPanel({
             >
               <option value="todos">Filtrar semáforo: Todos</option>
               <option value="vacio">Semáforo: Vacío</option>
-              <option value="normal">Semáforo: Normal</option>
+              <option value="normal">Semáforo: Estándar</option>
               <option value="alerta">Semáforo: Alerta</option>
               <option value="critico">Semáforo: Crítico</option>
             </select>

@@ -385,9 +385,10 @@ export default function Simulacion() {
   }, [sessionId])
 
   function formatElapsed(seconds: number): string {
-    const m = Math.floor(seconds / 60)
+    const h = Math.floor(seconds / 3600)
+    const m = Math.floor((seconds % 3600) / 60)
     const s = seconds % 60
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
   }
 
   const simulatedElapsedSeconds = useMemo(() => {
@@ -649,54 +650,56 @@ export default function Simulacion() {
           <div className="absolute bottom-4 left-4 z-[999] flex flex-col gap-2">
             <div className="bg-gray-900/40 border border-gray-700/40 rounded-xl p-3 backdrop-blur-[2px]">
               <h4 className="text-xs font-semibold text-gray-300 mb-2 pb-1 border-b border-gray-700/50">Ocupación Global</h4>
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between text-[10px] text-gray-400 mb-0.5">
-                      <span className="truncate">Flota: {occupancy.flota.carga}/{occupancy.flota.capacidad}</span>
-                      <span className="shrink-0 ml-1">{occupancy.flota.capacidad > 0 ? Math.round(occupancy.flota.carga / occupancy.flota.capacidad * 100) : 0}%</span>
-                    </div>
-                    <div className="w-full h-1.5 rounded-full bg-gray-800 overflow-hidden">
-                      <div className={`h-full rounded-full transition-all ${ocupColor(occupancy.flota.capacidad > 0 ? occupancy.flota.carga / occupancy.flota.capacidad : 0)}`} style={{ width: `${Math.min(occupancy.flota.capacidad > 0 ? occupancy.flota.carga / occupancy.flota.capacidad * 100 : 0, 100)}%` }} />
-                    </div>
+              <div className="grid grid-cols-1 gap-2">
+                <div className="rounded-lg border border-gray-700/50 bg-gray-900/55 px-2.5 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-medium uppercase tracking-wide text-violet-300">Flota</span>
+                    <span className="text-sm font-bold text-gray-100">{occupancy.flota.capacidad > 0 ? Math.round(occupancy.flota.carga / occupancy.flota.capacidad * 100) : 0}%</span>
                   </div>
-                  <span className={`w-2 h-2 rounded-full shrink-0 ${ocupColor(occupancy.flota.capacidad > 0 ? occupancy.flota.carga / occupancy.flota.capacidad : 0)}`} />
+                  <div className="mt-1 flex items-center justify-between gap-2 text-[11px]">
+                    <span className="font-mono text-gray-200">{occupancy.flota.carga}/{occupancy.flota.capacidad}</span>
+                    <span className={`h-2 w-2 shrink-0 rounded-full ${ocupColor(occupancy.flota.capacidad > 0 ? occupancy.flota.carga / occupancy.flota.capacidad : 0)}`} />
+                  </div>
+                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-800">
+                    <div className={`h-full rounded-full transition-all ${ocupColor(occupancy.flota.capacidad > 0 ? occupancy.flota.carga / occupancy.flota.capacidad : 0)}`} style={{ width: `${Math.min(occupancy.flota.capacidad > 0 ? occupancy.flota.carga / occupancy.flota.capacidad * 100 : 0, 100)}%` }} />
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between text-[10px] text-gray-400 mb-0.5">
-                      <span className="truncate">Aeropuertos: {occupancy.aeropuertos.ocupacion}/{occupancy.aeropuertos.capacidad}</span>
-                      <span className="shrink-0 ml-1">{occupancy.aeropuertos.capacidad > 0 ? Math.round(occupancy.aeropuertos.ocupacion / occupancy.aeropuertos.capacidad * 100) : 0}%</span>
-                    </div>
-                    <div className="w-full h-1.5 rounded-full bg-gray-800 overflow-hidden">
-                      <div className={`h-full rounded-full transition-all ${ocupColor(occupancy.aeropuertos.capacidad > 0 ? occupancy.aeropuertos.ocupacion / occupancy.aeropuertos.capacidad : 0)}`} style={{ width: `${Math.min(occupancy.aeropuertos.capacidad > 0 ? occupancy.aeropuertos.ocupacion / occupancy.aeropuertos.capacidad * 100 : 0, 100)}%` }} />
-                    </div>
+                <div className="rounded-lg border border-gray-700/50 bg-gray-900/55 px-2.5 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-medium uppercase tracking-wide text-violet-300">Aeropuertos</span>
+                    <span className="text-sm font-bold text-gray-100">{occupancy.aeropuertos.capacidad > 0 ? Math.round(occupancy.aeropuertos.ocupacion / occupancy.aeropuertos.capacidad * 100) : 0}%</span>
                   </div>
-                  <span className={`w-2 h-2 rounded-full shrink-0 ${ocupColor(occupancy.aeropuertos.capacidad > 0 ? occupancy.aeropuertos.ocupacion / occupancy.aeropuertos.capacidad : 0)}`} />
+                  <div className="mt-1 flex items-center justify-between gap-2 text-[11px]">
+                    <span className="font-mono text-gray-200">{occupancy.aeropuertos.ocupacion}/{occupancy.aeropuertos.capacidad}</span>
+                    <span className={`h-2 w-2 shrink-0 rounded-full ${ocupColor(occupancy.aeropuertos.capacidad > 0 ? occupancy.aeropuertos.ocupacion / occupancy.aeropuertos.capacidad : 0)}`} />
+                  </div>
+                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-800">
+                    <div className={`h-full rounded-full transition-all ${ocupColor(occupancy.aeropuertos.capacidad > 0 ? occupancy.aeropuertos.ocupacion / occupancy.aeropuertos.capacidad : 0)}`} style={{ width: `${Math.min(occupancy.aeropuertos.capacidad > 0 ? occupancy.aeropuertos.ocupacion / occupancy.aeropuertos.capacidad * 100 : 0, 100)}%` }} />
+                  </div>
                 </div>
               </div>
             </div>
-            <div className="bg-gray-900/40 border border-gray-700/40 rounded-xl p-3 backdrop-blur-[2px] transition-all duration-300 group-hover:bg-gray-900/95 group-hover:border-gray-700 group-hover:backdrop-blur-sm group-hover:shadow-2xl">
+            <div className="bg-gray-900/40 border border-gray-700/40 rounded-xl p-3 backdrop-blur-[2px]">
               <h4 className="text-xs font-semibold text-gray-300 mb-2 pb-1 border-b border-gray-700/50">Estado de Vuelos</h4>
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center gap-1.5 bg-violet-900/35 border border-violet-700/55 rounded-lg px-2 py-1">
-                  <span className="text-[10px] text-violet-400 font-medium">En Vuelo</span>
-                  <span className="text-xs font-bold text-violet-300 bg-violet-800/55 px-1.5 py-0.5 rounded">{vuelosEnTransitoCount}</span>
+              <div className="grid grid-cols-1 gap-2">
+                <div className="rounded-lg border border-gray-700/50 bg-gray-900/55 px-2.5 py-2">
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-violet-300">En vuelo</span>
+                  <div className="mt-1 text-lg font-bold text-gray-100">{vuelosEnTransitoCount}</div>
                 </div>
-                <div className="flex items-center gap-1.5 bg-sky-950/55 border border-sky-800/70 rounded-lg px-2 py-1">
-                  <span className="text-[10px] text-sky-300 font-medium">Vacíos en vuelo</span>
-                  <span className="text-xs font-bold text-sky-200 bg-sky-900/70 px-1.5 py-0.5 rounded">
-                    {vuelosVaciosEnTransito}/{vuelosEnTransitoCount}
-                  </span>
-                  <span className="text-[10px] text-sky-400 font-medium">({vuelosVaciosEnTransitoPct}%)</span>
+                <div className="rounded-lg border border-gray-700/50 bg-gray-900/55 px-2.5 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-medium uppercase tracking-wide text-violet-300">Vacíos en vuelo</span>
+                    <span className="text-sm font-bold text-gray-100">{vuelosVaciosEnTransitoPct}%</span>
+                  </div>
+                  <div className="mt-1 text-[11px] font-mono text-gray-200">{vuelosVaciosEnTransito}/{vuelosEnTransitoCount}</div>
                 </div>
-                <div className="flex items-center gap-1.5 bg-violet-900/20 border border-violet-700/40 rounded-lg px-2 py-1">
-                  <span className="text-[10px] text-violet-300 font-medium">Culminados</span>
-                  <span className="text-xs font-bold text-violet-200 bg-violet-700/40 px-1.5 py-0.5 rounded">{vuelosCulminados}</span>
+                <div className="rounded-lg border border-gray-700/50 bg-gray-900/55 px-2.5 py-2">
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-violet-300">Culminados</span>
+                  <div className="mt-1 text-lg font-bold text-gray-100">{vuelosCulminados}</div>
                 </div>
-                <div className="flex items-center gap-1.5 bg-violet-950/55 border border-violet-800/70 rounded-lg px-2 py-1">
-                  <span className="text-[10px] text-violet-500 font-medium">Cancelados</span>
-                  <span className="text-xs font-bold text-violet-400 bg-violet-950/80 px-1.5 py-0.5 rounded">{vuelosCancelados}</span>
+                <div className="rounded-lg border border-gray-700/50 bg-gray-900/55 px-2.5 py-2">
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-violet-300">Cancelados</span>
+                  <div className="mt-1 text-lg font-bold text-gray-100">{vuelosCancelados}</div>
                 </div>
               </div>
             </div>
