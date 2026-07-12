@@ -163,6 +163,13 @@ export interface EnviosIncrementalesResponse {
   envios: EnvioIncremental[];
 }
 
+export interface ContextSharedState {
+  contexto: AlmacenContexto;
+  version: number;
+  updatedAt: string;
+  reason: string;
+}
+
 export interface EnvioEstado {
   id: string;
   origen: string;

@@ -63,11 +63,14 @@ public class CargaArchivosService {
     });
     private final DatasetContextService datasetContextService;
     private final VueloCanceladoRepository vueloCanceladoRepository;
+    private final ContextSyncStateService contextSyncStateService;
 
     public CargaArchivosService(DatasetContextService datasetContextService,
-                                VueloCanceladoRepository vueloCanceladoRepository) {
+                                VueloCanceladoRepository vueloCanceladoRepository,
+                                ContextSyncStateService contextSyncStateService) {
         this.datasetContextService = datasetContextService;
         this.vueloCanceladoRepository = vueloCanceladoRepository;
+        this.contextSyncStateService = contextSyncStateService;
     }
 
     public record CargaResult(boolean success, String message, int aeropuertosCount, int vuelosCount,
@@ -843,6 +846,7 @@ public class CargaArchivosService {
         }
         System.out.println("[CargaArchivosService] Vuelo cancelado: " + vueloACancelar.getId()
                 + " (minutos para salida: " + minutosParaSalida + ")");
+        contextSyncStateService.touch(contexto, "vuelo-cancelado");
         return vueloId;
     }
 
@@ -851,6 +855,7 @@ public class CargaArchivosService {
         VueloCancelado cancelado = vueloCanceladoRepository.findByContextoAndVueloId(contexto, vueloId)
                 .orElseThrow(() -> new IllegalArgumentException("El vuelo " + vueloId + " no esta cancelado en el contexto " + contexto));
         vueloCanceladoRepository.delete(cancelado);
+        contextSyncStateService.touch(contexto, "vuelo-descancelado");
         return vueloId;
     }
 
@@ -906,6 +911,7 @@ public class CargaArchivosService {
     @Transactional
     public synchronized void limpiarVuelosCancelados(AlmacenContexto contexto) {
         vueloCanceladoRepository.deleteAllByContexto(contexto);
+        contextSyncStateService.touch(contexto, "vuelos-cancelados-limpiados");
     }
 
     public synchronized List<Paquete> agregarEnvios(List<EnvioEntrada> envios) {

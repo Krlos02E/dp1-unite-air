@@ -12,11 +12,13 @@ import { formatDateTime } from '../utils/dateFormat'
 import { AIRPORTS_DATA } from '../data/airportsData'
 import type { VueloDTO, AeropuertoDTO, SimulationState, EnvioEstado, MaletaEstado } from '../types'
 import { shouldDisplayFlight } from '../utils/flightVisibility'
+import { hasSharedVersionChanged } from '../utils/sharedSync'
 
 const SIM_CONFIG_KEY = 'uniteair_simConfig'
 const SIM_ACTIVE_CONFIG_KEY = 'uniteair_activeSimConfig'
 const DURACION_FIJA = 5
 const EMPTY_FLIGHTS: VueloDTO[] = []
+const SHARED_SIMULATION_CONTEXT_POLL_MS = 5000
 
 const aeropuertosFallback: AeropuertoDTO[] = Object.values(AIRPORTS_DATA).map((a) => ({
   codigoOACI: a.codigoOACI,
@@ -72,6 +74,7 @@ export default function Simulacion() {
   const [filteredAirportIds, setFilteredAirportIds] = useState<Set<string> | null>(null)
   const filteredFlightSignatureRef = useRef('')
   const filteredAirportSignatureRef = useRef('')
+  const sharedSimulationVersionRef = useRef<number | null>(null)
 
   const handleVueloClick = useCallback((v: VueloDTO) => {
     setSelectedVuelo((prev) => (prev?.id === v.id ? null : v))
@@ -257,6 +260,11 @@ export default function Simulacion() {
     setVuelosEstaticos(vuelosData)
   }, [])
 
+  const refreshSimulationSharedVersion = useCallback(async () => {
+    const sharedState = await cargaArchivosService.obtenerEstadoCompartido('SIMULACION')
+    sharedSimulationVersionRef.current = sharedState.version
+  }, [])
+
   const [showResultados, setShowResultados] = useState(false)
   const hasShownResults = useRef(false)
   const [resultSnapshot, setResultSnapshot] = useState<SimulationState | null>(null)
@@ -264,18 +272,30 @@ export default function Simulacion() {
   const hasSimulationStarted = Boolean(sessionId || simulationState)
 
   const aeropuertos = useMemo(() => {
-    const base = simulationState?.aeropuertos?.length ? simulationState.aeropuertos : []
     const map = new Map<string, AeropuertoDTO>()
 
+    simulationState?.aeropuertos?.forEach((a) => {
+      map.set(a.codigoOACI, a)
+    })
+
     aeropuertosEstaticos.forEach((a) => {
-      map.set(a.codigoOACI, a)
+      const current = map.get(a.codigoOACI)
+      if (!current) {
+        map.set(a.codigoOACI, a)
+        return
+      }
+      map.set(a.codigoOACI, {
+        ...current,
+        latitud: a.latitud,
+        longitud: a.longitud,
+        ciudad: a.ciudad ?? current.ciudad,
+        pais: a.pais ?? current.pais,
+        capacidadMaxima: a.capacidadMaxima,
+        editable: a.editable ?? current.editable,
+      })
     })
 
-    base.forEach((a) => {
-      map.set(a.codigoOACI, a)
-    })
-
-    return Array.from(map.values())
+    return map.size > 0 ? Array.from(map.values()) : aeropuertosFallback
   }, [simulationState?.aeropuertos, aeropuertosEstaticos])
 
   useEffect(() => {
@@ -293,6 +313,7 @@ export default function Simulacion() {
   // Restore config from sessionStorage on mount
   useEffect(() => {
     refreshSimulacionContextData().catch(() => {})
+    refreshSimulationSharedVersion().catch(() => {})
 
     const saved = sessionStorage.getItem(SIM_CONFIG_KEY)
     if (saved) {
@@ -303,6 +324,31 @@ export default function Simulacion() {
       } catch {
         // ignore parse errors
       }
+    }
+  }, [refreshSimulacionContextData, refreshSimulationSharedVersion])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const pollSharedSimulationContext = async () => {
+      try {
+        const sharedState = await cargaArchivosService.obtenerEstadoCompartido('SIMULACION')
+        if (cancelled) return
+        if (!hasSharedVersionChanged(sharedSimulationVersionRef.current, sharedState.version)) return
+        sharedSimulationVersionRef.current = sharedState.version
+        await refreshSimulacionContextData()
+      } catch {
+        // ignore polling errors to keep the current shared snapshot on screen
+      }
+    }
+
+    const intervalId = window.setInterval(() => {
+      void pollSharedSimulationContext()
+    }, SHARED_SIMULATION_CONTEXT_POLL_MS)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(intervalId)
     }
   }, [refreshSimulacionContextData])
 
@@ -370,11 +416,27 @@ export default function Simulacion() {
     if (!hasSimulationStarted) return EMPTY_FLIGHTS
 
     const combinados = new Map<string, VueloDTO>()
-    vuelosEstaticos.forEach((vuelo) => {
-      combinados.set(vuelo.id, vuelo)
-    })
     simulationState?.vuelos?.forEach((vuelo) => {
       combinados.set(vuelo.id, vuelo)
+    })
+    vuelosEstaticos.forEach((vuelo) => {
+      const current = combinados.get(vuelo.id)
+      if (!current) {
+        combinados.set(vuelo.id, vuelo)
+        return
+      }
+      combinados.set(vuelo.id, {
+        ...current,
+        latOrigen: vuelo.latOrigen,
+        lonOrigen: vuelo.lonOrigen,
+        latDestino: vuelo.latDestino,
+        lonDestino: vuelo.lonDestino,
+        capacidad: vuelo.capacidad,
+        programacionId: vuelo.programacionId ?? current.programacionId,
+        editable: vuelo.editable ?? current.editable,
+        recurrente: vuelo.recurrente ?? current.recurrente,
+        estado: vuelo.estado === 'CANCELADO' ? 'CANCELADO' : current.estado,
+      })
     })
     return Array.from(combinados.values())
   }, [hasSimulationStarted, simulationState?.vuelos, vuelosEstaticos])

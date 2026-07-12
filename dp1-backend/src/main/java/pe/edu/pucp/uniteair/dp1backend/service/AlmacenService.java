@@ -30,13 +30,16 @@ public class AlmacenService {
     private final AlmacenRepository almacenRepository;
     private final AlmacenConfiguracionRepository almacenConfiguracionRepository;
     private final CargaArchivosService cargaArchivosService;
+    private final ContextSyncStateService contextSyncStateService;
 
     public AlmacenService(AlmacenRepository almacenRepository,
                           AlmacenConfiguracionRepository almacenConfiguracionRepository,
-                          @Lazy CargaArchivosService cargaArchivosService) {
+                          @Lazy CargaArchivosService cargaArchivosService,
+                          ContextSyncStateService contextSyncStateService) {
         this.almacenRepository = almacenRepository;
         this.almacenConfiguracionRepository = almacenConfiguracionRepository;
         this.cargaArchivosService = cargaArchivosService;
+        this.contextSyncStateService = contextSyncStateService;
     }
 
     @PostConstruct
@@ -172,6 +175,7 @@ public class AlmacenService {
                 .build();
         almacenConfiguracionRepository.save(configuracion);
         invalidarCache(contexto);
+        contextSyncStateService.touch(contexto, "almacen-creado");
         return getMapaAlmacenes(contexto).get(almacen.getCodigoOACI());
     }
 
@@ -194,6 +198,7 @@ public class AlmacenService {
         configuracion.setLongitud(datos.getLongitud());
         almacenConfiguracionRepository.save(configuracion);
         invalidarCache(contexto);
+        contextSyncStateService.touch(contexto, "almacen-actualizado");
         return getMapaAlmacenes(contexto).get(codigoOACI);
     }
 
@@ -207,12 +212,14 @@ public class AlmacenService {
         }
         almacenConfiguracionRepository.deleteByContextoAndCodigoOACI(contexto, codigoOACI);
         invalidarCache(contexto);
+        contextSyncStateService.touch(contexto, "almacen-eliminado");
     }
 
     @Transactional
     public void limpiarContexto(AlmacenContexto contexto) {
         almacenConfiguracionRepository.deleteAllByContexto(contexto);
         invalidarCache(contexto);
+        contextSyncStateService.touch(contexto, "almacen-contexto-limpiado");
     }
 
     private final Map<AlmacenContexto, Map<String, Almacen>> cachedMapaAlmacenes = new HashMap<>();

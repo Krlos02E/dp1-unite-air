@@ -14,6 +14,7 @@ import type {
   AlmacenContexto,
   ProgramacionVueloDTO,
   PlanificacionLogDTO,
+  ContextSharedState,
 } from '../types'
 
 class CargaArchivosService extends HttpClient {
@@ -42,6 +43,10 @@ class CargaArchivosService extends HttpClient {
 
   obtenerVuelos(contexto: AlmacenContexto = 'OPERACION'): Promise<VueloDTO[]> {
     return this.get<VueloDTO[]>('/carga/vuelos', { contexto })
+  }
+
+  obtenerEstadoCompartido(contexto: AlmacenContexto = 'OPERACION'): Promise<ContextSharedState> {
+    return this.get<ContextSharedState>('/carga/estado-compartido', { contexto })
   }
 
   cancelarVuelo(origen: string, destino: string, horaSalidaLocal: string, contexto: AlmacenContexto = 'OPERACION', sessionId?: string): Promise<CancelarVueloResult> {

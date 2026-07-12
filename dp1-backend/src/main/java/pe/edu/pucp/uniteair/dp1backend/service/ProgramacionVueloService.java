@@ -22,11 +22,14 @@ public class ProgramacionVueloService {
 
     private final ProgramacionVueloRepository programacionVueloRepository;
     private final AlmacenService almacenService;
+    private final ContextSyncStateService contextSyncStateService;
 
     public ProgramacionVueloService(ProgramacionVueloRepository programacionVueloRepository,
-                                    AlmacenService almacenService) {
+                                    AlmacenService almacenService,
+                                    ContextSyncStateService contextSyncStateService) {
         this.programacionVueloRepository = programacionVueloRepository;
         this.almacenService = almacenService;
+        this.contextSyncStateService = contextSyncStateService;
     }
 
     public List<ProgramacionVueloDTO> listar(AlmacenContexto contexto) {
@@ -42,7 +45,9 @@ public class ProgramacionVueloService {
         ProgramacionVuelo entity = new ProgramacionVuelo();
         entity.setContexto(contexto);
         aplicarDatos(entity, dto, contexto);
-        return toDto(programacionVueloRepository.save(entity));
+        ProgramacionVueloDTO created = toDto(programacionVueloRepository.save(entity));
+        contextSyncStateService.touch(contexto, "programacion-creada");
+        return created;
     }
 
     @Transactional
@@ -53,7 +58,9 @@ public class ProgramacionVueloService {
             throw new IllegalArgumentException("La programación de vuelo no pertenece al contexto " + contexto);
         }
         aplicarDatos(entity, dto, contexto);
-        return toDto(programacionVueloRepository.save(entity));
+        ProgramacionVueloDTO updated = toDto(programacionVueloRepository.save(entity));
+        contextSyncStateService.touch(contexto, "programacion-actualizada");
+        return updated;
     }
 
     @Transactional
@@ -64,11 +71,13 @@ public class ProgramacionVueloService {
             throw new IllegalArgumentException("La programación de vuelo no pertenece al contexto " + contexto);
         }
         programacionVueloRepository.delete(entity);
+        contextSyncStateService.touch(contexto, "programacion-eliminada");
     }
 
     @Transactional
     public void limpiarContexto(AlmacenContexto contexto) {
         programacionVueloRepository.deleteAllByContexto(contexto);
+        contextSyncStateService.touch(contexto, "programacion-contexto-limpiada");
     }
 
     public List<Vuelo> generarVuelosRecurrentes(

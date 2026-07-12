@@ -11,6 +11,7 @@ import pe.edu.pucp.uniteair.dp1backend.dto.VueloDTO;
 import pe.edu.pucp.uniteair.dp1backend.entity.AlmacenContexto;
 import pe.edu.pucp.uniteair.dp1backend.service.CargaArchivosService;
 import pe.edu.pucp.uniteair.dp1backend.service.AlmacenService;
+import pe.edu.pucp.uniteair.dp1backend.service.ContextSyncStateService;
 import pe.edu.pucp.uniteair.dp1backend.service.DatasetContextService;
 import pe.edu.pucp.uniteair.dp1backend.entity.Almacen;
 import tasf.core.Dataset;
@@ -34,15 +35,18 @@ public class CargaArchivosController {
 
     private final CargaArchivosService cargaArchivosService;
     private final AlmacenService almacenService;
+    private final ContextSyncStateService contextSyncStateService;
     private final DatasetContextService datasetContextService;
     private final SimulationCache simulationCache;
 
     public CargaArchivosController(CargaArchivosService cargaArchivosService,
                                    AlmacenService almacenService,
+                                   ContextSyncStateService contextSyncStateService,
                                    DatasetContextService datasetContextService,
                                    SimulationCache simulationCache) {
         this.cargaArchivosService = cargaArchivosService;
         this.almacenService = almacenService;
+        this.contextSyncStateService = contextSyncStateService;
         this.datasetContextService = datasetContextService;
         this.simulationCache = simulationCache;
     }
@@ -150,6 +154,13 @@ public class CargaArchivosController {
                 })
                 .collect(Collectors.toList());
         return ResponseEntity.ok(aeropuertos);
+    }
+
+    @GetMapping("/estado-compartido")
+    public ResponseEntity<Map<String, Object>> obtenerEstadoCompartido(
+            @RequestParam(defaultValue = "OPERACION") AlmacenContexto contexto
+    ) {
+        return ResponseEntity.ok(contextSyncStateService.snapshot(contexto));
     }
 
     private List<AeropuertoDTO> combinarAeropuertosConAlmacenes(
@@ -305,13 +316,38 @@ public class CargaArchivosController {
             List<VueloDTO> vuelosContexto
     ) {
         Map<String, VueloDTO> combinados = new LinkedHashMap<>();
+        Map<String, VueloDTO> contextoMap = new LinkedHashMap<>();
 
         for (VueloDTO vuelo : vuelosContexto) {
             combinados.put(vuelo.getId(), vuelo);
+            contextoMap.put(vuelo.getId(), vuelo);
         }
 
         for (VueloDTO vuelo : vuelosEstado) {
-            combinados.put(vuelo.getId(), vuelo);
+            VueloDTO contexto = contextoMap.get(vuelo.getId());
+            if (contexto == null) {
+                combinados.put(vuelo.getId(), vuelo);
+                continue;
+            }
+
+            combinados.put(vuelo.getId(), VueloDTO.builder()
+                    .id(vuelo.getId())
+                    .origen(vuelo.getOrigen())
+                    .destino(vuelo.getDestino())
+                    .latOrigen(contexto.getLatOrigen())
+                    .lonOrigen(contexto.getLonOrigen())
+                    .latDestino(contexto.getLatDestino())
+                    .lonDestino(contexto.getLonDestino())
+                    .salidaUtc(vuelo.getSalidaUtc())
+                    .llegadaUtc(vuelo.getLlegadaUtc())
+                    .capacidad(contexto.getCapacidad())
+                    .cargaActual(vuelo.getCargaActual())
+                    .progresoVuelo(vuelo.getProgresoVuelo())
+                    .estado("CANCELADO".equals(contexto.getEstado()) ? "CANCELADO" : vuelo.getEstado())
+                    .programacionId(contexto.getProgramacionId())
+                    .editable(contexto.isEditable() || vuelo.isEditable())
+                    .recurrente(contexto.isRecurrente() || vuelo.isRecurrente())
+                    .build());
         }
 
         return new ArrayList<>(combinados.values());
