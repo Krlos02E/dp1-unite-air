@@ -579,13 +579,13 @@ export default function Simulacion() {
 
         {/* Tiempos de simulación */}
         {simulationState && (
-          <div className="flex items-center gap-3">
-            <span className="text-[11px] text-sky-400/80 font-medium">Real <span className="font-mono text-xs text-white font-semibold">{formatElapsed(elapsedRealSeconds)}</span></span>
-            <span className="text-[11px] text-sky-400/80 font-medium">Sim <span className="font-mono text-xs text-white font-semibold">{formatElapsed(simulatedElapsedSeconds)}</span></span>
-            <span className="text-[11px] text-emerald-400/80 font-medium">Fecha Sim <span className="font-mono text-xs text-white font-semibold">{formatDateTime(simulationState?.simulationTime)}</span></span>
-            <span className="text-[11px] text-violet-400/80 font-medium">Día <span className="font-mono text-xs text-white font-semibold">{Math.ceil((simulationState.progreso / 100) * DURACION_FIJA)}</span></span>
+          <div className="flex items-center gap-6">
+            <span className="text-[11px] text-sky-400/80 font-medium">Tiempo real transcurrido <span className="font-mono text-xs text-white font-semibold">{formatElapsed(elapsedRealSeconds)}</span></span>
+            <span className="text-[11px] text-sky-400/80 font-medium">Tiempo simulado transcurrido <span className="font-mono text-xs text-white font-semibold">{formatElapsed(simulatedElapsedSeconds)}</span></span>
+            <span className="text-[11px] text-emerald-400/80 font-medium">Fecha actual simulación <span className="font-mono text-xs text-white font-semibold">{formatDateTime(simulationState?.simulationTime)}</span></span>
+            <span className="text-[11px] text-violet-400/80 font-medium">Día <span className="font-mono text-xs text-white font-semibold">{Math.min(DURACION_FIJA, Math.floor(simulatedElapsedSeconds / 86400) + 1)}/5</span></span>
             <div className="flex items-center gap-2">
-              <div className="w-24 bg-gray-800 rounded-full h-1.5 overflow-hidden">
+              <div className="w-48 bg-gray-800 rounded-full h-1.5 overflow-hidden">
                 <div
                   className="bg-emerald-500 h-1.5 rounded-full transition-all"
                   style={{ width: `${simulationState.progreso}%` }}
