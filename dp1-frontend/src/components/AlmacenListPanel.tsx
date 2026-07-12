@@ -525,8 +525,8 @@ export default function AlmacenListPanel({
           const esEditable = Boolean(almacenDB?.editable)
           const nextDepartureFlight = getClosestFlight(a.vuelosSalientes, vuelosMap, 'salida')
           const nextArrivalFlight = getClosestFlight(a.vuelosEntrantes, vuelosMap, 'llegada')
-          const showNextDeparture = sortField === 'proxima-salida' && nextDepartureFlight
-          const showNextArrival = sortField === 'proxima-llegada' && nextArrivalFlight
+          const showNextDeparture = nextDepartureFlight
+          const showNextArrival = nextArrivalFlight
 
           return (
             <div key={a.codigoOACI} className="border-b border-gray-800/50">
