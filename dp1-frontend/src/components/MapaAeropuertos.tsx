@@ -513,7 +513,8 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       const map = L.map(mapContainerRef.current, {
         center: INITIAL_CENTER,
         zoom: dynamicZoom,
-        zoomControl: true,
+        zoomControl: false,
+        attributionControl: false,
         preferCanvas: true,
         zoomSnap: 0.25,
         zoomDelta: 0.25,
