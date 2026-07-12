@@ -64,6 +64,13 @@ function routeMatches(route: string[] | undefined, term: string, matchBy: Filter
   return route.some((code) => airportMatches(code, term, matchBy))
 }
 
+function parseCurrentTimeMs(currentTime?: string | null): number {
+  if (!currentTime) return Date.now()
+  const normalized = currentTime.endsWith('Z') ? currentTime : `${currentTime}Z`
+  const parsed = Date.parse(normalized)
+  return Number.isNaN(parsed) ? Date.now() : parsed
+}
+
 function estaDentroDeHoras(envio: EnvioEstado, horas?: number, currentTime?: string | null): boolean {
   if (!horas || envio.estado !== 'ENTREGADO') return true
   if (!envio.ultimaLlegadaUtc) return false
@@ -71,8 +78,7 @@ function estaDentroDeHoras(envio: EnvioEstado, horas?: number, currentTime?: str
   const llegadaMs = Date.parse(envio.ultimaLlegadaUtc)
   if (Number.isNaN(llegadaMs)) return false
 
-  const referenciaMs = currentTime ? Date.parse(currentTime) : Date.now()
-  if (Number.isNaN(referenciaMs)) return false
+  const referenciaMs = parseCurrentTimeMs(currentTime)
 
   const diffMs = referenciaMs - llegadaMs
   return diffMs >= 0 && diffMs <= horas * 60 * 60 * 1000

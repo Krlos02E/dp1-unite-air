@@ -6,10 +6,17 @@ import { buildAirportLookup, getAirportCityResolved, getAirportCountryResolved, 
 import { TIMEZONE_OPTIONS } from '../utils/timezoneFormat'
 import { shouldDisplayFlight } from '../utils/flightVisibility'
 
-function tooltipForFlight(v: VueloDTO, airportLookup: Map<string, AirportLookupData>, referenceTime?: Date): string {
+function tooltipForFlight(
+  v: VueloDTO,
+  airportLookup: Map<string, AirportLookupData>,
+  simulationMode: boolean,
+  referenceTime?: Date,
+): string {
   const origen = getAirportCityResolved(v.origen, airportLookup) || v.origen
   const destino = getAirportCityResolved(v.destino, airportLookup) || v.destino
-  const progreso = referenceTime ? calcularProgresoLocal(v, referenceTime) : calcularProgresoLocal(v, new Date())
+  const progreso = simulationMode
+    ? v.progresoVuelo
+    : (referenceTime ? calcularProgresoLocal(v, referenceTime) : calcularProgresoLocal(v, new Date()))
   return `<b>${v.id}</b><br>${origen} → ${destino}<br>Progreso: ${Math.round(progreso)}%<br>Maletas: ${v.cargaActual}/${v.capacidad}`
 }
 
@@ -841,7 +848,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       const from: [number, number] = [v.latOrigen, v.lonOrigen]
       const to: [number, number] = [v.latDestino, v.lonDestino]
       const isSelected = v.id === selectedVueloIdRef.current
-      const tooltipText = tooltipForFlight(v, airportLookup, realNow ?? undefined)
+      const tooltipText = tooltipForFlight(v, airportLookup, simulationMode, realNow ?? undefined)
       const pts = bezierPoints(from, to, ROUTE_POINT_COUNT)
       const progresoActual = getFlightProgress(v, simulationMode, realNow)
       const tNorm = progresoActual / 100

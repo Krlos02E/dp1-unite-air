@@ -36,11 +36,18 @@ interface Props {
 
 const DEFAULT_LIMIT = 50
 
+function parseCurrentTimeMs(currentTime?: string | null): number {
+  if (!currentTime) return Date.now()
+  const normalized = currentTime.endsWith('Z') ? currentTime : `${currentTime}Z`
+  const parsed = Date.parse(normalized)
+  return Number.isNaN(parsed) ? Date.now() : parsed
+}
+
 function estaDentroDeHoras(maleta: MaletaEstado, horas?: number, currentTime?: string | null): boolean {
   if (!horas || maleta.estado !== 'ENTREGADO') return true
   if (!maleta.ultimaLlegadaUtc) return false
   const llegadaMs = Date.parse(maleta.ultimaLlegadaUtc)
-  const referenciaMs = currentTime ? Date.parse(currentTime) : Date.now()
+  const referenciaMs = parseCurrentTimeMs(currentTime)
   if (Number.isNaN(llegadaMs) || Number.isNaN(referenciaMs)) return false
   const diffMs = referenciaMs - llegadaMs
   return diffMs >= 0 && diffMs <= horas * 60 * 60 * 1000

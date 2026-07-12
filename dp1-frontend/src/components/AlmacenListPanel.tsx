@@ -175,6 +175,30 @@ export default function AlmacenListPanel({
   }, [contexto])
 
   useEffect(() => {
+    if (contexto !== 'SIMULACION') return
+
+    let cancelled = false
+    const refresh = async () => {
+      try {
+        const latest = await cargaArchivosService.obtenerAlmacenes(contexto)
+        if (!cancelled) setAlmacenesDB(latest)
+      } catch {
+        // ignore transient sync errors
+      }
+    }
+
+    void refresh()
+    const intervalId = window.setInterval(() => {
+      void refresh()
+    }, 5000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(intervalId)
+    }
+  }, [contexto])
+
+  useEffect(() => {
     if (contexto !== 'OPERACION' || pendingReplanBaseLogId == null || !onDataChanged) return
 
     let cancelled = false
