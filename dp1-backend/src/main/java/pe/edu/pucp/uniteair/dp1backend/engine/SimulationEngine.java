@@ -89,6 +89,11 @@ public class SimulationEngine {
         pauseFlags.remove(sessionId);
     }
 
+    public boolean isSimulacionActiva(String sessionId) {
+        CompletableFuture<Void> future = activeSimulations.get(sessionId);
+        return future != null && !future.isDone() && !future.isCancelled();
+    }
+
     public boolean isPausada(String sessionId) {
         return pauseFlags.getOrDefault(sessionId, false);
     }

@@ -17,6 +17,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -222,6 +223,35 @@ public class SimulationService {
                 .envios(state.getEnvios())
                 .maletas(state.getMaletas())
                 .build();
+    }
+
+    public SimulationSession obtenerSesionActiva() {
+        String activeSessionId = simulationCache.getActiveSessionId();
+        if (activeSessionId != null) {
+            var activeSession = sessionRepository.findById(activeSessionId).orElse(null);
+            if (activeSession != null
+                    && Arrays.asList("PLANIFICANDO", "EJECUTANDO").contains(activeSession.getEstado())
+                    && simulationEngine.isSimulacionActiva(activeSessionId)) {
+                return activeSession;
+            }
+        }
+
+        var candidateSession = sessionRepository
+                .findTopByEstadoInOrderByCreatedAtDesc(Arrays.asList("PLANIFICANDO", "EJECUTANDO"))
+                .orElse(null);
+
+        if (candidateSession == null) {
+            return null;
+        }
+
+        if (simulationEngine.isSimulacionActiva(candidateSession.getSessionId())) {
+            return candidateSession;
+        }
+
+        candidateSession.setEstado("ERROR");
+        candidateSession.setMotivoColapso("Simulación interrumpida: el proceso del backend ya no estaba activo.");
+        sessionRepository.save(candidateSession);
+        return null;
     }
 
     public SimulationState detenerSimulacion(String sessionId) {

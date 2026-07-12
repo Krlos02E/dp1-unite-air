@@ -36,10 +36,11 @@ public class SimulationController {
 
     @GetMapping("/activa")
     public ResponseEntity<Map<String, Object>> activa() {
-        String sessionId = simulationCache.getActiveSessionId();
-        if (sessionId == null) {
+        var activeSession = simulationService.obtenerSesionActiva();
+        if (activeSession == null) {
             return ResponseEntity.ok(Map.of("activa", false));
         }
+        String sessionId = activeSession.getSessionId();
         SimulationState state = simulationService.obtenerEstado(sessionId);
         if (state == null) {
             return ResponseEntity.ok(Map.of("activa", false));
@@ -53,6 +54,7 @@ public class SimulationController {
                 "status", state.getStatus(),
                 "progreso", state.getProgreso(),
                 "startedAt", state.getStartedAt(),
+                "simulationStartedAt", activeSession.getFechaInicio(),
                 "elapsedRealtimeSeconds", Math.max(0, elapsed)
         ));
     }

@@ -304,28 +304,37 @@ export default function Simulacion() {
     }
   }, [refreshSimulacionContextData])
 
-  // Detectar simulación activa al montar (permite ver simulación en otras pestañas)
+  // Detectar simulación activa al montar (permite ver simulación en otros clientes)
   useEffect(() => {
-    const wasStopped = localStorage.getItem(SIM_STOPPED_KEY)
-    if (wasStopped) {
-      // El usuario detuvo manualmente: limpiar estado residual y no restaurar nunca
-      resetSimulation()
-      setSessionId('')
-      setResultSnapshot(null)
-      hasShownResults.current = false
-      return
-    }
     let cancelled = false
     simulationService.activa().then((res) => {
       if (cancelled) return
+      const stoppedSessionId = localStorage.getItem(SIM_STOPPED_KEY)
       if (res.activa && res.sessionId) {
+        if (stoppedSessionId && stoppedSessionId === res.sessionId) {
+          resetSimulation()
+          setSessionId('')
+          setResultSnapshot(null)
+          hasShownResults.current = false
+          return
+        }
         setSessionId(res.sessionId)
         startPolling(res.sessionId, undefined, res.startedAt, res.elapsedRealtimeSeconds)
-        const activeCfg = getActiveConfigFromStorage()
-        if (activeCfg?.sessionId === res.sessionId) {
-          setFechaInicio(activeCfg.fechaInicio)
-          setHoraInicio(activeCfg.horaInicio)
+        if (res.simulationStartedAt) {
+          const parts = res.simulationStartedAt.split('T')
+          if (parts.length === 2) {
+            setFechaInicio(parts[0])
+            setHoraInicio(parts[1].substring(0, 5))
+          }
+        } else {
+          const activeCfg = getActiveConfigFromStorage()
+          if (activeCfg?.sessionId === res.sessionId) {
+            setFechaInicio(activeCfg.fechaInicio)
+            setHoraInicio(activeCfg.horaInicio)
+          }
         }
+      } else if (stoppedSessionId) {
+        localStorage.removeItem(SIM_STOPPED_KEY)
       }
     }).catch(() => {})
     return () => { cancelled = true }
@@ -364,24 +373,6 @@ export default function Simulacion() {
       setShowResultados(true)
     }
   }, [simulationState])
-
-  // Detener simulación al cerrar la pestaña
-  useEffect(() => {
-    const API_BASE = import.meta.env.VITE_API_URL || '/api'
-    const handleBeforeUnload = () => {
-      if (sessionId) {
-        const url = `${API_BASE}/simulacion/detener/${sessionId}`
-        navigator.sendBeacon?.(url)
-        try {
-          fetch(url, { method: 'POST', keepalive: true, mode: 'no-cors' })
-        } catch {
-          // ignore
-        }
-      }
-    }
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [sessionId])
 
   function formatElapsed(seconds: number): string {
     const h = Math.floor(seconds / 3600)
@@ -477,7 +468,7 @@ export default function Simulacion() {
     resetElapsedTimer()
     clearConfigStorage()
     clearActiveConfigStorage()
-    localStorage.setItem(SIM_STOPPED_KEY, '1')
+    localStorage.setItem(SIM_STOPPED_KEY, sessionId)
     hasShownResults.current = false
     setResultSnapshot(null)
     setShowResultados(false)
