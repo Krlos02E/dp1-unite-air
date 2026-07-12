@@ -79,6 +79,9 @@ server {
         proxy_set_header Connection "upgrade";
         proxy_set_header Host \$host;
         proxy_cache_bypass \$http_upgrade;
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 75s;
+        proxy_send_timeout 300s;
     }
 }
 EOF
