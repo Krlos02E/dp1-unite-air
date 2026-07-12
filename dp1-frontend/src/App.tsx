@@ -63,8 +63,8 @@ function AppContent({ checking }: { checking: boolean }) {
         </div>
       ) : (
         <>
-          <nav className="bg-gray-900 border-b border-gray-800 px-4 sm:px-6 py-3 flex items-center gap-4 sm:gap-6 overflow-x-auto">
-            <h1 className="text-lg sm:text-xl font-bold text-sky-400 shrink-0">UniteAir</h1>
+          <nav className="bg-gray-900 border-b border-gray-800 px-4 sm:px-5 py-2 flex items-center gap-3 sm:gap-5 overflow-x-auto">
+            <h1 className="text-base sm:text-lg font-bold text-sky-400 shrink-0">UniteAir</h1>
             <button onClick={handleNav('carga')} className={navButtonClass('carga')}>
               Gestión de Envíos
             </button>
@@ -79,7 +79,7 @@ function AppContent({ checking }: { checking: boolean }) {
             </button>
           </nav>
 
-          <main className="p-4 sm:p-6 flex-1">
+          <main className="px-3 sm:px-5 pt-2 sm:pt-3 pb-4 sm:pb-5 flex-1">
             {page === 'carga' && <GestionEnvios />}
             {page === 'operacion-diaria' && <OperacionDiaria />}
             {page === 'simulacion' && <Simulacion />}

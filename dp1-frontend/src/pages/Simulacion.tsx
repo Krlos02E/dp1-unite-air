@@ -529,59 +529,59 @@ export default function Simulacion() {
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-1">
       {/* Barra superior de parámetros + tiempos */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl px-3 py-2 flex flex-wrap items-center gap-x-2 gap-y-2">
+      <div className="bg-gray-900 border border-gray-800 rounded-xl px-3 py-1.5 flex flex-wrap items-center gap-x-2 gap-y-1.5">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-400 font-medium">Escenario:</span>
-          <span className="text-sm text-gray-200 font-semibold">{DURACION_FIJA} días</span>
+          <span className="text-[13px] text-gray-400 font-medium">Escenario:</span>
+          <span className="text-[13px] text-gray-200 font-semibold">{DURACION_FIJA} días</span>
         </div>
 
         <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-400 font-medium">Fecha inicio:</label>
+          <label className="text-[13px] text-gray-400 font-medium">Fecha inicio:</label>
           <input
             type="date"
             value={fechaInicio}
             onChange={(e) => setFechaInicio(e.target.value)}
-            className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-0.5 text-[13px] text-gray-200 focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             disabled={!!sessionId && !isError}
           />
         </div>
 
         <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-400 font-medium">Hora inicio:</label>
+          <label className="text-[13px] text-gray-400 font-medium">Hora inicio:</label>
           <input
             type="time"
             value={horaInicio}
             onChange={(e) => setHoraInicio(e.target.value)}
-            className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-0.5 text-[13px] text-gray-200 focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             disabled={!!sessionId && !isError}
           />
         </div>
 
         {/* Tiempos de simulación */}
         {simulationState && (
-          <div className="flex items-center gap-2 ml-1">
-            <div className="flex flex-col bg-sky-950/40 border border-sky-800/40 rounded-lg px-2.5 py-1">
+          <div className="flex items-center gap-1.5 ml-0.5">
+            <div className="flex flex-col bg-sky-950/40 border border-sky-800/40 rounded-lg px-2 py-0.5">
               <span className="text-[10px] text-sky-300/80 leading-tight">Tiempo real transcurrido</span>
               <span className="font-mono text-xs text-sky-200 leading-tight">{formatElapsed(elapsedRealSeconds)}</span>
             </div>
-            <div className="flex flex-col bg-sky-950/40 border border-sky-800/40 rounded-lg px-2.5 py-1">
+            <div className="flex flex-col bg-sky-950/40 border border-sky-800/40 rounded-lg px-2 py-0.5">
               <span className="text-[10px] text-sky-300/80 leading-tight">Tiempo simulado transcurrido</span>
               <span className="font-mono text-xs text-sky-200 leading-tight">{formatElapsed(simulatedElapsedSeconds)}</span>
             </div>
-            <div className="flex flex-col bg-sky-950/40 border border-sky-800/40 rounded-lg px-2.5 py-1">
+            <div className="flex flex-col bg-sky-950/40 border border-sky-800/40 rounded-lg px-2 py-0.5">
               <span className="text-[10px] text-sky-300/80 leading-tight">Fecha actual simulación</span>
               <span className="font-mono text-xs text-sky-200 leading-tight">{formatDateTime(simulationState?.simulationTime)}</span>
             </div>
-            <div className="flex flex-col bg-sky-950/40 border border-sky-800/40 rounded-lg px-2.5 py-1">
+            <div className="flex flex-col bg-sky-950/40 border border-sky-800/40 rounded-lg px-2 py-0.5">
               <span className="text-[10px] text-sky-300/80 leading-tight">Día</span>
               <span className="font-mono text-xs text-sky-200 leading-tight">{Math.ceil((simulationState.progreso / 100) * DURACION_FIJA)}</span>
             </div>
-            <div className="flex flex-col w-[260px]">
-              <div className="w-full bg-gray-800 rounded-full h-2.5">
+            <div className="flex flex-col w-[220px]">
+              <div className="w-full bg-gray-800 rounded-full h-2">
                 <div
-                  className="bg-emerald-500 h-2.5 rounded-full transition-all"
+                  className="bg-emerald-500 h-2 rounded-full transition-all"
                   style={{ width: `${simulationState.progreso}%` }}
                 />
               </div>
@@ -590,7 +590,7 @@ export default function Simulacion() {
           </div>
         )}
 
-        <div className="flex items-center gap-2 ml-2">
+        <div className="flex items-center gap-2 ml-1">
           {error && (
             <span className="text-xs text-red-400 font-medium">{error}</span>
           )}
@@ -599,7 +599,7 @@ export default function Simulacion() {
               {!isCompleted && (
                 <button
                   onClick={() => setShowStopConfirm(true)}
-                  className="px-4 py-2 rounded-lg font-medium text-sm bg-red-600 hover:bg-red-700 text-white transition-colors cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg font-medium text-sm bg-red-600 hover:bg-red-700 text-white transition-colors cursor-pointer"
                 >
                   Detener
                 </button>
@@ -607,7 +607,7 @@ export default function Simulacion() {
               {isCompleted && (
                 <button
                   onClick={handleNuevaSimulacion}
-                  className="px-4 py-2 rounded-lg font-medium text-sm bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
+                  className="px-3 py-1.5 rounded-lg font-medium text-sm bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
                 >
                   Nueva Simulación
                 </button>
@@ -617,7 +617,7 @@ export default function Simulacion() {
             <button
               onClick={handleIniciar}
               disabled={loading}
-              className="px-6 py-2 rounded-lg font-medium text-sm bg-sky-600 hover:bg-sky-700 text-white transition-colors disabled:bg-gray-600 cursor-pointer"
+              className="px-5 py-1.5 rounded-lg font-medium text-sm bg-sky-600 hover:bg-sky-700 text-white transition-colors disabled:bg-gray-600 cursor-pointer"
             >
               {loading ? 'Iniciando...' : 'Iniciar'}
             </button>
