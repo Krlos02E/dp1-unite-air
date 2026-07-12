@@ -1,16 +1,21 @@
 package pe.edu.pucp.uniteair.dp1backend.service;
 
 import org.springframework.stereotype.Service;
+import pe.edu.pucp.uniteair.dp1backend.config.AeropuertoCoordenadas;
+import pe.edu.pucp.uniteair.dp1backend.dto.AeropuertoDTO;
 import pe.edu.pucp.uniteair.dp1backend.cache.SimulationCache;
 import pe.edu.pucp.uniteair.dp1backend.dto.LogEntry;
 import pe.edu.pucp.uniteair.dp1backend.dto.SimulationState;
 import pe.edu.pucp.uniteair.dp1backend.dto.SimulacionConfigRequest;
+import pe.edu.pucp.uniteair.dp1backend.dto.VueloDTO;
 import pe.edu.pucp.uniteair.dp1backend.engine.SimulationEngine;
+import pe.edu.pucp.uniteair.dp1backend.entity.Almacen;
 import pe.edu.pucp.uniteair.dp1backend.entity.AlmacenContexto;
 import pe.edu.pucp.uniteair.dp1backend.entity.SimulationSession;
 import pe.edu.pucp.uniteair.dp1backend.repository.SimulationSessionRepository;
 import tasf.config.Config_Simulacion;
 import tasf.core.Dataset;
+import tasf.model.Vuelo;
 
 import java.time.Duration;
 import java.time.LocalDate;
@@ -19,8 +24,13 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class SimulationService {
@@ -30,17 +40,20 @@ public class SimulationService {
     private final SimulationEngine simulationEngine;
     private final CargaArchivosService cargaArchivosService;
     private final DatasetContextService datasetContextService;
+    private final AlmacenService almacenService;
 
     public SimulationService(SimulationSessionRepository sessionRepository,
                              SimulationCache simulationCache,
                              SimulationEngine simulationEngine,
                              CargaArchivosService cargaArchivosService,
-                             DatasetContextService datasetContextService) {
+                             DatasetContextService datasetContextService,
+                             AlmacenService almacenService) {
         this.sessionRepository = sessionRepository;
         this.simulationCache = simulationCache;
         this.simulationEngine = simulationEngine;
         this.cargaArchivosService = cargaArchivosService;
         this.datasetContextService = datasetContextService;
+        this.almacenService = almacenService;
     }
 
     public SimulationState iniciarSimulacion(SimulacionConfigRequest req, Dataset dataset) {
@@ -270,5 +283,216 @@ public class SimulationService {
 
     public void reanudarSimulacion(String sessionId) {
         simulationEngine.reanudarSimulacion(sessionId);
+    }
+
+    public void refrescarEstadoVisualSesionActivaSimulacion() {
+        SimulationSession activeSession = obtenerSesionActiva();
+        if (activeSession == null) {
+            return;
+        }
+        refrescarEstadoVisualSimulacion(activeSession.getSessionId());
+    }
+
+    public void refrescarEstadoVisualSimulacion(String sessionId) {
+        if (sessionId == null || sessionId.isBlank()) {
+            return;
+        }
+
+        SimulationState currentState = simulationCache.get(sessionId);
+        if (currentState == null) {
+            currentState = simulationCache.getStable(sessionId);
+        }
+        if (currentState == null) {
+            return;
+        }
+
+        SimulationSession session = sessionRepository.findById(sessionId).orElse(null);
+        Dataset baseDataset = cargaArchivosService.obtenerUltimoDataset();
+        if (session == null || baseDataset == null) {
+            return;
+        }
+
+        LocalDate fechaInicio = session.getFechaInicio() != null
+                ? session.getFechaInicio().toLocalDate()
+                : LocalDate.now();
+        int diasVentana = Math.max(session.getDuracionDias() + 2, 1);
+        LocalDateTime simulationTime = currentState.getSimulationTime() != null
+                ? currentState.getSimulationTime()
+                : session.getFechaActualSimulacion();
+
+        Dataset effectiveDataset = datasetContextService.construirDatasetEfectivo(
+                AlmacenContexto.SIMULACION,
+                baseDataset,
+                fechaInicio,
+                diasVentana
+        );
+
+        List<AeropuertoDTO> refreshedAeropuertos = construirAeropuertosContextuales(
+                effectiveDataset,
+                currentState.getAeropuertos()
+        );
+        List<VueloDTO> refreshedVuelos = construirVuelosContextuales(
+                effectiveDataset,
+                currentState.getVuelos(),
+                simulationTime
+        );
+
+        SimulationState refreshedState = SimulationState.builder()
+                .sessionId(currentState.getSessionId())
+                .status(currentState.getStatus())
+                .startedAt(currentState.getStartedAt())
+                .simulationTime(currentState.getSimulationTime())
+                .vuelos(refreshedVuelos)
+                .aeropuertos(refreshedAeropuertos)
+                .maletasEntregadas(currentState.getMaletasEntregadas())
+                .maletasEnTransito(currentState.getMaletasEnTransito())
+                .vuelosCulminados(currentState.getVuelosCulminados())
+                .vuelosEnTransito(currentState.getVuelosEnTransito())
+                .vuelosCancelados(currentState.getVuelosCancelados())
+                .progreso(currentState.getProgreso())
+                .colapsada(currentState.isColapsada())
+                .motivoColapso(currentState.getMotivoColapso())
+                .elapsedRealtimeSeconds(currentState.getElapsedRealtimeSeconds())
+                .logs(currentState.getLogs())
+                .envios(currentState.getEnvios())
+                .maletas(currentState.getMaletas())
+                .build();
+
+        simulationCache.put(sessionId, refreshedState);
+        if ("EJECUTANDO".equals(refreshedState.getStatus()) || "COMPLETADA".equals(refreshedState.getStatus())) {
+            simulationCache.putStable(sessionId, refreshedState);
+        }
+    }
+
+    private List<AeropuertoDTO> construirAeropuertosContextuales(
+            Dataset dataset,
+            List<AeropuertoDTO> currentAeropuertos
+    ) {
+        if (dataset == null) {
+            return currentAeropuertos != null ? currentAeropuertos : List.of();
+        }
+
+        Map<String, AeropuertoDTO> currentMap = new LinkedHashMap<>();
+        if (currentAeropuertos != null) {
+            currentAeropuertos.forEach(aeropuerto -> currentMap.put(aeropuerto.getCodigoOACI(), aeropuerto));
+        }
+
+        Set<String> vuelosCancelados = cargaArchivosService.obtenerVuelosCancelados(AlmacenContexto.SIMULACION);
+        Map<String, List<String>> entrantesMap = new LinkedHashMap<>();
+        Map<String, List<String>> salientesMap = new LinkedHashMap<>();
+        Map<String, List<String>> canceladosMap = new LinkedHashMap<>();
+
+        for (Vuelo vuelo : dataset.getVuelos()) {
+            String origen = vuelo.getOrigen().getCodigoOACI();
+            String destino = vuelo.getDestino().getCodigoOACI();
+            entrantesMap.computeIfAbsent(destino, key -> new ArrayList<>()).add(vuelo.getId());
+            salientesMap.computeIfAbsent(origen, key -> new ArrayList<>()).add(vuelo.getId());
+            if (vuelosCancelados.contains(vuelo.getId())) {
+                canceladosMap.computeIfAbsent(origen, key -> new ArrayList<>()).add(vuelo.getId());
+            }
+        }
+
+        Map<String, Almacen> almacenMap = almacenService.getMapaAlmacenes(AlmacenContexto.SIMULACION);
+        Set<String> codigos = new LinkedHashSet<>(dataset.getAeropuertos().keySet());
+        codigos.addAll(almacenMap.keySet());
+        codigos.addAll(currentMap.keySet());
+
+        List<AeropuertoDTO> aeropuertos = new ArrayList<>();
+        for (String codigo : codigos) {
+            Almacen almacen = almacenMap.get(codigo);
+            AeropuertoDTO current = currentMap.get(codigo);
+            double[] coord = AeropuertoCoordenadas.get(codigo);
+            double latitud = almacen != null ? almacen.getLatitud() : (current != null ? current.getLatitud() : coord[0]);
+            double longitud = almacen != null ? almacen.getLongitud() : (current != null ? current.getLongitud() : coord[1]);
+            aeropuertos.add(AeropuertoDTO.builder()
+                    .codigoOACI(codigo)
+                    .latitud(latitud)
+                    .longitud(longitud)
+                    .ciudad(almacen != null ? almacen.getCiudad() : (current != null ? current.getCiudad() : null))
+                    .pais(almacen != null ? almacen.getPais() : (current != null ? current.getPais() : null))
+                    .capacidadMaxima(almacen != null
+                            ? almacen.getCapacidadMaxima()
+                            : (current != null ? current.getCapacidadMaxima() : 0))
+                    .ocupacionActual(current != null ? current.getOcupacionActual() : 0)
+                    .vuelosEntrantes(entrantesMap.getOrDefault(codigo, List.of()))
+                    .vuelosSalientes(salientesMap.getOrDefault(codigo, List.of()))
+                    .vuelosCanceladosSalientes(canceladosMap.getOrDefault(codigo, List.of()))
+                    .build());
+        }
+        return aeropuertos;
+    }
+
+    private List<VueloDTO> construirVuelosContextuales(
+            Dataset dataset,
+            List<VueloDTO> currentVuelos,
+            LocalDateTime simulationTime
+    ) {
+        if (dataset == null) {
+            return currentVuelos != null ? currentVuelos : List.of();
+        }
+
+        Map<String, VueloDTO> currentMap = new LinkedHashMap<>();
+        if (currentVuelos != null) {
+            currentVuelos.forEach(vuelo -> currentMap.put(vuelo.getId(), vuelo));
+        }
+
+        LocalDateTime referencia = simulationTime != null ? simulationTime : LocalDateTime.now();
+        Set<String> vuelosCancelados = cargaArchivosService.obtenerVuelosCancelados(AlmacenContexto.SIMULACION);
+        Map<String, Almacen> almacenMap = almacenService.getMapaAlmacenes(AlmacenContexto.SIMULACION);
+
+        return dataset.getVuelos().stream()
+                .map(vuelo -> {
+                    VueloDTO current = currentMap.get(vuelo.getId());
+                    double[] origenCoord = AeropuertoCoordenadas.get(vuelo.getOrigen().getCodigoOACI());
+                    double[] destinoCoord = AeropuertoCoordenadas.get(vuelo.getDestino().getCodigoOACI());
+                    Almacen almacenOrigen = almacenMap.get(vuelo.getOrigen().getCodigoOACI());
+                    Almacen almacenDestino = almacenMap.get(vuelo.getDestino().getCodigoOACI());
+
+                    String estado;
+                    if (vuelosCancelados.contains(vuelo.getId())) {
+                        estado = "CANCELADO";
+                    } else if (vuelo.getLlegadaUtc() != null && referencia.isAfter(vuelo.getLlegadaUtc())) {
+                        estado = "CULMINADO";
+                    } else if (vuelo.getSalidaUtc() != null && referencia.isAfter(vuelo.getSalidaUtc())) {
+                        estado = "ACTIVO";
+                    } else {
+                        estado = "PROGRAMADO";
+                    }
+
+                    return VueloDTO.builder()
+                            .id(vuelo.getId())
+                            .origen(vuelo.getOrigen().getCodigoOACI())
+                            .destino(vuelo.getDestino().getCodigoOACI())
+                            .latOrigen(almacenOrigen != null ? almacenOrigen.getLatitud() : origenCoord[0])
+                            .lonOrigen(almacenOrigen != null ? almacenOrigen.getLongitud() : origenCoord[1])
+                            .latDestino(almacenDestino != null ? almacenDestino.getLatitud() : destinoCoord[0])
+                            .lonDestino(almacenDestino != null ? almacenDestino.getLongitud() : destinoCoord[1])
+                            .salidaUtc(current != null ? current.getSalidaUtc() : vuelo.getSalidaUtc())
+                            .llegadaUtc(current != null ? current.getLlegadaUtc() : vuelo.getLlegadaUtc())
+                            .capacidad(vuelo.getCapacidadCarga())
+                            .cargaActual(current != null ? current.getCargaActual() : 0)
+                            .progresoVuelo(current != null ? current.getProgresoVuelo() : 0)
+                            .estado(estado)
+                            .programacionId(extraerProgramacionId(vuelo.getId()))
+                            .editable(vuelo.getId() != null && vuelo.getId().startsWith("USR-"))
+                            .recurrente(vuelo.getId() != null && vuelo.getId().startsWith("USR-"))
+                            .build();
+                })
+                .collect(Collectors.toList());
+    }
+
+    private Long extraerProgramacionId(String vueloId) {
+        if (vueloId == null || !vueloId.startsWith("USR-")) {
+            return null;
+        }
+        String[] partes = vueloId.split("-");
+        if (partes.length < 3) {
+            return null;
+        }
+        try {
+            return Long.parseLong(partes[1]);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 }

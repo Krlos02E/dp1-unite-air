@@ -52,6 +52,8 @@ public class VueloController {
             );
             if (request.contexto() == null || request.contexto() == AlmacenContexto.OPERACION) {
                 cargaArchivosService.replanificarOperacionActual();
+            } else if (request.contexto() == AlmacenContexto.SIMULACION) {
+                simulationService.refrescarEstadoVisualSesionActivaSimulacion();
             }
 
             return ResponseEntity.ok(Map.of(
@@ -83,6 +85,8 @@ public class VueloController {
             );
             if (request.contexto() == null || request.contexto() == AlmacenContexto.OPERACION) {
                 cargaArchivosService.replanificarOperacionActual();
+            } else if (request.contexto() == AlmacenContexto.SIMULACION) {
+                simulationService.refrescarEstadoVisualSesionActivaSimulacion();
             }
             return ResponseEntity.ok(Map.of(
                     "success", true,
@@ -111,6 +115,9 @@ public class VueloController {
     ) {
         try {
             ProgramacionVueloDTO response = programacionVueloService.crear(contexto, request);
+            if (contexto == AlmacenContexto.SIMULACION) {
+                simulationService.refrescarEstadoVisualSesionActivaSimulacion();
+            }
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of(
@@ -128,6 +135,9 @@ public class VueloController {
     ) {
         try {
             ProgramacionVueloDTO response = programacionVueloService.actualizar(contexto, id, request);
+            if (contexto == AlmacenContexto.SIMULACION) {
+                simulationService.refrescarEstadoVisualSesionActivaSimulacion();
+            }
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of(
@@ -144,6 +154,9 @@ public class VueloController {
     ) {
         try {
             programacionVueloService.eliminar(contexto, id);
+            if (contexto == AlmacenContexto.SIMULACION) {
+                simulationService.refrescarEstadoVisualSesionActivaSimulacion();
+            }
             return ResponseEntity.ok(Map.of("success", true));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of(

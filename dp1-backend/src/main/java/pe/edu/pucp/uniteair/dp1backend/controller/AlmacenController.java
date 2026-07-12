@@ -5,6 +5,7 @@ import org.springframework.web.bind.annotation.*;
 import pe.edu.pucp.uniteair.dp1backend.entity.Almacen;
 import pe.edu.pucp.uniteair.dp1backend.entity.AlmacenContexto;
 import pe.edu.pucp.uniteair.dp1backend.service.AlmacenService;
+import pe.edu.pucp.uniteair.dp1backend.service.SimulationService;
 
 import java.util.List;
 import java.util.Map;
@@ -14,9 +15,12 @@ import java.util.Map;
 public class AlmacenController {
 
     private final AlmacenService almacenService;
+    private final SimulationService simulationService;
 
-    public AlmacenController(AlmacenService almacenService) {
+    public AlmacenController(AlmacenService almacenService,
+                             SimulationService simulationService) {
         this.almacenService = almacenService;
+        this.simulationService = simulationService;
     }
 
     @GetMapping
@@ -43,6 +47,9 @@ public class AlmacenController {
     ) {
         try {
             Almacen creado = almacenService.crear(contexto, almacen);
+            if (contexto == AlmacenContexto.SIMULACION) {
+                simulationService.refrescarEstadoVisualSesionActivaSimulacion();
+            }
             return ResponseEntity.ok(creado);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -57,6 +64,9 @@ public class AlmacenController {
     ) {
         try {
             Almacen actualizado = almacenService.actualizar(contexto, codigo, datos);
+            if (contexto == AlmacenContexto.SIMULACION) {
+                simulationService.refrescarEstadoVisualSesionActivaSimulacion();
+            }
             return ResponseEntity.ok(actualizado);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -70,6 +80,9 @@ public class AlmacenController {
     ) {
         try {
             almacenService.eliminar(contexto, codigo);
+            if (contexto == AlmacenContexto.SIMULACION) {
+                simulationService.refrescarEstadoVisualSesionActivaSimulacion();
+            }
             return ResponseEntity.ok(Map.of("success", true));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));

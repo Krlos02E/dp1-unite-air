@@ -11,13 +11,16 @@ public class SimulationContextService {
     private final AlmacenService almacenService;
     private final ProgramacionVueloService programacionVueloService;
     private final CargaArchivosService cargaArchivosService;
+    private final SimulationService simulationService;
 
     public SimulationContextService(AlmacenService almacenService,
                                     ProgramacionVueloService programacionVueloService,
-                                    CargaArchivosService cargaArchivosService) {
+                                    CargaArchivosService cargaArchivosService,
+                                    SimulationService simulationService) {
         this.almacenService = almacenService;
         this.programacionVueloService = programacionVueloService;
         this.cargaArchivosService = cargaArchivosService;
+        this.simulationService = simulationService;
     }
 
     @PostConstruct
@@ -30,5 +33,6 @@ public class SimulationContextService {
         programacionVueloService.limpiarContexto(AlmacenContexto.SIMULACION);
         almacenService.limpiarContexto(AlmacenContexto.SIMULACION);
         cargaArchivosService.limpiarVuelosCancelados(AlmacenContexto.SIMULACION);
+        simulationService.refrescarEstadoVisualSesionActivaSimulacion();
     }
 }
