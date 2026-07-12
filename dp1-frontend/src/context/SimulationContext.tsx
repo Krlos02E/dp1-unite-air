@@ -41,6 +41,8 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   const [pollingInterval, setPollingInterval] = useState(1500)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const pollingActiveRef = useRef(false)
+  const pollErrorCountRef = useRef(0)
+  const currentPollingSessionIdRef = useRef<string | null>(null)
 
   const [elapsedRealSeconds, setElapsedRealSeconds] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
@@ -60,6 +62,8 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       intervalRef.current = null
     }
     pollingActiveRef.current = false
+    pollErrorCountRef.current = 0
+    currentPollingSessionIdRef.current = null
     setIsRunning(false)
   }, [])
 
@@ -84,6 +88,9 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const startPolling = useCallback((sessionId: string, interval?: number, startedAt?: string, initialElapsed?: number) => {
+    if (pollingActiveRef.current && currentPollingSessionIdRef.current === sessionId) {
+      return
+    }
     stopPolling()
     setSimulationState(null)
     setActiveSimulation((current) => ({
@@ -113,6 +120,8 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       serverPollTimeRef.current = performance.now()
     }
     pollingActiveRef.current = true
+    pollErrorCountRef.current = 0
+    currentPollingSessionIdRef.current = sessionId
 
     const effectiveInterval = interval ?? pollingInterval
 
@@ -121,6 +130,7 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       try {
         const state = await simulationService.poll(sessionId)
         if (!pollingActiveRef.current) return
+        pollErrorCountRef.current = 0
         if (state.elapsedRealtimeSeconds !== undefined) {
           serverElapsedRef.current = state.elapsedRealtimeSeconds
           serverPollTimeRef.current = performance.now()
@@ -130,7 +140,10 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
           stopPolling()
         }
       } catch {
-        stopPolling()
+        pollErrorCountRef.current += 1
+        if (pollErrorCountRef.current >= 3) {
+          stopPolling()
+        }
       }
     }
 

@@ -308,10 +308,6 @@ export default function OperacionDiaria() {
     setTodasMaletas(maletasData.maletas)
   }, [])
 
-  const refreshOperacionContextData = useCallback(async () => {
-    await refreshOperacionSharedData()
-  }, [refreshOperacionSharedData])
-
   // Cargar aeropuertos y vuelos del dataset
   useEffect(() => {
     let cancelled = false

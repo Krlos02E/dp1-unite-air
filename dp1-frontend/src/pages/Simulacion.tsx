@@ -15,7 +15,6 @@ import { shouldDisplayFlight } from '../utils/flightVisibility'
 
 const SIM_CONFIG_KEY = 'uniteair_simConfig'
 const SIM_ACTIVE_CONFIG_KEY = 'uniteair_activeSimConfig'
-const SIM_STOPPED_KEY = 'uniteair_simStopped'
 const DURACION_FIJA = 5
 const EMPTY_FLIGHTS: VueloDTO[] = []
 
@@ -35,6 +34,7 @@ export default function Simulacion() {
   const {
     simulationState,
     activeSimulation,
+    isRunning,
     startPolling,
     resetSimulation,
     elapsedRealSeconds,
@@ -311,17 +311,13 @@ export default function Simulacion() {
     let cancelled = false
     const syncFromActiveSimulation = async () => {
       if (cancelled) return
-      const stoppedSessionId = localStorage.getItem(SIM_STOPPED_KEY)
       if (activeSimulation?.activa && activeSimulation.sessionId) {
-        if (stoppedSessionId && stoppedSessionId === activeSimulation.sessionId) {
-          resetSimulation()
-          setSessionId('')
-          setResultSnapshot(null)
-          hasShownResults.current = false
-          return
-        }
         setSessionId(activeSimulation.sessionId)
-        if (sessionId !== activeSimulation.sessionId || simulationState?.sessionId !== activeSimulation.sessionId) {
+        if (
+          !isRunning
+          || sessionId !== activeSimulation.sessionId
+          || simulationState?.sessionId !== activeSimulation.sessionId
+        ) {
           startPolling(
             activeSimulation.sessionId,
             undefined,
@@ -342,13 +338,33 @@ export default function Simulacion() {
             setHoraInicio(activeCfg.horaInicio)
           }
         }
-      } else if (stoppedSessionId) {
-        localStorage.removeItem(SIM_STOPPED_KEY)
+      } else if (sessionId && !isCompleted && !isColapsada && !isError) {
+        resetSimulation()
+        setSessionId('')
       }
     }
     void syncFromActiveSimulation()
     return () => { cancelled = true }
-  }, [activeSimulation, sessionId, simulationState?.sessionId, startPolling, resetSimulation])
+  }, [activeSimulation, isRunning, sessionId, simulationState?.sessionId, startPolling, resetSimulation, isCompleted, isColapsada, isError])
+
+  useEffect(() => {
+    const syncWhenVisible = () => {
+      if (document.visibilityState !== 'visible') return
+      void refreshActiveSimulation()
+    }
+
+    const syncWhenFocused = () => {
+      void refreshActiveSimulation()
+    }
+
+    document.addEventListener('visibilitychange', syncWhenVisible)
+    window.addEventListener('focus', syncWhenFocused)
+
+    return () => {
+      document.removeEventListener('visibilitychange', syncWhenVisible)
+      window.removeEventListener('focus', syncWhenFocused)
+    }
+  }, [refreshActiveSimulation])
 
   const vuelos = useMemo(() => {
     if (!hasSimulationStarted) return EMPTY_FLIGHTS
@@ -449,7 +465,6 @@ export default function Simulacion() {
       }
       saveConfigToStorage({ fechaInicio, horaInicio })
       saveActiveConfigToStorage({ sessionId: state.sessionId, fechaInicio, horaInicio })
-      localStorage.removeItem(SIM_STOPPED_KEY)
       hasShownResults.current = false
       setResultSnapshot(null)
       setSessionId(state.sessionId)
@@ -479,7 +494,6 @@ export default function Simulacion() {
     resetElapsedTimer()
     clearConfigStorage()
     clearActiveConfigStorage()
-    localStorage.setItem(SIM_STOPPED_KEY, sessionId)
     hasShownResults.current = false
     setResultSnapshot(null)
     setShowResultados(false)
@@ -494,7 +508,6 @@ export default function Simulacion() {
     resetElapsedTimer()
     clearConfigStorage()
     clearActiveConfigStorage()
-    localStorage.removeItem(SIM_STOPPED_KEY)
     hasShownResults.current = false
     setResultSnapshot(null)
     setShowResultados(false)
