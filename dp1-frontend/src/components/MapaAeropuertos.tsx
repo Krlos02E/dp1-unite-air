@@ -316,6 +316,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
   const markerLayerRef = useRef<L.LayerGroup | null>(null)
   const flightMarkersRef = useRef<Map<string, L.Marker>>(new Map())
   const airportMarkersRef = useRef<Map<string, L.Marker>>(new Map())
+  const flightIconSignatureRef = useRef<Map<string, string>>(new Map())
   const flightAngleRef = useRef<Map<string, number>>(new Map())
   const renderedFlightAngleRef = useRef<Map<string, number>>(new Map())
   const airportDataRef = useRef<Map<string, AeropuertoDTO>>(new Map())
@@ -367,6 +368,10 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
   const getKnownFlightAngle = (flightId: string, fallback?: number) => {
     return flightAngleRef.current.get(flightId) ?? renderedFlightAngleRef.current.get(flightId) ?? fallback
   }
+
+  const getFlightIconSignature = (selected: boolean, cargaActual: number, capacidad: number) => (
+    `${selected ? '1' : '0'}:${cargaActual}:${capacidad}`
+  )
 
   const shouldSkipMarkerMove = (mk: L.Marker, nextPos: [number, number]) => {
     const map = mapRef.current
@@ -549,6 +554,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         persistentFlightsRef.current.clear()
         flightMarkersRef.current.forEach((mk) => markerLayerRef.current?.removeLayer(mk))
         flightMarkersRef.current.clear()
+        flightIconSignatureRef.current.clear()
         flightAngleRef.current.clear()
         renderedFlightAngleRef.current.clear()
         flightAnimsRef.current.clear()
@@ -562,6 +568,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         if (mk) {
           markerLayerRef.current?.removeLayer(mk)
           flightMarkersRef.current.delete(id)
+          flightIconSignatureRef.current.delete(id)
           flightAngleRef.current.delete(id)
           renderedFlightAngleRef.current.delete(id)
         }
@@ -583,6 +590,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         if (mk) {
           markerLayerRef.current?.removeLayer(mk)
           flightMarkersRef.current.delete(v.id)
+          flightIconSignatureRef.current.delete(v.id)
           flightAngleRef.current.delete(v.id)
           renderedFlightAngleRef.current.delete(v.id)
         }
@@ -706,6 +714,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         mapRef.current = null
         flightMarkersRef.current.clear()
         airportMarkersRef.current.clear()
+        flightIconSignatureRef.current.clear()
         persistentFlightsRef.current.clear()
         flightAngleRef.current.clear()
         renderedFlightAngleRef.current.clear()
@@ -927,7 +936,11 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       const v = vueloMap.get(id) || persistentFlightsRef.current.get(id)
       const carga = v?.cargaActual ?? 0
       const cap = v?.capacidad ?? 1
-      mk.setIcon(getAirplaneIcon(isSelected, carga, cap))
+      const nextSignature = getFlightIconSignature(isSelected, carga, cap)
+      if (flightIconSignatureRef.current.get(id) !== nextSignature) {
+        mk.setIcon(getAirplaneIcon(isSelected, carga, cap))
+        flightIconSignatureRef.current.set(id, nextSignature)
+      }
       const angle = getKnownFlightAngle(id)
       if (angle !== undefined) {
         requestAnimationFrame(() => updateFlightRotation(mk, id, angle, true))
@@ -1044,6 +1057,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         })
         markerLayerRef.current?.addLayer(mk)
         flightMarkersRef.current.set(v.id, mk)
+        flightIconSignatureRef.current.set(v.id, getFlightIconSignature(isSelected, v.cargaActual, v.capacidad))
         const directAngle = bearing(from, to)
         const angle = resolveFlightAngle(
           interpolatePosition(from, to, Math.max(0, (initialProgress / 100) - 0.01)),
@@ -1056,7 +1070,11 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         mk.setOpacity(1)
         const element = mk.getElement()
         if (element) element.style.pointerEvents = 'auto'
-        mk.setIcon(getAirplaneIcon(isSelected, v.cargaActual, v.capacidad))
+        const nextSignature = getFlightIconSignature(isSelected, v.cargaActual, v.capacidad)
+        if (flightIconSignatureRef.current.get(v.id) !== nextSignature) {
+          mk.setIcon(getAirplaneIcon(isSelected, v.cargaActual, v.capacidad))
+          flightIconSignatureRef.current.set(v.id, nextSignature)
+        }
         mk.setTooltipContent(tooltipText)
         if (simulationMode && !wasVisibleBefore) {
           mk.setLatLng(interpolatePosition(from, to, progresoActual / 100))
