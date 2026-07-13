@@ -735,15 +735,26 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         existing.setLatLng([lat, lon])
         existing.setTooltipContent(airportTooltip())
         existing.setOpacity(passesPanelFilter ? 1 : 0)
+        if (!passesPanelFilter && existing.isTooltipOpen()) {
+          existing.closeTooltip()
+        }
         const element = existing.getElement()
         if (element) element.style.pointerEvents = passesPanelFilter ? 'auto' : 'none'
       } else {
         const code = a.codigoOACI
         const mk = L.marker([lat, lon], { icon: airportIcon(color, label, code === selectedAeropuertoIdRef.current) })
-        mk.bindTooltip(airportTooltip(), { direction: 'top', offset: L.point(0, -14) })
+        mk.bindTooltip(airportTooltip(), {
+          direction: 'top',
+          offset: L.point(0, -14),
+          interactive: false,
+          className: 'flight-map-tooltip',
+        })
         mk.on('click', () => {
           const current = airportDataRef.current.get(code)
           if (current) onAeropuertoClickRef.current?.(current)
+        })
+        mk.on('mouseout', () => {
+          mk.closeTooltip()
         })
         mk.setOpacity(passesPanelFilter ? 1 : 0)
         circleLayerRef.current?.addLayer(mk)
@@ -916,6 +927,9 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       mk.setIcon(airportIcon(color, cityName, code === selectedAeropuertoId))
       const passesPanelFilter = !filteredAirportIds || filteredAirportIds.has(code) || code === selectedAeropuertoId
       mk.setOpacity(passesPanelFilter ? 1 : 0)
+      if (!passesPanelFilter && mk.isTooltipOpen()) {
+        mk.closeTooltip()
+      }
       const element = mk.getElement()
       if (element) element.style.pointerEvents = passesPanelFilter ? 'auto' : 'none'
     })
