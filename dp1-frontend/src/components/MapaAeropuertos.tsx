@@ -231,6 +231,7 @@ interface FlightAnim {
   to: [number, number]
   pts?: [number, number][]
   displayedProgress: number
+  displayedPosition: [number, number]
   startProgress: number
   targetProgress: number
   transitionStartedAt: number
@@ -252,6 +253,7 @@ interface PointerSnapshot {
 const DEFAULT_SIM_CLOCK_RATE = 240
 const NEW_FLIGHT_SPAWN_PROGRESS_THRESHOLD = 15
 const NEW_FLIGHT_SPAWN_ANIMATION_MS = 1800
+const MARKER_SMOOTHING_MS = 140
 
 function buildPendingRoutePoints(
   from: [number, number],
@@ -265,6 +267,19 @@ function buildPendingRoutePoints(
   const splitIndex = Math.max(0, Math.min(pts.length - 1, Math.ceil(tNorm * (pts.length - 1))))
   const tail = pts.slice(Math.min(splitIndex + 1, pts.length))
   return [currentPos, ...tail]
+}
+
+function smoothPosition(
+  from: [number, number],
+  to: [number, number],
+  deltaMs: number,
+): [number, number] {
+  if (deltaMs <= 0) return from
+  const alpha = 1 - Math.exp(-deltaMs / MARKER_SMOOTHING_MS)
+  return [
+    from[0] + ((to[0] - from[0]) * alpha),
+    from[1] + ((to[1] - from[1]) * alpha),
+  ]
 }
 
 function getTargetFrameIntervalMs(visibleFlightCount: number): number {
@@ -986,15 +1001,20 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
           ? 1
           : (simulationMode ? 1 : snapshotInterval)
         existingAnim.displayedProgress = currentProgress
+        if (simulationMode && !wasVisibleBefore) {
+          existingAnim.displayedPosition = interpolatePosition(from, to, progresoActual / 100)
+        }
         existingAnim.snapshotAt = frameNow
       } else {
         const initialDisplayedProgress = shouldAnimateSpawnFromOrigin ? 0 : progresoActual
+        const initialDisplayedPosition = interpolatePosition(from, to, initialDisplayedProgress / 100)
         flightAnimsRef.current.set(v.id, {
           vuelo: v,
           from,
           to,
           pts,
           displayedProgress: initialDisplayedProgress,
+          displayedPosition: initialDisplayedPosition,
           startProgress: initialDisplayedProgress,
           targetProgress: progresoActual,
           transitionStartedAt: frameNow,
@@ -1065,6 +1085,9 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         rafIdRef.current = requestAnimationFrame(animate)
         return
       }
+      const deltaMs = lastAnimationFrameRef.current > 0
+        ? frameNow - lastAnimationFrameRef.current
+        : targetFrameInterval
       lastAnimationFrameRef.current = frameNow
       const realNow = simulationMode ? null : new Date()
       flightAnimsRef.current.forEach((anim, id) => {
@@ -1091,20 +1114,20 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         }
 
         const tNorm = currentProgress / 100
-        const pos = interpolatePosition(anim.from, anim.to, tNorm)
-        if (!shouldSkipMarkerMove(mk, pos)) {
-          mk.setLatLng(pos)
+        const targetPos = interpolatePosition(anim.from, anim.to, tNorm)
+        const currentDisplayedPos = anim.displayedPosition ?? targetPos
+        const nextDisplayedPos = smoothPosition(currentDisplayedPos, targetPos, deltaMs)
+        anim.displayedPosition = nextDisplayedPos
+        if (!shouldSkipMarkerMove(mk, nextDisplayedPos)) {
+          mk.setLatLng(nextDisplayedPos)
         }
 
         if (mk.isTooltipOpen() && !isPointerStillOverMarker(mk, pointerRef.current)) {
           mk.closeTooltip()
         }
 
-        const delta = 0.005
-        const tBefore = Math.max(0, tNorm - delta)
-        const tAfter = Math.min(1, tNorm + delta)
-        const posBefore = interpolatePosition(anim.from, anim.to, tBefore)
-        const posAfter = interpolatePosition(anim.from, anim.to, tAfter)
+        const posBefore = currentDisplayedPos
+        const posAfter = nextDisplayedPos
         const fallbackAngle = bearing(anim.from, anim.to)
         const previousAngle = flightAngleRef.current.get(id) ?? renderedFlightAngleRef.current.get(id)
         const angle = resolveFlightAngle(posBefore, posAfter, previousAngle ?? fallbackAngle)
