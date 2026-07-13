@@ -436,13 +436,39 @@ export default function Simulacion() {
           }
         }
       } else if (sessionId && !isCompleted && !isColapsada && !isError) {
+        try {
+          const latestState = await simulationService.estado(sessionId)
+          if (cancelled) return
+
+          const finished =
+            latestState.status === 'COMPLETADA'
+            || latestState.status === 'COLAPSADA'
+            || latestState.status === 'ERROR'
+            || latestState.progreso >= 100
+
+          if (finished) {
+            setSimulationState(latestState)
+            if (
+              (latestState.status === 'COMPLETADA' || latestState.progreso >= 100)
+              && !hasShownResults.current
+            ) {
+              hasShownResults.current = true
+              setResultSnapshot({ ...latestState })
+              setShowResultados(true)
+            }
+            return
+          }
+        } catch {
+          // If the session is no longer available, fall through and clear the local state.
+        }
+
         resetSimulation()
         setSessionId('')
       }
     }
     void syncFromActiveSimulation()
     return () => { cancelled = true }
-  }, [activeSimulation, isRunning, sessionId, simulationState?.sessionId, startPolling, resetSimulation, isCompleted, isColapsada, isError])
+  }, [activeSimulation, isRunning, sessionId, simulationState?.sessionId, startPolling, resetSimulation, isCompleted, isColapsada, isError, setSimulationState])
 
   useEffect(() => {
     const syncWhenVisible = () => {
