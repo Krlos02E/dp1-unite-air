@@ -1,4 +1,4 @@
-export const FLIGHT_DISPLAY_PERCENTAGE = 0.5
+export const FLIGHT_DISPLAY_PERCENTAGE = 1
 
 export function shouldDisplayFlight(flightId: string): boolean {
   let hash = 0

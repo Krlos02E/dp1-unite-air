@@ -1,17 +1,7 @@
 import { createContext, useContext, useRef, useState, useCallback, useEffect, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import { simulationService } from '../services/SimulationService'
+import { simulationSocketService, type ActiveSimulationInfo } from '../services/SimulationSocketService'
 import type { SimulationState } from '../types'
-
-interface ActiveSimulationInfo {
-  activa: boolean
-  sessionId?: string
-  status?: string
-  progreso?: number
-  startedAt?: string
-  simulationStartedAt?: string
-  fechaInicio?: string
-  elapsedRealtimeSeconds?: number
-}
 
 interface SimulationContextType {
   simulationState: SimulationState | null
@@ -40,10 +30,17 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   const [checkingActiveSimulation, setCheckingActiveSimulation] = useState(true)
   const [isRunning, setIsRunning] = useState(false)
   const [pollingInterval, setPollingInterval] = useState(2500)
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pollingActiveRef = useRef(false)
   const pollErrorCountRef = useRef(0)
   const currentPollingSessionIdRef = useRef<string | null>(null)
+  const activeRefreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const activeRefreshInFlightRef = useRef(false)
+  const activeSocketCleanupRef = useRef<(() => void) | null>(null)
+  const sessionSocketCleanupRef = useRef<(() => void) | null>(null)
+  const activeSocketConnectedRef = useRef(false)
+  const sessionSocketConnectedRef = useRef(false)
+  const sessionSocketFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [elapsedRealSeconds, setElapsedRealSeconds] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
@@ -58,13 +55,22 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const stopPolling = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current)
-      intervalRef.current = null
+    if (pollTimeoutRef.current) {
+      clearTimeout(pollTimeoutRef.current)
+      pollTimeoutRef.current = null
     }
     pollingActiveRef.current = false
     pollErrorCountRef.current = 0
     currentPollingSessionIdRef.current = null
+    sessionSocketConnectedRef.current = false
+    if (sessionSocketFallbackTimerRef.current) {
+      clearTimeout(sessionSocketFallbackTimerRef.current)
+      sessionSocketFallbackTimerRef.current = null
+    }
+    if (sessionSocketCleanupRef.current) {
+      sessionSocketCleanupRef.current()
+      sessionSocketCleanupRef.current = null
+    }
     setIsRunning(false)
   }, [])
 
@@ -78,15 +84,121 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   }, [stopPolling])
 
   const refreshActiveSimulation = useCallback(async () => {
+    if (activeSocketConnectedRef.current) {
+      setCheckingActiveSimulation(false)
+      return
+    }
+    if (activeRefreshInFlightRef.current) return
+    activeRefreshInFlightRef.current = true
     try {
       const state = await simulationService.activa()
       setActiveSimulation(state)
     } catch {
       setActiveSimulation({ activa: false })
     } finally {
+      activeRefreshInFlightRef.current = false
       setCheckingActiveSimulation(false)
     }
   }, [])
+
+  const applySimulationState = useCallback((state: SimulationState) => {
+    pollErrorCountRef.current = 0
+    if (state.elapsedRealtimeSeconds !== undefined) {
+      serverElapsedRef.current = state.elapsedRealtimeSeconds
+      serverPollTimeRef.current = performance.now()
+      setElapsedRealSeconds(state.elapsedRealtimeSeconds)
+    }
+    setSimulationState(state)
+    setActiveSimulation((current) => ({
+      ...(current ?? {}),
+      activa: !(state.colapsada || state.status === 'COMPLETADA' || state.status === 'ERROR'),
+      sessionId: state.sessionId,
+      status: state.status,
+      progreso: state.progreso,
+      startedAt: state.startedAt,
+      simulationStartedAt: current?.simulationStartedAt ?? state.simulationTime,
+      fechaInicio: state.simulationTime,
+      elapsedRealtimeSeconds: state.elapsedRealtimeSeconds,
+    }))
+    if (state.colapsada || state.status === 'COMPLETADA' || state.status === 'ERROR') {
+      stopPolling()
+    }
+  }, [stopPolling])
+
+  const startHttpPolling = useCallback((sessionId: string, effectiveInterval: number) => {
+    const scheduleNextPoll = () => {
+      if (!pollingActiveRef.current || sessionSocketConnectedRef.current) return
+      pollTimeoutRef.current = window.setTimeout(() => {
+        void poll()
+      }, effectiveInterval)
+    }
+
+    const poll = async () => {
+      if (!pollingActiveRef.current || sessionSocketConnectedRef.current) return
+      let shouldScheduleNext = true
+      try {
+        const state = await simulationService.poll(sessionId)
+        if (!pollingActiveRef.current || sessionSocketConnectedRef.current) return
+        applySimulationState(state)
+        if (state.colapsada || state.status === 'COMPLETADA') {
+          shouldScheduleNext = false
+        }
+      } catch {
+        pollErrorCountRef.current += 1
+        if (pollErrorCountRef.current >= 3) {
+          shouldScheduleNext = false
+          stopPolling()
+        }
+      } finally {
+        if (shouldScheduleNext && pollingActiveRef.current && !sessionSocketConnectedRef.current) {
+          scheduleNextPoll()
+        }
+      }
+    }
+
+    void poll()
+  }, [applySimulationState, stopPolling])
+
+  const connectSessionSocket = useCallback((sessionId: string, effectiveInterval: number) => {
+    sessionSocketConnectedRef.current = false
+    if (sessionSocketCleanupRef.current) {
+      sessionSocketCleanupRef.current()
+      sessionSocketCleanupRef.current = null
+    }
+    if (sessionSocketFallbackTimerRef.current) {
+      clearTimeout(sessionSocketFallbackTimerRef.current)
+    }
+
+    sessionSocketFallbackTimerRef.current = window.setTimeout(() => {
+      if (pollingActiveRef.current && currentPollingSessionIdRef.current === sessionId && !sessionSocketConnectedRef.current) {
+        startHttpPolling(sessionId, effectiveInterval)
+      }
+    }, 2500)
+
+    sessionSocketCleanupRef.current = simulationSocketService.connectSimulationState(sessionId, {
+      onOpen: () => {
+        sessionSocketConnectedRef.current = true
+        if (sessionSocketFallbackTimerRef.current) {
+          clearTimeout(sessionSocketFallbackTimerRef.current)
+          sessionSocketFallbackTimerRef.current = null
+        }
+      },
+      onMessage: (state) => {
+        if (!pollingActiveRef.current || currentPollingSessionIdRef.current !== sessionId) return
+        applySimulationState(state)
+      },
+      onClose: () => {
+        const shouldFallback = pollingActiveRef.current && currentPollingSessionIdRef.current === sessionId
+        sessionSocketConnectedRef.current = false
+        if (shouldFallback) {
+          startHttpPolling(sessionId, effectiveInterval)
+        }
+      },
+      onError: () => {
+        sessionSocketConnectedRef.current = false
+      },
+    })
+  }, [applySimulationState, startHttpPolling])
 
   const startPolling = useCallback((sessionId: string, interval?: number, startedAt?: string, initialElapsed?: number) => {
     if (pollingActiveRef.current && currentPollingSessionIdRef.current === sessionId) {
@@ -125,41 +237,66 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     currentPollingSessionIdRef.current = sessionId
 
     const effectiveInterval = interval ?? pollingInterval
+    connectSessionSocket(sessionId, effectiveInterval)
+  }, [connectSessionSocket, pollingInterval, stopPolling])
 
-    const poll = async () => {
-      if (!pollingActiveRef.current) return
-      try {
-        const state = await simulationService.poll(sessionId)
-        if (!pollingActiveRef.current) return
-        pollErrorCountRef.current = 0
-        if (state.elapsedRealtimeSeconds !== undefined) {
-          serverElapsedRef.current = state.elapsedRealtimeSeconds
-          serverPollTimeRef.current = performance.now()
-        }
-        setSimulationState(state)
-        if (state.colapsada || state.status === 'COMPLETADA') {
-          stopPolling()
-        }
-      } catch {
-        pollErrorCountRef.current += 1
-        if (pollErrorCountRef.current >= 3) {
-          stopPolling()
-        }
+  useEffect(() => {
+    activeSocketCleanupRef.current = simulationSocketService.connectActiveSimulation({
+      onOpen: () => {
+        activeSocketConnectedRef.current = true
+        setCheckingActiveSimulation(false)
+      },
+      onMessage: (state) => {
+        activeSocketConnectedRef.current = true
+        setActiveSimulation(state)
+        setCheckingActiveSimulation(false)
+      },
+      onClose: () => {
+        activeSocketConnectedRef.current = false
+      },
+      onError: () => {
+        activeSocketConnectedRef.current = false
+      },
+    })
+
+    return () => {
+      if (activeSocketCleanupRef.current) {
+        activeSocketCleanupRef.current()
+        activeSocketCleanupRef.current = null
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    if (activeSocketConnectedRef.current) {
+      setCheckingActiveSimulation(false)
+      return () => {
+        cancelled = true
       }
     }
 
-    poll()
-    intervalRef.current = setInterval(poll, effectiveInterval)
-  }, [pollingInterval, stopPolling])
+    const scheduleNextRefresh = () => {
+      if (cancelled) return
+      activeRefreshTimeoutRef.current = window.setTimeout(async () => {
+        if (activeSocketConnectedRef.current) return
+        await refreshActiveSimulation()
+        scheduleNextRefresh()
+      }, 5000)
+    }
 
-  useEffect(() => {
-    void refreshActiveSimulation()
+    void refreshActiveSimulation().finally(() => {
+      scheduleNextRefresh()
+    })
 
-    const intervalId = window.setInterval(() => {
-      void refreshActiveSimulation()
-    }, 5000)
-
-    return () => window.clearInterval(intervalId)
+    return () => {
+      cancelled = true
+      if (activeRefreshTimeoutRef.current) {
+        clearTimeout(activeRefreshTimeoutRef.current)
+        activeRefreshTimeoutRef.current = null
+      }
+    }
   }, [refreshActiveSimulation])
 
   // Timer: uses server elapsedRealtimeSeconds as base and interpolates between polls

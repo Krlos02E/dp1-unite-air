@@ -180,6 +180,29 @@ public class SimulationService {
         return simulationCache.get(sessionId);
     }
 
+    public Map<String, Object> obtenerInfoSesionActivaDesdeEstado(SimulationState state) {
+        if (state == null) {
+            return Map.of("activa", false);
+        }
+        long elapsed = state.getStartedAt() != null
+                ? Duration.between(state.getStartedAt(), LocalDateTime.now()).getSeconds()
+                : 0;
+        boolean activa = state.getStatus() != null
+                && !"COMPLETADA".equals(state.getStatus())
+                && !"COLAPSADA".equals(state.getStatus())
+                && !"ERROR".equals(state.getStatus());
+        return Map.of(
+                "activa", activa,
+                "sessionId", state.getSessionId(),
+                "status", state.getStatus(),
+                "progreso", state.getProgreso(),
+                "startedAt", state.getStartedAt(),
+                "simulationStartedAt", state.getFechaInicio(),
+                "elapsedRealtimeSeconds", Math.max(0, elapsed),
+                "fechaInicio", state.getFechaInicio()
+        );
+    }
+
     public SimulationState obtenerEstado(String sessionId) {
         SimulationState state = simulationCache.get(sessionId);
         if (state == null) {

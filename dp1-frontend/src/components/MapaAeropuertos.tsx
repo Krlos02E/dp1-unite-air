@@ -247,9 +247,16 @@ function animatedProgress(anim: FlightAnim, now: number): number {
   return anim.startProgress + (anim.targetProgress - anim.startProgress) * fraction
 }
 
+function getTargetFrameIntervalMs(visibleFlightCount: number): number {
+  if (visibleFlightCount > 1200) return 66
+  if (visibleFlightCount > 600) return 50
+  if (visibleFlightCount > 250) return 33
+  return 16
+}
+
 function shouldKeepFlightVisibleOnMap(vuelo: VueloDTO, simulationMode: boolean, selectedVueloId?: string | null): boolean {
   if (vuelo.id === selectedVueloId) return true
-  if (simulationMode) return vuelo.estado === 'ACTIVO'
+  if (simulationMode) return vuelo.estado === 'ACTIVO' && shouldDisplayFlight(vuelo.id)
   return Boolean(vuelo.editable) || shouldDisplayFlight(vuelo.id)
 }
 
@@ -280,7 +287,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
   const selectedAeropuertoIdRef = useRef(selectedAeropuertoId)
   const prevSelectionRef = useRef<string | null>(null)
   const prevViewRef = useRef<{ center: L.LatLng; zoom: number } | null>(null)
-  const [showRouteLines, setShowRouteLines] = useState(true)
+  const [showRouteLines, setShowRouteLines] = useState(false)
   const [routeDisplayMode, setRouteDisplayMode] = useState<RouteDisplayMode>('all')
   const [routeDirectionFilter, setRouteDirectionFilter] = useState<RouteDirectionFilter>('both')
   const [routeFilterQuery, setRouteFilterQuery] = useState('')
@@ -595,6 +602,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         flightMarkersRef.current.clear()
         airportMarkersRef.current.clear()
         persistentFlightsRef.current.clear()
+        flightAngleRef.current.clear()
         flightAnimsRef.current.clear()
       }
       resizeObserver.disconnect()
@@ -838,8 +846,6 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       flightMarkersRef.current.forEach((mk, id) => {
         if (!displayIds.has(id)) {
           mk.setOpacity(0)
-          const element = mk.getElement()
-          if (element) element.style.pointerEvents = 'none'
           const route = routeLinesRef.current.get(id)
           route?.pending.setStyle({ opacity: 0 })
         }
@@ -894,10 +900,9 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         })
         markerLayerRef.current?.addLayer(mk)
         flightMarkersRef.current.set(v.id, mk)
-
         const angle = bearing(
           interpolatePosition(from, to, Math.max(0, tNorm - 0.01)),
-          interpolatePosition(from, to, Math.min(1, tNorm + 0.01))
+          interpolatePosition(from, to, Math.min(1, tNorm + 0.01)),
         )
         flightAngleRef.current.set(v.id, angle)
         applyTransform(mk, angle)
@@ -923,7 +928,8 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
 
   useEffect(() => {
     const animate = (frameNow: number) => {
-      if (frameNow - lastAnimationFrameRef.current < 16) {
+      const targetFrameInterval = getTargetFrameIntervalMs(visibleFlightIdsRef.current.size)
+      if (frameNow - lastAnimationFrameRef.current < targetFrameInterval) {
         rafIdRef.current = requestAnimationFrame(animate)
         return
       }

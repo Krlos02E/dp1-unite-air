@@ -13,11 +13,13 @@ import java.util.concurrent.atomic.AtomicLong;
 @Service
 public class ContextSyncStateService {
 
+    private final SimulationRealtimeService simulationRealtimeService;
     private final Map<AlmacenContexto, AtomicLong> versions = new EnumMap<>(AlmacenContexto.class);
     private final Map<AlmacenContexto, LocalDateTime> updatedAt = new EnumMap<>(AlmacenContexto.class);
     private final Map<AlmacenContexto, String> reasons = new EnumMap<>(AlmacenContexto.class);
 
-    public ContextSyncStateService() {
+    public ContextSyncStateService(SimulationRealtimeService simulationRealtimeService) {
+        this.simulationRealtimeService = simulationRealtimeService;
         for (AlmacenContexto contexto : AlmacenContexto.values()) {
             versions.put(contexto, new AtomicLong(1));
             updatedAt.put(contexto, LocalDateTime.now(ZoneOffset.UTC));
@@ -30,6 +32,7 @@ public class ContextSyncStateService {
         long nextVersion = versions.get(ctx).incrementAndGet();
         updatedAt.put(ctx, LocalDateTime.now(ZoneOffset.UTC));
         reasons.put(ctx, reason != null && !reason.isBlank() ? reason : "unknown");
+        simulationRealtimeService.broadcastContextSnapshot(ctx, snapshot(ctx));
         return nextVersion;
     }
 

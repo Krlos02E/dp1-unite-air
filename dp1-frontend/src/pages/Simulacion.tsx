@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useSimulation } from '../context/SimulationContext'
 import { simulationService } from '../services/SimulationService'
 import { cargaArchivosService } from '../services/CargaArchivosService'
+import { simulationSocketService } from '../services/SimulationSocketService'
 import MapaAeropuertos from '../components/MapaAeropuertos'
 import EnvioListPanel from '../components/EnvioListPanel'
 import MaletaListPanel from '../components/MaletaListPanel'
@@ -18,7 +19,7 @@ const SIM_CONFIG_KEY = 'uniteair_simConfig'
 const SIM_ACTIVE_CONFIG_KEY = 'uniteair_activeSimConfig'
 const DURACION_FIJA = 5
 const EMPTY_FLIGHTS: VueloDTO[] = []
-const SHARED_SIMULATION_CONTEXT_POLL_MS = 5000
+const SHARED_SIMULATION_CONTEXT_POLL_MS = 10000
 
 const aeropuertosFallback: AeropuertoDTO[] = Object.values(AIRPORTS_DATA).map((a) => ({
   codigoOACI: a.codigoOACI,
@@ -79,6 +80,7 @@ export default function Simulacion() {
   const filteredFlightSignatureRef = useRef('')
   const filteredAirportSignatureRef = useRef('')
   const sharedSimulationVersionRef = useRef<number | null>(null)
+  const sharedContextSocketConnectedRef = useRef(false)
 
   const handleVueloClick = useCallback((v: VueloDTO) => {
     setSelectedVuelo((prev) => (prev?.id === v.id ? null : v))
@@ -333,10 +335,38 @@ export default function Simulacion() {
   }, [refreshSimulacionContextData, refreshSimulationSharedVersion])
 
   useEffect(() => {
+    const disconnect = simulationSocketService.connectContext('SIMULACION', {
+      onOpen: () => {
+        sharedContextSocketConnectedRef.current = true
+      },
+      onMessage: (sharedState) => {
+        sharedContextSocketConnectedRef.current = true
+        if (!hasSharedVersionChanged(sharedSimulationVersionRef.current, sharedState.version)) return
+        sharedSimulationVersionRef.current = sharedState.version
+        void refreshSimulacionContextData()
+      },
+      onClose: () => {
+        sharedContextSocketConnectedRef.current = false
+      },
+      onError: () => {
+        sharedContextSocketConnectedRef.current = false
+      },
+    })
+
+    return () => {
+      disconnect()
+      sharedContextSocketConnectedRef.current = false
+    }
+  }, [refreshSimulacionContextData])
+
+  useEffect(() => {
     let cancelled = false
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
 
     const pollSharedSimulationContext = async () => {
       try {
+        if (sharedContextSocketConnectedRef.current) return
+        if (activeSimulation?.activa) return
         const sharedState = await cargaArchivosService.obtenerEstadoCompartido('SIMULACION')
         if (cancelled) return
         if (!hasSharedVersionChanged(sharedSimulationVersionRef.current, sharedState.version)) return
@@ -347,15 +377,25 @@ export default function Simulacion() {
       }
     }
 
-    const intervalId = window.setInterval(() => {
-      void pollSharedSimulationContext()
-    }, SHARED_SIMULATION_CONTEXT_POLL_MS)
+    const scheduleNextPoll = () => {
+      if (cancelled) return
+      timeoutId = window.setTimeout(async () => {
+        await pollSharedSimulationContext()
+        scheduleNextPoll()
+      }, SHARED_SIMULATION_CONTEXT_POLL_MS)
+    }
+
+    void pollSharedSimulationContext().finally(() => {
+      scheduleNextPoll()
+    })
 
     return () => {
       cancelled = true
-      window.clearInterval(intervalId)
+      if (timeoutId) {
+        window.clearTimeout(timeoutId)
+      }
     }
-  }, [refreshSimulacionContextData])
+  }, [activeSimulation?.activa, refreshSimulacionContextData])
 
   // Detectar simulación activa al montar (permite ver simulación en otros clientes)
   useEffect(() => {

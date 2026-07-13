@@ -5,6 +5,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Service;
 import pe.edu.pucp.uniteair.dp1backend.dto.SimulationState;
+import pe.edu.pucp.uniteair.dp1backend.service.SimulationRealtimeService;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -13,9 +14,14 @@ import java.util.concurrent.TimeUnit;
 @Service
 public class SimulationCache {
 
+    private final SimulationRealtimeService simulationRealtimeService;
     private Cache<String, SimulationState> cache;
     private Cache<String, SimulationState> stableCache;
     private String activeSessionId;
+
+    public SimulationCache(SimulationRealtimeService simulationRealtimeService) {
+        this.simulationRealtimeService = simulationRealtimeService;
+    }
 
     @PostConstruct
     public void init() {
@@ -34,6 +40,7 @@ public class SimulationCache {
         if ("PLANIFICANDO".equals(state.getStatus()) || "EJECUTANDO".equals(state.getStatus())) {
             this.activeSessionId = sessionId;
         }
+        simulationRealtimeService.broadcastSimulationState(state);
     }
 
     public SimulationState get(String sessionId) {
@@ -54,6 +61,7 @@ public class SimulationCache {
         if (sessionId.equals(this.activeSessionId)) {
             this.activeSessionId = null;
         }
+        simulationRealtimeService.broadcastNoActiveSimulation();
     }
 
     public boolean containsKey(String sessionId) {
@@ -65,6 +73,7 @@ public class SimulationCache {
         SimulationState state = cache.getIfPresent(activeSessionId);
         if (state == null || "COLAPSADA".equals(state.getStatus()) || "COMPLETADA".equals(state.getStatus()) || "ERROR".equals(state.getStatus())) {
             activeSessionId = null;
+            simulationRealtimeService.broadcastNoActiveSimulation();
             return null;
         }
         return activeSessionId;
