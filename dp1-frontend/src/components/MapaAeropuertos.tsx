@@ -56,6 +56,9 @@ const MAP_SELECTION_COLOR = '#8b5cf6'
 const BASE_ICON_SIZE = 26
 const AIRPORT_ICON_RATIO = 0.8
 const ROUTE_POINT_COUNT = 28
+const ROTATION_ZOOM_THRESHOLD = 4
+const LOW_ZOOM_PIXEL_JITTER_THRESHOLD = 0.75
+const ANGLE_JITTER_THRESHOLD = 2.5
 
 type RouteDisplayMode = 'all' | 'selected'
 type RouteDirectionFilter = 'both' | 'outbound' | 'inbound'
@@ -172,11 +175,8 @@ function bearing(from: [number, number], to: [number, number]): number {
 }
 
 function interpolatePosition(from: [number, number], to: [number, number], t: number): [number, number] {
-  const offset = Math.min(2.0, Math.abs(to[1] - from[1]) * 0.02)
-  const midLat = (from[0] + to[0]) / 2 + offset
-  const midLon = (from[1] + to[1]) / 2
-  const lat = (1 - t) * (1 - t) * from[0] + 2 * (1 - t) * t * midLat + t * t * to[0]
-  const lon = (1 - t) * (1 - t) * from[1] + 2 * (1 - t) * t * midLon + t * t * to[1]
+  const lat = from[0] + ((to[0] - from[0]) * t)
+  const lon = from[1] + ((to[1] - from[1]) * t)
   return [lat, lon]
 }
 
@@ -200,6 +200,10 @@ function bezierPoints(from: [number, number], to: [number, number], steps: numbe
 function applyTransform(mk: L.Marker, angle: number) {
   const el = mk.getElement()?.querySelector('.airplane-body') as HTMLElement | null
   if (el) el.style.transform = `rotate(${angle}deg)`
+}
+
+function normalizeAngleDelta(next: number, previous: number): number {
+  return Math.abs((((next - previous) + 540) % 360) - 180)
 }
 
 interface RoutePair {
@@ -268,6 +272,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
   const flightMarkersRef = useRef<Map<string, L.Marker>>(new Map())
   const airportMarkersRef = useRef<Map<string, L.Marker>>(new Map())
   const flightAngleRef = useRef<Map<string, number>>(new Map())
+  const renderedFlightAngleRef = useRef<Map<string, number>>(new Map())
   const airportDataRef = useRef<Map<string, AeropuertoDTO>>(new Map())
   const persistentFlightsRef = useRef<Map<string, VueloDTO>>(new Map())
   const airportLookup = useMemo(() => buildAirportLookup(aeropuertos), [aeropuertos])
@@ -301,6 +306,26 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
   const selectedRouteAirportsRef = useRef<string[]>(selectedRouteAirports)
   const isZoomingRef = useRef(false)
   const simClockRef = useRef<SimClockSnapshot | null>(null)
+  const currentZoomRef = useRef(2)
+
+  const updateFlightRotation = (mk: L.Marker, flightId: string, angle: number, force = false) => {
+    const previousRendered = renderedFlightAngleRef.current.get(flightId)
+    if (!force && previousRendered !== undefined && normalizeAngleDelta(angle, previousRendered) < ANGLE_JITTER_THRESHOLD) {
+      return
+    }
+
+    applyTransform(mk, angle)
+    renderedFlightAngleRef.current.set(flightId, angle)
+  }
+
+  const shouldSkipMarkerMove = (mk: L.Marker, nextPos: [number, number]) => {
+    const map = mapRef.current
+    if (!map || currentZoomRef.current >= ROTATION_ZOOM_THRESHOLD) return false
+    const current = mk.getLatLng()
+    const currentPoint = map.latLngToContainerPoint(current)
+    const nextPoint = map.latLngToContainerPoint(L.latLng(nextPos[0], nextPos[1]))
+    return currentPoint.distanceTo(nextPoint) < LOW_ZOOM_PIXEL_JITTER_THRESHOLD
+  }
 
   const updateSelectedFlightRouteOverlay = (flightId: string, progress: number) => {
     const selectedVuelo = persistentFlightsRef.current.get(flightId) ?? vuelos.find((v) => v.id === flightId)
@@ -469,14 +494,15 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
     const persistedIds = new Set(persistentFlightsRef.current.keys())
     const incomingIds = new Set(vuelos.map((v) => v.id))
 
-    if (persistedIds.size > 0 && ![...incomingIds].some((id) => persistedIds.has(id))) {
-      persistentFlightsRef.current.clear()
-      flightMarkersRef.current.forEach((mk) => markerLayerRef.current?.removeLayer(mk))
-      flightMarkersRef.current.clear()
-      flightAngleRef.current.clear()
-      flightAnimsRef.current.clear()
-      removeAllRoutes()
-    }
+      if (persistedIds.size > 0 && ![...incomingIds].some((id) => persistedIds.has(id))) {
+        persistentFlightsRef.current.clear()
+        flightMarkersRef.current.forEach((mk) => markerLayerRef.current?.removeLayer(mk))
+        flightMarkersRef.current.clear()
+        flightAngleRef.current.clear()
+        renderedFlightAngleRef.current.clear()
+        flightAnimsRef.current.clear()
+        removeAllRoutes()
+      }
 
     persistedIds.forEach((id) => {
       if (!incomingIds.has(id)) {
@@ -486,6 +512,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
           markerLayerRef.current?.removeLayer(mk)
           flightMarkersRef.current.delete(id)
           flightAngleRef.current.delete(id)
+          renderedFlightAngleRef.current.delete(id)
         }
         flightAnimsRef.current.delete(id)
         removeRoute(id)
@@ -506,6 +533,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
           markerLayerRef.current?.removeLayer(mk)
           flightMarkersRef.current.delete(v.id)
           flightAngleRef.current.delete(v.id)
+          renderedFlightAngleRef.current.delete(v.id)
         }
         flightAnimsRef.current.delete(v.id)
         removeRoute(v.id)
@@ -541,11 +569,13 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       routeLayerRef.current = L.layerGroup().addTo(map)
       markerLayerRef.current = L.layerGroup().addTo(map)
       mapRef.current = map
+      currentZoomRef.current = map.getZoom()
 
       map.on('zoom', () => {
+        currentZoomRef.current = map.getZoom()
         flightMarkersRef.current.forEach((mk, id) => {
           const angle = flightAngleRef.current.get(id) ?? 0
-          applyTransform(mk, angle)
+          updateFlightRotation(mk, id, angle, true)
         })
       })
 
@@ -558,6 +588,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       })
 
       map.on('zoomend', () => {
+        currentZoomRef.current = map.getZoom()
         routeLinesRef.current.forEach((pair, id) => {
           const anim = flightAnimsRef.current.get(id)
           if (anim) {
@@ -603,6 +634,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         airportMarkersRef.current.clear()
         persistentFlightsRef.current.clear()
         flightAngleRef.current.clear()
+        renderedFlightAngleRef.current.clear()
         flightAnimsRef.current.clear()
       }
       resizeObserver.disconnect()
@@ -813,7 +845,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       mk.setIcon(getAirplaneIcon(isSelected, carga, cap))
       const angle = flightAngleRef.current.get(id)
       if (angle !== undefined) {
-        requestAnimationFrame(() => applyTransform(mk, angle))
+        requestAnimationFrame(() => updateFlightRotation(mk, id, angle, true))
       }
     })
 
@@ -905,7 +937,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
           interpolatePosition(from, to, Math.min(1, tNorm + 0.01)),
         )
         flightAngleRef.current.set(v.id, angle)
-        applyTransform(mk, angle)
+        updateFlightRotation(mk, v.id, angle, true)
       } else {
         mk.setOpacity(1)
         const element = mk.getElement()
@@ -951,6 +983,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
           markerLayerRef.current?.removeLayer(mk)
           flightMarkersRef.current.delete(id)
           flightAngleRef.current.delete(id)
+          renderedFlightAngleRef.current.delete(id)
           flightAnimsRef.current.delete(id)
           removeRoute(id)
           return
@@ -958,7 +991,9 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
 
         const tNorm = currentProgress / 100
         const pos = interpolatePosition(anim.from, anim.to, tNorm)
-        mk.setLatLng(pos)
+        if (!shouldSkipMarkerMove(mk, pos)) {
+          mk.setLatLng(pos)
+        }
 
         const delta = 0.005
         const tBefore = Math.max(0, tNorm - delta)
@@ -967,7 +1002,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         const posAfter = interpolatePosition(anim.from, anim.to, tAfter)
         const angle = bearing(posBefore, posAfter)
         flightAngleRef.current.set(id, angle)
-        applyTransform(mk, angle)
+        updateFlightRotation(mk, id, angle)
 
         if (!isZoomingRef.current && anim.pts) {
           const splitIndex = Math.round(tNorm * (anim.pts.length - 1))
