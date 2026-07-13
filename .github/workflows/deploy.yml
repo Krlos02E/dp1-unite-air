@@ -1,0 +1,25 @@
+name: Deploy to VM PUCP
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.13.0'
+          cache: 'npm'
+          cache-dependency-path: dp1-frontend/package-lock.json
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y sshpass rsync
+
+      - name: Deploy to VM
+        run: ./dp1-backend/deploy-vm.sh
+        env:
+          V_MACHINE_PASSWORD: ${{ secrets.V_MACHINE_PASSWORD }}

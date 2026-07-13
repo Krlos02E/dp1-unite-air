@@ -1,6 +1,6 @@
 #!/bin/bash
 # =====================================
-#  DEPLOY VM PUCP (S3 frontend + SSL)
+#  DEPLOY VM PUCP (frontend + SSL)
 # =====================================
 
 IMAGE_NAME="dp1-backend"
@@ -8,18 +8,22 @@ IMAGE_TAG="v1"
 
 VM_HOST="1inf54-983-1a.inf.pucp.edu.pe"
 VM_USER="1inf54.983.1a"
-VM_PASS="---"
+VM_PASS="${V_MACHINE_PASSWORD:?Error: V_MACHINE_PASSWORD no está definida}"
 VM_DIR="/home/${VM_USER}/dp1-unite-air"
 SSH="sshpass -p ${VM_PASS} ssh -t -o StrictHostKeyChecking=no ${VM_USER}@${VM_HOST}"
 SUDO="echo ${VM_PASS} | sudo -S"
 DOMAIN="1inf54-983-1a.inf.pucp.edu.pe"
 APP_PORT=8081
-S3_BUCKET="unitesapps.com"
-
 set -e
 
+echo "Building frontend..."
+cd "$(dirname "$0")/../dp1-frontend"
+npm install
+npm run build
+cd "$(dirname "$0")/../dp1-backend"
+
 echo "====================================="
-echo "[1/6] Uploading source code to VM..."
+echo "[1/7] Uploading source code to VM..."
 echo "====================================="
 ${SSH} "mkdir -p ${VM_DIR}"
 sshpass -p "${VM_PASS}" rsync -e "ssh -o StrictHostKeyChecking=no" -avz --delete \
@@ -32,12 +36,20 @@ sshpass -p "${VM_PASS}" rsync -e "ssh -o StrictHostKeyChecking=no" -avz --delete
   $(dirname "$0")/../ ${VM_USER}@${VM_HOST}:${VM_DIR}/
 
 echo "====================================="
-echo "[2/6] Building Docker image on VM..."
+echo "[2/7] Uploading frontend dist..."
+echo "====================================="
+sshpass -p "${VM_PASS}" ssh -o StrictHostKeyChecking=no ${VM_USER}@${VM_HOST} "sudo mkdir -p /var/www/${DOMAIN}"
+sshpass -p "${VM_PASS}" rsync -e "ssh -o StrictHostKeyChecking=no" -avz --delete \
+  "$(dirname "$0")/../dp1-frontend/dist/" \
+  ${VM_USER}@${VM_HOST}:/var/www/${DOMAIN}/
+
+echo "====================================="
+echo "[3/7] Building Docker image on VM..."
 echo "====================================="
 ${SSH} "cd ${VM_DIR} && ${SUDO} docker build -t ${IMAGE_NAME}:${IMAGE_TAG} -f dp1-backend/Dockerfile ."
 
 echo "====================================="
-echo "[3/6] Setting up MySQL..."
+echo "[4/7] Setting up MySQL..."
 echo "====================================="
 ${SSH} "${SUDO} docker network create unite-air-net 2>/dev/null || true; \
    if ! ${SUDO} docker ps -a --format '{{.Names}}' | grep -q '^unite-air-mysql$'; then
@@ -46,7 +58,7 @@ ${SSH} "${SUDO} docker network create unite-air-net 2>/dev/null || true; \
    fi"
 
 echo "====================================="
-echo "[4/6] Replacing backend container..."
+echo "[5/7] Replacing backend container..."
 echo "====================================="
 ${SSH} "${SUDO} docker rm -f ${IMAGE_NAME} || true"
 ${SSH} "${SUDO} docker run -d \
@@ -60,7 +72,7 @@ ${SSH} "${SUDO} docker run -d \
     ${IMAGE_NAME}:${IMAGE_TAG}"
 
 echo "====================================="
-echo "[5/6] Configuring Nginx (S3 frontend + API)..."
+echo "[6/7] Configuring Nginx (frontend + API)..."
 echo "====================================="
 cat > /tmp/nginx-${DOMAIN}.conf <<EOF
 server {
@@ -68,8 +80,8 @@ server {
     server_name ${DOMAIN};
 
     location / {
-        proxy_pass http://${S3_BUCKET}.s3-website-us-east-1.amazonaws.com;
-        proxy_set_header Host ${S3_BUCKET}.s3-website-us-east-1.amazonaws.com;
+        root /var/www/${DOMAIN};
+        try_files \$uri \$uri/ /index.html;
     }
 
     location /api/ {
@@ -90,7 +102,7 @@ sshpass -p "${VM_PASS}" ssh -o StrictHostKeyChecking=no ${VM_USER}@${VM_HOST} "e
 rm -f /tmp/nginx-${DOMAIN}.conf
 
 echo "====================================="
-echo "[6/6] SSL certificate (Certbot)..."
+echo "[7/7] SSL certificate (Certbot)..."
 echo "====================================="
 echo "Instalando certbot si no está..."
 sshpass -p "${VM_PASS}" ssh -o StrictHostKeyChecking=no ${VM_USER}@${VM_HOST} "echo ${VM_PASS} | sudo -S apt install -y certbot python3-certbot-nginx 2>/dev/null || true"
