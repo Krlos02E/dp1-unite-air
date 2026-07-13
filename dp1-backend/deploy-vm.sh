@@ -6,6 +6,10 @@
 IMAGE_NAME="dp1-backend"
 IMAGE_TAG="v1"
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+cd "${PROJECT_ROOT}"
+
 VM_HOST="1inf54-983-1a.inf.pucp.edu.pe"
 VM_USER="1inf54.983.1a"
 VM_PASS="${V_MACHINE_PASSWORD:?Error: V_MACHINE_PASSWORD no está definida}"
@@ -17,10 +21,9 @@ APP_PORT=8081
 set -e
 
 echo "Building frontend..."
-cd "$(dirname "$0")/../dp1-frontend"
+cd "${PROJECT_ROOT}/dp1-frontend"
 npm install
 npm run build
-cd "$(dirname "$0")/../dp1-backend"
 
 echo "====================================="
 echo "[1/7] Uploading source code to VM..."
@@ -33,14 +36,14 @@ sshpass -p "${VM_PASS}" rsync -e "ssh -o StrictHostKeyChecking=no" -avz --delete
   --exclude='docker-compose.yml' --exclude='.gitmodules' --exclude='.dockerignore' \
   --exclude='ssh-config.txt' --exclude='limpiar-ssh.sh' --exclude='subir-tar.sh' \
   --exclude='dp1-backend/deploy.sh' --exclude='dp1-backend/deploy.bat' \
-  $(dirname "$0")/../ ${VM_USER}@${VM_HOST}:${VM_DIR}/
+  "${PROJECT_ROOT}" ${VM_USER}@${VM_HOST}:${VM_DIR}/
 
 echo "====================================="
 echo "[2/7] Uploading frontend dist..."
 echo "====================================="
 sshpass -p "${VM_PASS}" ssh -o StrictHostKeyChecking=no ${VM_USER}@${VM_HOST} "sudo mkdir -p /var/www/${DOMAIN}"
 sshpass -p "${VM_PASS}" rsync -e "ssh -o StrictHostKeyChecking=no" -avz --delete \
-  "$(dirname "$0")/../dp1-frontend/dist/" \
+  "${PROJECT_ROOT}/dp1-frontend/dist/" \
   ${VM_USER}@${VM_HOST}:/var/www/${DOMAIN}/
 
 echo "====================================="
