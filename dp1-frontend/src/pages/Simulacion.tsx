@@ -272,8 +272,8 @@ export default function Simulacion() {
   }, [])
 
   const [showResultados, setShowResultados] = useState(false)
-  const hasShownResults = useRef(false)
   const [resultSnapshot, setResultSnapshot] = useState<SimulationState | null>(null)
+  const hasShownResults = useRef(false)
 
   const hasSimulationStarted = Boolean(sessionId || simulationState)
   const hasSimulationFlightSnapshot = (simulationState?.vuelos?.length ?? 0) > 0
@@ -633,10 +633,15 @@ export default function Simulacion() {
 
   const handleDetenerConfirmado = async () => {
     if (!sessionId) return
+    const snapshot = simulationState ? { ...simulationState } : null
     try {
       await simulationService.detener(sessionId)
     } catch {
       // ignore
+    }
+    if (snapshot) {
+      setResultSnapshot(snapshot)
+      setShowResultados(true)
     }
     resetSimulation()
     setSessionId('')
@@ -646,8 +651,6 @@ export default function Simulacion() {
     clearActiveConfigStorage()
     broadcastSimMessage('STOPPED')
     hasShownResults.current = false
-    setResultSnapshot(null)
-    setShowResultados(false)
     setShowStopConfirm(false)
     await refreshActiveSimulation()
   }
@@ -1058,12 +1061,16 @@ export default function Simulacion() {
         )}
       </div>
 
-      <ResultadosModal
-        state={resultSnapshot}
+  <ResultadosModal
+        state={resultSnapshot ?? simulationState}
         isOpen={showResultados}
-        onClose={() => setShowResultados(false)}
+        onClose={() => {
+          setShowResultados(false)
+          setResultSnapshot(null)
+        }}
         onNuevaSimulacion={() => {
           setShowResultados(false)
+          setResultSnapshot(null)
           handleNuevaSimulacion()
         }}
       />

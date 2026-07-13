@@ -22,6 +22,7 @@ export default function SimulacionEjecucion({ sessionId, onColapso, onBack }: Pr
   const [selectedEnvio, setSelectedEnvio] = useState<EnvioEstado | null>(null)
   const [isPaused, setIsPaused] = useState(false)
   const [showResultados, setShowResultados] = useState(false)
+  const [resultSnapshot, setResultSnapshot] = useState<SimulationState | null>(null)
   const [mapTz, setMapTz] = useState(0)
   const logEndRef = useRef<HTMLDivElement>(null)
 
@@ -62,6 +63,7 @@ export default function SimulacionEjecucion({ sessionId, onColapso, onBack }: Pr
   // Show results modal on completion
   useEffect(() => {
     if (simulationState?.status === 'COMPLETADA') {
+      setResultSnapshot((current) => current ?? (simulationState ? { ...simulationState } : null))
       setShowResultados(true)
     }
   }, [simulationState?.status])
@@ -74,6 +76,8 @@ export default function SimulacionEjecucion({ sessionId, onColapso, onBack }: Pr
   useEffect(() => {
     if (simulationState?.sessionId !== sessionId) return
     if (simulationState?.colapsada) {
+      setResultSnapshot((current) => current ?? (simulationState ? { ...simulationState } : null))
+      setShowResultados(true)
       stopPolling()
       onColapso?.(simulationState)
     }
@@ -101,13 +105,17 @@ export default function SimulacionEjecucion({ sessionId, onColapso, onBack }: Pr
   }
 
   const handleDetener = async () => {
+    const snapshot = simulationState ? { ...simulationState } : null
     try {
       await simulationService.detener(sessionId)
     } catch {
       // ignore
     }
+    if (snapshot) {
+      setResultSnapshot(snapshot)
+      setShowResultados(true)
+    }
     stopPolling()
-    onBack()
   }
 
   const handleNuevaSimulacion = () => {
@@ -260,11 +268,16 @@ export default function SimulacionEjecucion({ sessionId, onColapso, onBack }: Pr
 
       <EnvioModal envio={selectedEnvio} isOpen={!!selectedEnvio} onClose={() => setSelectedEnvio(null)} onIrAVuelo={handleIrAVueloDesdeEnvio} vuelos={simulationState?.vuelos} />
       <ResultadosModal
-        state={simulationState}
+        state={resultSnapshot ?? simulationState}
         isOpen={showResultados}
-        onClose={() => setShowResultados(false)}
+        onClose={() => {
+          setShowResultados(false)
+          setResultSnapshot(null)
+          onBack()
+        }}
         onNuevaSimulacion={() => {
           setShowResultados(false)
+          setResultSnapshot(null)
           handleNuevaSimulacion()
         }}
       />
