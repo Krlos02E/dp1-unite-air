@@ -66,6 +66,7 @@ export default function Simulacion() {
   const [selectedMaletaRouteMode, setSelectedMaletaRouteMode] = useState<'actual' | 'anterior'>('actual')
   const [showStopConfirm, setShowStopConfirm] = useState(false)
   const [mapTz, setMapTz] = useState(0)
+  const [simInfoCollapsed, setSimInfoCollapsed] = useState(false)
   const [ocuCollapsed, setOcuCollapsed] = useState(false)
   const [vuelosCollapsed, setVuelosCollapsed] = useState(false)
   const [panelMode, setPanelMode] = useState<'envios' | 'maletas' | 'almacenes' | 'aviones'>('aviones')
@@ -626,6 +627,8 @@ export default function Simulacion() {
   }
 
   const showActionButton = sessionId && !isColapsada && !isError
+  const simulationProgress = simulationState?.progreso ?? 0
+  const scenarioDateTime = fechaInicio && horaInicio ? `${fechaInicio} ${horaInicio}` : 'Sin definir'
 
   useEffect(() => {
     if (!panelCollapsed) {
@@ -678,86 +681,6 @@ export default function Simulacion() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)]">
-      {/* Barra superior de parámetros + tiempos — centrada, sin recuadros */}
-      <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 px-4 py-1">
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] uppercase tracking-wider text-gray-500 font-semibold">Escenario</span>
-          <span className="text-sm font-bold text-white">{DURACION_FIJA} días</span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <label className="text-[11px] uppercase tracking-wider text-gray-500 font-semibold">Inicio</label>
-          <input
-            type="date"
-            value={fechaInicio}
-            onChange={(e) => setFechaInicio(e.target.value)}
-            className="bg-gray-800/80 border border-gray-600 rounded-lg px-2 py-1 text-xs text-gray-100 focus:outline-none focus:ring-2 focus:ring-sky-500/60 focus:border-sky-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer hover:bg-gray-800 transition-colors"
-            disabled={!!sessionId && !isError}
-          />
-          <input
-            type="time"
-            value={horaInicio}
-            onChange={(e) => setHoraInicio(e.target.value)}
-            className="bg-gray-800/80 border border-gray-600 rounded-lg px-2 py-1 text-xs text-gray-100 focus:outline-none focus:ring-2 focus:ring-sky-500/60 focus:border-sky-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer hover:bg-gray-800 transition-colors"
-            disabled={!!sessionId && !isError}
-          />
-        </div>
-
-        {/* Tiempos de simulación */}
-        {simulationState && (
-          <div className="flex items-center gap-6">
-            <span className="text-[11px] text-sky-400/80 font-medium">Fecha y hora actual <span className="font-mono text-xs text-white font-semibold">{fechaHoraActual}</span></span>
-            <span className="text-[11px] text-sky-400/80 font-medium">Tiempo real transcurrido <span className="font-mono text-xs text-white font-semibold">{formatElapsed(elapsedRealSeconds)}</span></span>
-            <span className="text-[11px] text-emerald-400/80 font-medium">Fecha y hora simulación <span className="font-mono text-xs text-white font-semibold">{formatDateTime(simulationState?.simulationTime)}</span></span>
-            <span className="text-[11px] text-emerald-400/80 font-medium">Tiempo simulado transcurrido <span className="font-mono text-xs text-white font-semibold">{formatElapsed(simulatedElapsedSeconds)}</span></span>
-            <span className="text-[11px] text-emerald-400/80 font-medium">Día <span className="font-mono text-xs text-white font-semibold">{Math.min(DURACION_FIJA, Math.floor(simulatedElapsedSeconds / 86400) + 1)}/5</span></span>
-            <div className="flex items-center gap-2">
-              <div className="w-48 bg-gray-800 rounded-full h-1.5 overflow-hidden">
-                <div
-                  className="bg-emerald-500 h-1.5 rounded-full transition-all"
-                  style={{ width: `${simulationState.progreso}%` }}
-                />
-              </div>
-              <span className="text-xs font-mono font-bold text-white">{simulationState.progreso}%</span>
-            </div>
-          </div>
-        )}
-
-        <div className="flex items-center gap-2 ml-auto">
-          {error && (
-            <span className="text-xs text-red-400 font-medium">{error}</span>
-          )}
-          {showActionButton ? (
-            <div className="flex items-center gap-2">
-              {!isCompleted && (
-                <button
-                  onClick={() => setShowStopConfirm(true)}
-                  className="px-3 py-1 rounded-lg font-medium text-xs bg-red-600 hover:bg-red-500 text-white transition-colors cursor-pointer"
-                >
-                  Detener
-                </button>
-              )}
-              {isCompleted && (
-                <button
-                  onClick={handleNuevaSimulacion}
-                  className="px-3 py-1 rounded-lg font-medium text-xs bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
-                >
-                  Nueva Simulación
-                </button>
-              )}
-            </div>
-          ) : (
-            <button
-              onClick={handleIniciar}
-              disabled={loading}
-              className="px-4 py-1 rounded-lg font-medium text-xs bg-sky-600 hover:bg-sky-500 text-white transition-colors disabled:bg-gray-600 cursor-pointer"
-            >
-              {loading ? 'Iniciando...' : 'Iniciar'}
-            </button>
-          )}
-        </div>
-      </div>
-
       {/* Mapa + Panel lateral (como OperacionDiaria) */}
       <div className="flex gap-2 flex-1 min-h-0">
         <div className="relative flex-1 bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
@@ -778,6 +701,147 @@ export default function Simulacion() {
             filteredFlightIds={hasSimulationStarted && (panelMode === 'aviones' || panelMode === 'envios') && !panelCollapsed ? filteredFlightIds : null}
             filteredAirportIds={panelMode === 'almacenes' && !panelCollapsed ? filteredAirportIds : null}
           />
+
+          <div className="absolute left-3 top-3 z-[1001] w-[min(22rem,calc(100%-1.5rem))] rounded-xl border border-gray-600/55 bg-gray-900/70 shadow-lg shadow-black/20 backdrop-blur-[3px]">
+            <button
+              type="button"
+              onClick={() => setSimInfoCollapsed((value) => !value)}
+              className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left cursor-pointer"
+            >
+              <div className="min-w-0">
+                <h4 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-violet-200">Simulacion</h4>
+                <p className="truncate text-[11px] text-gray-300">
+                  {simulationState ? `${scenarioDateTime} · ${formatElapsed(elapsedRealSeconds)} · ${simulationProgress}%` : `Escenario ${DURACION_FIJA} dias`}
+                </p>
+              </div>
+              <span className={`shrink-0 text-xs text-gray-400 transition-transform ${simInfoCollapsed ? '' : 'rotate-180'}`}>v</span>
+            </button>
+
+            {simInfoCollapsed && simulationState && (
+              <div className="space-y-2 px-3 pb-3">
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
+                    <span className="block text-[9px] uppercase tracking-wide text-gray-500">Escenario</span>
+                    <span className="font-mono font-semibold text-gray-100">{scenarioDateTime}</span>
+                  </div>
+                  <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
+                    <span className="block text-[9px] uppercase tracking-wide text-gray-500">Transcurrido</span>
+                    <span className="font-mono font-semibold text-gray-100">{formatElapsed(elapsedRealSeconds)}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-800">
+                    <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${simulationProgress}%` }} />
+                  </div>
+                  <span className="w-10 text-right font-mono text-xs font-bold text-white">{simulationProgress}%</span>
+                </div>
+                {showActionButton && !isCompleted && (
+                  <button
+                    type="button"
+                    onClick={() => setShowStopConfirm(true)}
+                    className="w-full rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-500 cursor-pointer"
+                  >
+                    Detener
+                  </button>
+                )}
+              </div>
+            )}
+
+            {(!simInfoCollapsed || !simulationState) && (
+              <div className="space-y-2 px-3 pb-3">
+                {!simulationState ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="text-[10px] font-medium uppercase tracking-wide text-gray-400">
+                        Fecha
+                        <input
+                          type="date"
+                          value={fechaInicio}
+                          onChange={(e) => setFechaInicio(e.target.value)}
+                          className="mt-1 w-full rounded-lg border border-gray-600 bg-gray-800/90 px-2 py-1.5 text-xs text-gray-100 transition-colors hover:bg-gray-800 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+                        />
+                      </label>
+                      <label className="text-[10px] font-medium uppercase tracking-wide text-gray-400">
+                        Hora
+                        <input
+                          type="time"
+                          value={horaInicio}
+                          onChange={(e) => setHoraInicio(e.target.value)}
+                          className="mt-1 w-full rounded-lg border border-gray-600 bg-gray-800/90 px-2 py-1.5 text-xs text-gray-100 transition-colors hover:bg-gray-800 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+                        />
+                      </label>
+                    </div>
+                    <div className="flex items-center justify-between rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2 text-xs">
+                      <span className="text-gray-400">Escenario</span>
+                      <span className="font-semibold text-white">{DURACION_FIJA} dias</span>
+                    </div>
+                    {error && <p className="text-xs font-medium text-red-400">{error}</p>}
+                    <button
+                      type="button"
+                      onClick={handleIniciar}
+                      disabled={loading}
+                      className="w-full rounded-lg bg-sky-600 px-4 py-1.5 text-xs font-medium text-white transition-colors hover:bg-sky-500 disabled:bg-gray-600 cursor-pointer"
+                    >
+                      {loading ? 'Iniciando...' : 'Iniciar'}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 gap-2 text-[11px]">
+                      <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
+                        <span className="block text-[9px] uppercase tracking-wide text-gray-500">Inicio</span>
+                        <span className="font-mono font-semibold text-gray-100">{scenarioDateTime}</span>
+                      </div>
+                      <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
+                        <span className="block text-[9px] uppercase tracking-wide text-gray-500">Modalidad</span>
+                        <span className="font-semibold text-gray-100">{algoritmo}</span>
+                      </div>
+                      <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
+                        <span className="block text-[9px] uppercase tracking-wide text-gray-500">Actual</span>
+                        <span className="font-mono font-semibold text-gray-100">{fechaHoraActual}</span>
+                      </div>
+                      <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
+                        <span className="block text-[9px] uppercase tracking-wide text-gray-500">Simulacion</span>
+                        <span className="font-mono font-semibold text-gray-100">{formatDateTime(simulationState.simulationTime)}</span>
+                      </div>
+                      <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
+                        <span className="block text-[9px] uppercase tracking-wide text-gray-500">Transcurrido</span>
+                        <span className="font-mono font-semibold text-gray-100">{formatElapsed(elapsedRealSeconds)}</span>
+                      </div>
+                      <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
+                        <span className="block text-[9px] uppercase tracking-wide text-gray-500">Dia</span>
+                        <span className="font-mono font-semibold text-gray-100">{Math.min(DURACION_FIJA, Math.floor(simulatedElapsedSeconds / 86400) + 1)}/{DURACION_FIJA}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-800">
+                        <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${simulationProgress}%` }} />
+                      </div>
+                      <span className="w-10 text-right font-mono text-xs font-bold text-white">{simulationProgress}%</span>
+                    </div>
+                    {showActionButton && !isCompleted && (
+                      <button
+                        type="button"
+                        onClick={() => setShowStopConfirm(true)}
+                        className="w-full rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-500 cursor-pointer"
+                      >
+                        Detener
+                      </button>
+                    )}
+                    {isCompleted && (
+                      <button
+                        type="button"
+                        onClick={handleNuevaSimulacion}
+                        className="w-full rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-emerald-500"
+                      >
+                        Nueva Simulacion
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Indicadores flotantes - inferior izquierda */}
           <div className="absolute bottom-3 left-3 z-[999] flex flex-col gap-1.5">
