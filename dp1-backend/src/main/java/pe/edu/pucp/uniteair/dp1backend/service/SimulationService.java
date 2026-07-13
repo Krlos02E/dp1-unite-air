@@ -265,6 +265,11 @@ public class SimulationService {
             return candidateSession;
         }
 
+        if (candidateSession.getCreatedAt() != null
+                && Duration.between(candidateSession.getCreatedAt(), LocalDateTime.now()).getSeconds() < 30) {
+            return candidateSession;
+        }
+
         candidateSession.setEstado("ERROR");
         candidateSession.setMotivoColapso("Simulación interrumpida: el proceso del backend ya no estaba activo.");
         sessionRepository.save(candidateSession);

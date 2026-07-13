@@ -628,7 +628,7 @@ export default function Simulacion() {
 
   const showActionButton = sessionId && !isColapsada && !isError
   const simulationProgress = simulationState?.progreso ?? 0
-  const scenarioDateTime = fechaInicio && horaInicio ? `${fechaInicio} ${horaInicio}` : 'Sin definir'
+  const scenarioDateTime = fechaInicio && horaInicio ? `${fechaInicio.split('-').reverse().join('/')} ${horaInicio}` : 'Sin definir'
 
   useEffect(() => {
     if (!panelCollapsed) {
@@ -710,40 +710,18 @@ export default function Simulacion() {
             >
               <div className="min-w-0">
                 <h4 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-violet-200">Simulacion</h4>
-                <p className="truncate text-[11px] text-gray-300">
-                  {simulationState ? `${scenarioDateTime} · ${formatElapsed(elapsedRealSeconds)} · ${simulationProgress}%` : `Escenario ${DURACION_FIJA} dias`}
-                </p>
+                <p className="truncate text-[11px] text-gray-300">{fechaHoraActual}</p>
               </div>
               <span className={`shrink-0 text-xs text-gray-400 transition-transform ${simInfoCollapsed ? '' : 'rotate-180'}`}>v</span>
             </button>
 
             {simInfoCollapsed && simulationState && (
-              <div className="space-y-2 px-3 pb-3">
-                <div className="grid grid-cols-2 gap-2 text-[11px]">
-                  <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
-                    <span className="block text-[9px] uppercase tracking-wide text-gray-500">Escenario</span>
-                    <span className="font-mono font-semibold text-gray-100">{scenarioDateTime}</span>
-                  </div>
-                  <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
-                    <span className="block text-[9px] uppercase tracking-wide text-gray-500">Transcurrido</span>
-                    <span className="font-mono font-semibold text-gray-100">{formatElapsed(elapsedRealSeconds)}</span>
-                  </div>
+              <div className="flex items-center gap-2 px-3 pb-3">
+                <span className="font-mono text-xs font-semibold text-white shrink-0">Dia {Math.min(DURACION_FIJA, Math.floor(simulatedElapsedSeconds / 86400) + 1)}/{DURACION_FIJA}</span>
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-800">
+                  <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${simulationProgress}%` }} />
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-800">
-                    <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${simulationProgress}%` }} />
-                  </div>
-                  <span className="w-10 text-right font-mono text-xs font-bold text-white">{simulationProgress}%</span>
-                </div>
-                {showActionButton && !isCompleted && (
-                  <button
-                    type="button"
-                    onClick={() => setShowStopConfirm(true)}
-                    className="w-full rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-500 cursor-pointer"
-                  >
-                    Detener
-                  </button>
-                )}
+                <span className="w-10 text-right font-mono text-xs font-bold text-white shrink-0">{simulationProgress}%</span>
               </div>
             )}
 
@@ -771,10 +749,6 @@ export default function Simulacion() {
                         />
                       </label>
                     </div>
-                    <div className="flex items-center justify-between rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2 text-xs">
-                      <span className="text-gray-400">Escenario</span>
-                      <span className="font-semibold text-white">{DURACION_FIJA} dias</span>
-                    </div>
                     {error && <p className="text-xs font-medium text-red-400">{error}</p>}
                     <button
                       type="button"
@@ -793,27 +767,20 @@ export default function Simulacion() {
                         <span className="font-mono font-semibold text-gray-100">{scenarioDateTime}</span>
                       </div>
                       <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
-                        <span className="block text-[9px] uppercase tracking-wide text-gray-500">Modalidad</span>
-                        <span className="font-semibold text-gray-100">{algoritmo}</span>
-                      </div>
-                      <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
-                        <span className="block text-[9px] uppercase tracking-wide text-gray-500">Actual</span>
-                        <span className="font-mono font-semibold text-gray-100">{fechaHoraActual}</span>
-                      </div>
-                      <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
-                        <span className="block text-[9px] uppercase tracking-wide text-gray-500">Simulacion</span>
+                        <span className="block text-[9px] uppercase tracking-wide text-gray-500">Fecha Simulacion</span>
                         <span className="font-mono font-semibold text-gray-100">{formatDateTime(simulationState.simulationTime)}</span>
                       </div>
                       <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
-                        <span className="block text-[9px] uppercase tracking-wide text-gray-500">Transcurrido</span>
-                        <span className="font-mono font-semibold text-gray-100">{formatElapsed(elapsedRealSeconds)}</span>
+                        <span className="block text-[9px] uppercase tracking-wide text-gray-500">Simulado Transcurrido</span>
+                        <span className="font-mono font-semibold text-gray-100">{formatElapsed(simulatedElapsedSeconds)}</span>
                       </div>
                       <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
-                        <span className="block text-[9px] uppercase tracking-wide text-gray-500">Dia</span>
-                        <span className="font-mono font-semibold text-gray-100">{Math.min(DURACION_FIJA, Math.floor(simulatedElapsedSeconds / 86400) + 1)}/{DURACION_FIJA}</span>
+<span className="block text-[9px] uppercase tracking-wide text-gray-500">Real Transcurrido</span>
+                        <span className="font-mono font-semibold text-gray-100">{formatElapsed(elapsedRealSeconds)}</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs font-semibold text-white">Dia {Math.min(DURACION_FIJA, Math.floor(simulatedElapsedSeconds / 86400) + 1)}/{DURACION_FIJA}</span>
                       <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-800">
                         <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${simulationProgress}%` }} />
                       </div>

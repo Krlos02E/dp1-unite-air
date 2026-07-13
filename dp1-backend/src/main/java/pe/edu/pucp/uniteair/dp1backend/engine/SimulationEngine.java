@@ -119,7 +119,9 @@ public class SimulationEngine {
     public CompletableFuture<Void> ejecutarSimulacion(String sessionId, Dataset dataset,
                                                        Config_Simulacion config, String algoritmo,
                                                        int duracionDias, LocalDateTime fechaInicio, double velocidad) {
-        CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        activeSimulations.put(sessionId, future);
+        CompletableFuture.runAsync(() -> {
             try {
                 int duracionHoras = duracionDias * 24;
                 int duracionMinutos = duracionHoras * 60;
@@ -461,11 +463,14 @@ public class SimulationEngine {
                         simulationCache.putStable(sessionId, completed);
                     }
                 }
+                future.complete(null);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
+                future.completeExceptionally(e);
             } catch (Exception e) {
                 System.err.println("[ERROR] Simulación " + sessionId + " falló: " + e.getMessage());
                 e.printStackTrace();
+                future.completeExceptionally(e);
                 try {
                     var session = sessionRepository.findById(sessionId).orElse(null);
                     if (session != null) {
@@ -486,7 +491,6 @@ public class SimulationEngine {
             }
         });
 
-        activeSimulations.put(sessionId, future);
         return future;
     }
 
