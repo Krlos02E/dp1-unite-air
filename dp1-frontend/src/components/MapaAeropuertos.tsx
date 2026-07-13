@@ -15,7 +15,7 @@ function tooltipForFlight(
   const origen = getAirportCityResolved(v.origen, airportLookup) || v.origen
   const destino = getAirportCityResolved(v.destino, airportLookup) || v.destino
   const progreso = simulationMode
-    ? v.progresoVuelo
+    ? (referenceTime ? calcularProgresoEnSimulacion(v, referenceTime) : v.progresoVuelo)
     : (referenceTime ? calcularProgresoLocal(v, referenceTime) : calcularProgresoLocal(v, new Date()))
   return `<b>${v.id}</b><br>${origen} → ${destino}<br>Progreso: ${Math.round(progreso)}%<br>Maletas: ${v.cargaActual}/${v.capacidad}`
 }
@@ -145,7 +145,7 @@ function calcularProgresoEnSimulacion(v: VueloDTO, simulationNow: Date): number 
 
 function getFlightProgress(vuelo: VueloDTO, simulationMode: boolean, referenceTime?: Date | null): number {
   if (simulationMode) {
-    return vuelo.progresoVuelo
+    return referenceTime ? calcularProgresoEnSimulacion(vuelo, referenceTime) : vuelo.progresoVuelo
   }
   return calcularProgresoLocal(vuelo, referenceTime ?? new Date())
 }
@@ -539,9 +539,9 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       }
     })
 
-    const realNow = simulationMode ? null : new Date()
+    const referenceTime = simulationMode ? getSimulationNow(performance.now()) : new Date()
     vuelos.forEach((v) => {
-      const progresoLocal = getFlightProgress(v, simulationMode, realNow)
+      const progresoLocal = getFlightProgress(v, simulationMode, referenceTime)
       const isActive = simulationMode
         ? v.estado === 'ACTIVO' && progresoLocal > 0 && progresoLocal < 100
         : progresoLocal > 0 && progresoLocal < 100
@@ -887,10 +887,10 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
   useEffect(() => {
     if (!markerLayerRef.current) return
 
-    const realNow = new Date()
     const frameNow = performance.now()
+    const referenceTime = simulationMode ? getSimulationNow(frameNow) : new Date()
     const displayFlights = Array.from(persistentFlightsRef.current.values()).filter((v) => {
-      const progreso = getFlightProgress(v, simulationMode, realNow)
+      const progreso = getFlightProgress(v, simulationMode, referenceTime)
       const passesPanelFilter = !filteredFlightIds || filteredFlightIds.has(v.id) || v.id === selectedVueloIdRef.current
       return progreso > 0 && progreso < 100 && passesPanelFilter
     })
@@ -909,9 +909,9 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       const from: [number, number] = [v.latOrigen, v.lonOrigen]
       const to: [number, number] = [v.latDestino, v.lonDestino]
       const isSelected = v.id === selectedVueloIdRef.current
-      const tooltipText = tooltipForFlight(v, airportLookup, simulationMode, realNow ?? undefined)
+      const tooltipText = tooltipForFlight(v, airportLookup, simulationMode, referenceTime ?? undefined)
       const pts = bezierPoints(from, to, ROUTE_POINT_COUNT)
-      const progresoActual = getFlightProgress(v, simulationMode, realNow)
+      const progresoActual = getFlightProgress(v, simulationMode, referenceTime)
       const tNorm = progresoActual / 100
 
       const existingAnim = flightAnimsRef.current.get(v.id)
