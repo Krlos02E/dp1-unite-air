@@ -119,7 +119,9 @@ public class SimulationEngine {
     public CompletableFuture<Void> ejecutarSimulacion(String sessionId, Dataset dataset,
                                                        Config_Simulacion config, String algoritmo,
                                                        int duracionDias, LocalDateTime fechaInicio, double velocidad) {
-        CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        activeSimulations.put(sessionId, future);
+        CompletableFuture.runAsync(() -> {
             try {
                 int duracionHoras = duracionDias * 24;
                 int duracionMinutos = duracionHoras * 60;
@@ -215,7 +217,6 @@ public class SimulationEngine {
                 Map<String, Ruta> rutas = new HashMap<>(solucion.getRutasAsignadas());
                 Dataset datasetActual = obtenerDatasetSesionActualizado(sessionId, dataset);
                 asignacionesSplit.clear();
-                asignacionesSplit.putAll(solucion.getAsignacionesSplit());
                 Set<String> noAsignados = calcularNoAsignadosEnVentana(
                         datasetActual,
                         config,
@@ -225,7 +226,7 @@ public class SimulationEngine {
                         fechaInicio,
                         ROLLING_LOOKAHEAD_MINUTES
                 );
-                boolean hayColapso = !noAsignados.isEmpty();
+                boolean hayColapso = false;
                 MaletasResumen resumenInicial = calcularResumenMaletas(datasetActual, rutas, fechaInicio, fechaInicio);
                 maletasEntregadas = resumenInicial.entregadas();
                 maletasEnTransito = resumenInicial.enTransito();
@@ -270,16 +271,13 @@ public class SimulationEngine {
                                 rutas.size(), noAsignados.size()))
                         .build());
 
-                if (hayColapso) {
-                    String motivo = "Colapso en planificación: " + noAsignados.size() + " paquetes sin asignar";
+                if (!noAsignados.isEmpty()) {
+                    String motivo = "Ventana inicial con " + noAsignados.size() + " paquetes sin ruta; continuaran en espera para la replanificacion";
                     logs.add(LogEntry.builder()
                             .timestamp(fechaInicio)
-                            .tipo("COLAPSO")
+                            .tipo("WARN")
                             .mensaje(motivo)
                             .build());
-                    actualizarEstadoColapsado(sessionId, fechaInicio, fechaInicio, motivo, logs);
-                    actualizarSesionColapsada(sessionId, motivo, 0, duracionMinutos);
-                    return;
                 }
 
                 logs.add(LogEntry.builder()
@@ -465,11 +463,14 @@ public class SimulationEngine {
                         simulationCache.putStable(sessionId, completed);
                     }
                 }
+                future.complete(null);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
+                future.completeExceptionally(e);
             } catch (Exception e) {
                 System.err.println("[ERROR] Simulación " + sessionId + " falló: " + e.getMessage());
                 e.printStackTrace();
+                future.completeExceptionally(e);
                 try {
                     var session = sessionRepository.findById(sessionId).orElse(null);
                     if (session != null) {
@@ -490,7 +491,6 @@ public class SimulationEngine {
             }
         });
 
-        activeSimulations.put(sessionId, future);
         return future;
     }
 
@@ -570,7 +570,6 @@ public class SimulationEngine {
                 splitsMerge.put(entry.getKey(), entry.getValue());
             }
         }
-        splitsMerge.putAll(solParcial.getAsignacionesSplit());
 
         int asignadosTrasReplan = 0;
         int nuevasAsignaciones = 0;

@@ -19,8 +19,8 @@ server {
     server_name $DOMAIN;
 
     location / {
-        proxy_pass http://unitesapps.com.s3-website-us-east-1.amazonaws.com;
-        proxy_set_header Host unitesapps.com.s3-website-us-east-1.amazonaws.com;
+        root /var/www/uniteapps.com;
+        try_files \$uri \$uri/ /index.html;
     }
 
     location /api/ {
@@ -65,8 +65,8 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
 
     location / {
-        proxy_pass http://unitesapps.com.s3-website-us-east-1.amazonaws.com;
-        proxy_set_header Host unitesapps.com.s3-website-us-east-1.amazonaws.com;
+        root /var/www/uniteapps.com;
+        try_files \$uri \$uri/ /index.html;
     }
 
     location /api/ {

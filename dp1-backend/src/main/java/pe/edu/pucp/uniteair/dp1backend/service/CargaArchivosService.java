@@ -293,7 +293,7 @@ public class CargaArchivosService {
 
             registrarRutasAnteriores(rutas);
             this.rutasAsignadas = new HashMap<>(rutas);
-            this.asignacionesSplit = new HashMap<>(solucion.getAsignacionesSplit());
+            this.asignacionesSplit = new HashMap<>();
             this.estadoOperacional = PlanificacionUtils.construirEstadoConAsignaciones(rutas, datasetGestion, config);
             Map<String, Integer> nuevoCache = new HashMap<>();
             for (Vuelo v : dataset.getVuelos()) {
@@ -557,7 +557,6 @@ public class CargaArchivosService {
             TwoPhaseOrchestrator orchestrator = new TwoPhaseOrchestrator(new ALNS_RutasPlanner());
             var solucion = orchestrator.ejecutarFlujoCompleto(datasetPendientes, config);
             var nuevasRutas = solucion.getRutasAsignadas();
-            var nuevosSplits = solucion.getAsignacionesSplit();
 
             // 4. Merge: activos (intocables) + nuevos (re-planificados)
             Map<String, Ruta> todasLasRutas = new HashMap<>(rutasActivos);
@@ -570,7 +569,6 @@ public class CargaArchivosService {
                     splitsActivos.put(entry.getKey(), entry.getValue());
                 }
             }
-            splitsActivos.putAll(nuevosSplits);
             this.asignacionesSplit = splitsActivos;
 
             // 5. Reconstruir estado completo desde las rutas mergeadas
