@@ -207,6 +207,7 @@ export default function AeropuertoDetailCard({
     })
   }
 
+  
   const renderMaletaList = (items: EnvioEstado[], emptyLabel: string, tagLabel: string) => {
     if (items.length === 0) {
       return <p className="text-xs text-gray-500">{emptyLabel}</p>
