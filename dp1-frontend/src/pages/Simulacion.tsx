@@ -783,18 +783,18 @@ export default function Simulacion() {
           <div className="absolute bottom-3 left-3 z-[999] flex flex-col gap-1.5">
             <div className="min-w-[238px] bg-gray-900/50 border border-gray-600/45 rounded-xl backdrop-blur-[2px] shadow-md shadow-black/15">
               <button onClick={() => setOcuCollapsed((v) => !v)} className="flex w-full items-center justify-between gap-2 p-2.5 cursor-pointer">
-                <h4 className="text-[11px] font-semibold text-gray-300">Ocupación Global</h4>
+                <h4 className="text-[13px] font-semibold text-gray-300">Ocupación Global</h4>
                 <span className={`text-gray-500 text-xs transition-transform ${ocuCollapsed ? '' : 'rotate-180'}`}>▼</span>
               </button>
               {!ocuCollapsed && (
                 <div className="grid grid-cols-1 gap-1.5 px-2.5 pb-2.5">
                   <div className="rounded-lg border border-gray-600/55 bg-gray-950/65 px-2.5 py-2">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-violet-200">Flota</span>
+                      <span className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">Flota</span>
                       <span className="text-base font-bold text-white">{occupancy.flota.capacidad > 0 ? (occupancy.flota.carga / occupancy.flota.capacidad * 100).toFixed(2) : '0.00'}%</span>
                     </div>
                     <div className="mt-1 flex items-center justify-between gap-2">
-                      <span className="font-mono text-[12px] text-gray-100">{occupancy.flota.carga.toLocaleString('fr-FR')}/{occupancy.flota.capacidad.toLocaleString('fr-FR')}</span>
+                      <span className="font-mono text-sm text-gray-100">{occupancy.flota.carga.toLocaleString('fr-FR')}/{occupancy.flota.capacidad.toLocaleString('fr-FR')}</span>
                       <span className={`h-2 w-2 shrink-0 rounded-full ${ocupColor(occupancy.flota.capacidad > 0 ? occupancy.flota.carga / occupancy.flota.capacidad : 0)}`} />
                     </div>
                     <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-800">
@@ -803,11 +803,11 @@ export default function Simulacion() {
                   </div>
                   <div className="rounded-lg border border-gray-600/55 bg-gray-950/65 px-2.5 py-2">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-violet-200">Aeropuertos</span>
+                      <span className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">Aeropuertos</span>
                       <span className="text-base font-bold text-white">{occupancy.aeropuertos.capacidad > 0 ? (occupancy.aeropuertos.ocupacion / occupancy.aeropuertos.capacidad * 100).toFixed(2) : '0.00'}%</span>
                     </div>
                     <div className="mt-1 flex items-center justify-between gap-2">
-                      <span className="font-mono text-[12px] text-gray-100">{occupancy.aeropuertos.ocupacion.toLocaleString('fr-FR')}/{occupancy.aeropuertos.capacidad.toLocaleString('fr-FR')}</span>
+                      <span className="font-mono text-sm text-gray-100">{occupancy.aeropuertos.ocupacion.toLocaleString('fr-FR')}/{occupancy.aeropuertos.capacidad.toLocaleString('fr-FR')}</span>
                       <span className={`h-2 w-2 shrink-0 rounded-full ${ocupColor(occupancy.aeropuertos.capacidad > 0 ? occupancy.aeropuertos.ocupacion / occupancy.aeropuertos.capacidad : 0)}`} />
                     </div>
                     <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-800">
@@ -819,28 +819,28 @@ export default function Simulacion() {
             </div>
             <div className="min-w-[210px] bg-gray-900/38 border border-gray-700/38 rounded-xl backdrop-blur-[2px]">
               <button onClick={() => setVuelosCollapsed((v) => !v)} className="flex w-full items-center justify-between gap-2 p-2.5 cursor-pointer">
-                <h4 className="text-[11px] font-semibold text-gray-300">Estado de Vuelos</h4>
+                <h4 className="text-[13px] font-semibold text-gray-300">Estado de Vuelos</h4>
                 <span className={`text-gray-500 text-xs transition-transform ${vuelosCollapsed ? '' : 'rotate-180'}`}>▼</span>
               </button>
               {!vuelosCollapsed && (
                 <div className="grid grid-cols-1 gap-1.5 px-2.5 pb-2.5">
                   <div className="rounded-lg border border-gray-700/50 bg-gray-900/55 px-2 py-1.5">
-                    <span className="text-[10px] font-medium uppercase tracking-wide text-violet-300">En vuelo</span>
+                    <span className="text-xs font-medium uppercase tracking-wide text-violet-300">En vuelo</span>
                     <div className="mt-0.5 text-sm font-bold text-gray-100">{vuelosEnTransitoCount}</div>
                   </div>
                   <div className="rounded-lg border border-gray-700/50 bg-gray-900/55 px-2 py-1.5">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] font-medium uppercase tracking-wide text-violet-300">Vacíos en vuelo</span>
+                      <span className="text-xs font-medium uppercase tracking-wide text-violet-300">Vacíos en vuelo</span>
                       <span className="text-xs font-bold text-gray-100">{vuelosVaciosEnTransitoPct}%</span>
                     </div>
-                    <div className="mt-0.5 text-[10px] font-mono text-gray-200">{vuelosVaciosEnTransito}/{vuelosEnTransitoCount}</div>
+                    <div className="mt-0.5 text-xs font-mono text-gray-200">{vuelosVaciosEnTransito}/{vuelosEnTransitoCount}</div>
                   </div>
                   <div className="rounded-lg border border-gray-700/50 bg-gray-900/55 px-2 py-1.5">
-                    <span className="text-[10px] font-medium uppercase tracking-wide text-violet-300">Culminados</span>
+                    <span className="text-xs font-medium uppercase tracking-wide text-violet-300">Culminados</span>
                     <div className="mt-0.5 text-sm font-bold text-gray-100">{vuelosCulminados}</div>
                   </div>
                   <div className="rounded-lg border border-gray-700/50 bg-gray-900/55 px-2 py-1.5">
-                    <span className="text-[10px] font-medium uppercase tracking-wide text-violet-300">Cancelados</span>
+                    <span className="text-xs font-medium uppercase tracking-wide text-violet-300">Cancelados</span>
                     <div className="mt-0.5 text-sm font-bold text-gray-100">{vuelosCancelados}</div>
                   </div>
                 </div>

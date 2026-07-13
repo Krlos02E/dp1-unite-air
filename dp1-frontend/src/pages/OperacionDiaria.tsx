@@ -493,10 +493,10 @@ export default function OperacionDiaria() {
 
           <div className="absolute bottom-4 left-4 z-[999] flex flex-col gap-2">
             <div className="bg-gray-900/40 border border-gray-700/40 rounded-xl p-3 backdrop-blur-[2px]">
-              <h4 className="text-xs font-semibold text-gray-300 mb-2 pb-1 border-b border-gray-700/50">Ocupación Global</h4>
+              <h4 className="text-sm font-semibold text-gray-300 mb-2 pb-1 border-b border-gray-700/50">Ocupación Global</h4>
               <div className="flex items-center gap-2">
                 <div className="flex-1 min-w-0">
-                  <div className="flex justify-between text-[10px] text-gray-400 mb-0.5">
+                  <div className="flex justify-between text-xs text-gray-400 mb-0.5">
                     <span className="truncate">Flota: {occupancy.carga}/{occupancy.capacidad}</span>
                     <span className="shrink-0 ml-1">{occupancy.capacidad > 0 ? Math.round(occupancy.carga / occupancy.capacidad * 100) : 0}%</span>
                   </div>
@@ -511,25 +511,25 @@ export default function OperacionDiaria() {
               </div>
             </div>
             <div className="bg-gray-900/40 border border-gray-700/40 rounded-xl p-3 backdrop-blur-[2px]">
-              <h4 className="text-xs font-semibold text-gray-300 mb-2 pb-1 border-b border-gray-700/50">Estado de Vuelos</h4>
+              <h4 className="text-sm font-semibold text-gray-300 mb-2 pb-1 border-b border-gray-700/50">Estado de Vuelos</h4>
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center gap-1.5 bg-violet-900/35 border border-violet-700/55 rounded-lg px-2 py-1">
-                  <span className="text-[10px] text-violet-400 font-medium">En Vuelo</span>
+                  <span className="text-xs text-violet-400 font-medium">En Vuelo</span>
                   <span className="text-xs font-bold text-violet-300 bg-violet-800/55 px-1.5 py-0.5 rounded">{flightStats.enVuelo}</span>
                 </div>
                 <div className="flex items-center gap-1.5 bg-sky-950/55 border border-sky-800/70 rounded-lg px-2 py-1">
-                  <span className="text-[10px] text-sky-300 font-medium">Vacíos en vuelo</span>
+                  <span className="text-xs text-sky-300 font-medium">Vacíos en vuelo</span>
                   <span className="text-xs font-bold text-sky-200 bg-sky-900/70 px-1.5 py-0.5 rounded">
                     {flightStats.vaciosEnVuelo}/{flightStats.enVuelo}
                   </span>
-                  <span className="text-[10px] text-sky-400 font-medium">({vuelosVaciosEnVueloPct}%)</span>
+                  <span className="text-xs text-sky-400 font-medium">({vuelosVaciosEnVueloPct}%)</span>
                 </div>
                 <div className="flex items-center gap-1.5 bg-violet-900/20 border border-violet-700/40 rounded-lg px-2 py-1">
-                  <span className="text-[10px] text-violet-300 font-medium">Culminados</span>
+                  <span className="text-xs text-violet-300 font-medium">Culminados</span>
                   <span className="text-xs font-bold text-violet-200 bg-violet-700/40 px-1.5 py-0.5 rounded">{flightStats.culminados}</span>
                 </div>
                 <div className="flex items-center gap-1.5 bg-violet-950/55 border border-violet-800/70 rounded-lg px-2 py-1">
-                  <span className="text-[10px] text-violet-500 font-medium">Cancelados</span>
+                  <span className="text-xs text-violet-500 font-medium">Cancelados</span>
                   <span className="text-xs font-bold text-violet-400 bg-violet-950/80 px-1.5 py-0.5 rounded">{flightStats.cancelados}</span>
                 </div>
               </div>

@@ -53,8 +53,8 @@ const AIRPLANE_COLOR_GREEN = '#22c55e'
 const AIRPLANE_COLOR_YELLOW = '#eab308'
 const AIRPLANE_COLOR_RED = '#ef4444'
 const MAP_SELECTION_COLOR = '#8b5cf6'
-const BASE_ICON_SIZE = 29
-const AIRPORT_ICON_RATIO = 0.9
+const BASE_ICON_SIZE = 26
+const AIRPORT_ICON_RATIO = 0.8
 const ROUTE_POINT_COUNT = 28
 
 type RouteDisplayMode = 'all' | 'selected'
@@ -923,7 +923,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
 
   useEffect(() => {
     const animate = (frameNow: number) => {
-      if (frameNow - lastAnimationFrameRef.current < 33) {
+      if (frameNow - lastAnimationFrameRef.current < 16) {
         rafIdRef.current = requestAnimationFrame(animate)
         return
       }

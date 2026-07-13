@@ -6,7 +6,7 @@ import {
   getAirportCityResolved,
   getAirportCountryResolved,
 } from '../data/airportsData'
-import { formatTimeInTimezone, formatDateInTimezone } from '../utils/timezoneFormat'
+import { formatDateInTimezone, formatTimeInTimezone } from '../utils/timezoneFormat'
 
 interface Props {
   aeropuerto: AeropuertoDTO
@@ -18,6 +18,22 @@ interface Props {
   onEnvioSelect?: (envio: EnvioEstado) => void
   selectedEnvioId?: string | null
   onClear?: () => void
+}
+
+type SectionKey =
+  | 'envios-almacen'
+  | 'maletas-almacen'
+  | 'envios-entrada'
+  | 'maletas-entrada'
+  | 'envios-salida'
+  | 'maletas-salida'
+
+function getRouteIndex(envio: EnvioEstado, airportCode: string): number {
+  return (envio.rutaAeropuertos || []).indexOf(airportCode)
+}
+
+function getCurrentFlightId(envio: EnvioEstado): string | null {
+  return envio.vueloActual || envio.vueloEsperado || envio.ultimoVuelo || null
 }
 
 export default function AeropuertoDetailCard({
@@ -32,12 +48,8 @@ export default function AeropuertoDetailCard({
   aeropuertos = [],
 }: Props) {
   const [searchTerm, setSearchTerm] = useState('')
-  const [expandedSection, setExpandedSection] = useState<'envios-almacen' | 'envios-asociados' | 'paquetes-asociados' | 'entrantes' | 'salientes' | 'cancelados' | null>(null)
-  const [expandedIncomingFlightId, setExpandedIncomingFlightId] = useState<string | null>(null)
+  const [expandedSection, setExpandedSection] = useState<SectionKey | null>(null)
   const [expandedEnvioId, setExpandedEnvioId] = useState<string | null>(null)
-  const [filtroEntrantes, setFiltroEntrantes] = useState<'id' | 'ciudad'>('ciudad')
-  const [filtroSalientes, setFiltroSalientes] = useState<'id' | 'ciudad'>('ciudad')
-  const [filtroCancelados, setFiltroCancelados] = useState<'id' | 'ciudad'>('ciudad')
 
   const airportLookup = useMemo(() => buildAirportLookup(aeropuertos), [aeropuertos])
   const ciudad = getAirportCityResolved(aeropuerto.codigoOACI, airportLookup) || aeropuerto.ciudad || ''
@@ -45,110 +57,204 @@ export default function AeropuertoDetailCard({
 
   const vuelosMap = useMemo(() => {
     const map = new Map<string, VueloDTO>()
-    vuelos.forEach((v) => map.set(v.id, v))
+    vuelos.forEach((vuelo) => map.set(vuelo.id, vuelo))
     return map
   }, [vuelos])
-
-  const enviosByFlight = useMemo(() => {
-    const map = new Map<string, EnvioEstado[]>()
-    envios.forEach((envio) => {
-      const flightIds = [envio.vueloActual, envio.vueloEsperado, envio.ultimoVuelo].filter(Boolean) as string[]
-      flightIds.forEach((flightId) => {
-        const list = map.get(flightId) || []
-        list.push(envio)
-        map.set(flightId, list)
-      })
-    })
-    return map
-  }, [envios])
 
   const enviosEnAlmacen = useMemo(
     () => envios.filter((envio) => envio.aeropuertoActual === aeropuerto.codigoOACI),
     [envios, aeropuerto.codigoOACI],
   )
 
-  const enviosAsociados = useMemo(() => {
-    return envios.filter((envio) => {
-      if (envio.destino === aeropuerto.codigoOACI) return true
-      const ruta = envio.rutaAeropuertos || []
-      const indice = ruta.indexOf(aeropuerto.codigoOACI)
-      return indice > 0 && indice < ruta.length - 1
-    })
-  }, [envios, aeropuerto.codigoOACI])
-
-  const paquetesAsociados = useMemo(
-    () => enviosAsociados.reduce((sum, envio) => sum + envio.cantidad, 0),
-    [enviosAsociados],
+  const enviosPlaneadosEntrada = useMemo(
+    () => envios.filter((envio) => {
+      if (envio.aeropuertoActual === aeropuerto.codigoOACI) return false
+      const currentIndex = getRouteIndex(envio, envio.aeropuertoActual)
+      const targetIndex = getRouteIndex(envio, aeropuerto.codigoOACI)
+      return currentIndex >= 0 && targetIndex > currentIndex
+    }),
+    [envios, aeropuerto.codigoOACI],
   )
 
-  const enviosEnAlmacenFiltrados = useMemo(() => {
-    if (!searchTerm || expandedSection !== 'envios-almacen') return enviosEnAlmacen
-    const term = searchTerm.toLowerCase()
-    return enviosEnAlmacen.filter((envio) =>
-      envio.id.toLowerCase().includes(term)
+  const enviosPlaneadosSalida = useMemo(
+    () => envios.filter((envio) => {
+      if (envio.aeropuertoActual !== aeropuerto.codigoOACI) return false
+      const currentIndex = getRouteIndex(envio, aeropuerto.codigoOACI)
+      const route = envio.rutaAeropuertos || []
+      return currentIndex >= 0 && currentIndex < route.length - 1
+    }),
+    [envios, aeropuerto.codigoOACI],
+  )
+
+  const maletasEnAlmacen = useMemo(
+    () => enviosEnAlmacen.reduce((sum, envio) => sum + envio.cantidad, 0),
+    [enviosEnAlmacen],
+  )
+
+  const maletasPlaneadasEntrada = useMemo(
+    () => enviosPlaneadosEntrada.reduce((sum, envio) => sum + envio.cantidad, 0),
+    [enviosPlaneadosEntrada],
+  )
+
+  const maletasPlaneadasSalida = useMemo(
+    () => enviosPlaneadosSalida.reduce((sum, envio) => sum + envio.cantidad, 0),
+    [enviosPlaneadosSalida],
+  )
+
+  const stockPct = aeropuerto.capacidadMaxima > 0
+    ? Math.round((aeropuerto.ocupacionActual / aeropuerto.capacidadMaxima) * 100)
+    : 0
+
+  const matchesSearch = (envio: EnvioEstado) => {
+    const term = searchTerm.trim().toLowerCase()
+    if (!term) return true
+    return envio.id.toLowerCase().includes(term)
       || getAirportCityCountryResolved(envio.origen, airportLookup).toLowerCase().includes(term)
       || getAirportCityCountryResolved(envio.destino, airportLookup).toLowerCase().includes(term)
-    )
-  }, [enviosEnAlmacen, searchTerm, expandedSection, airportLookup])
+  }
 
-  const enviosAsociadosFiltrados = useMemo(() => {
-    if (!searchTerm || expandedSection !== 'envios-asociados') return enviosAsociados
-    const term = searchTerm.toLowerCase()
-    return enviosAsociados.filter((envio) =>
-      envio.id.toLowerCase().includes(term)
-      || getAirportCityCountryResolved(envio.origen, airportLookup).toLowerCase().includes(term)
-      || getAirportCityCountryResolved(envio.destino, airportLookup).toLowerCase().includes(term)
-    )
-  }, [enviosAsociados, searchTerm, expandedSection, airportLookup])
-
-  const filteredEntrantes = useMemo(() => {
-    return aeropuerto.vuelosEntrantes.filter((id) => {
-      const vuelo = vuelosMap.get(id)
-      if (!vuelo || vuelo.progresoVuelo <= 0 || vuelo.progresoVuelo >= 100) return false
-      if (!searchTerm) return true
-      if (filtroEntrantes === 'id') return id.toLowerCase().includes(searchTerm.toLowerCase())
-      return getAirportCityCountryResolved(vuelo.origen, airportLookup).toLowerCase().includes(searchTerm.toLowerCase())
-    })
-  }, [aeropuerto, searchTerm, vuelosMap, filtroEntrantes, airportLookup])
-
-  const filteredSalientes = useMemo(() => {
-    return aeropuerto.vuelosSalientes.filter((id) => {
-      const vuelo = vuelosMap.get(id)
-      if (!vuelo || vuelo.progresoVuelo <= 0 || vuelo.progresoVuelo >= 100) return false
-      if (!searchTerm) return true
-      if (filtroSalientes === 'id') return id.toLowerCase().includes(searchTerm.toLowerCase())
-      return getAirportCityCountryResolved(vuelo.destino, airportLookup).toLowerCase().includes(searchTerm.toLowerCase())
-    })
-  }, [aeropuerto, searchTerm, vuelosMap, filtroSalientes, airportLookup])
-
-  const filteredCancelados = useMemo(() => {
-    return (aeropuerto.vuelosCanceladosSalientes || []).filter((id) => {
-      const vuelo = vuelosMap.get(id)
-      if (!searchTerm) return true
-      if (!vuelo) return id.toLowerCase().includes(searchTerm.toLowerCase())
-      if (filtroCancelados === 'id') return id.toLowerCase().includes(searchTerm.toLowerCase())
-      return getAirportCityCountryResolved(vuelo.destino, airportLookup).toLowerCase().includes(searchTerm.toLowerCase())
-    })
-  }, [aeropuerto, searchTerm, vuelosMap, filtroCancelados, airportLookup])
-
-  const countEntrantesTransito = useMemo(
-    () => aeropuerto.vuelosEntrantes.filter((id) => {
-      const vuelo = vuelosMap.get(id)
-      return vuelo && vuelo.progresoVuelo > 0 && vuelo.progresoVuelo < 100
-    }).length,
-    [aeropuerto, vuelosMap],
+  const enviosEnAlmacenFiltrados = useMemo(
+    () => enviosEnAlmacen.filter(matchesSearch),
+    [enviosEnAlmacen, searchTerm, airportLookup],
   )
 
-  const countSalientesTransito = useMemo(
-    () => aeropuerto.vuelosSalientes.filter((id) => {
-      const vuelo = vuelosMap.get(id)
-      return vuelo && vuelo.progresoVuelo > 0 && vuelo.progresoVuelo < 100
-    }).length,
-    [aeropuerto, vuelosMap],
+  const enviosPlaneadosEntradaFiltrados = useMemo(
+    () => enviosPlaneadosEntrada.filter(matchesSearch),
+    [enviosPlaneadosEntrada, searchTerm, airportLookup],
   )
 
-  const toggleSection = (section: 'envios-almacen' | 'envios-asociados' | 'paquetes-asociados' | 'entrantes' | 'salientes' | 'cancelados') => {
+  const enviosPlaneadosSalidaFiltrados = useMemo(
+    () => enviosPlaneadosSalida.filter(matchesSearch),
+    [enviosPlaneadosSalida, searchTerm, airportLookup],
+  )
+
+  const toggleSection = (section: SectionKey) => {
     setExpandedSection((prev) => prev === section ? null : section)
+    setExpandedEnvioId(null)
+  }
+
+  const renderUtInfo = (envio: EnvioEstado) => {
+    const flightId = getCurrentFlightId(envio)
+    if (!flightId) return null
+    const vuelo = vuelosMap.get(flightId)
+    if (!vuelo) {
+      return <div className="text-[10px] text-gray-500">UT: {flightId}</div>
+    }
+
+    return (
+      <div className="mt-1 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation()
+            onVueloSelect?.(vuelo)
+          }}
+          className="rounded bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-medium text-sky-300 hover:bg-sky-500/20"
+        >
+          UT: {flightId}
+        </button>
+        <span className="text-[10px] text-gray-500">
+          {formatDateInTimezone(vuelo.salidaUtc, tzOffset)} {formatTimeInTimezone(vuelo.salidaUtc, tzOffset)}
+        </span>
+      </div>
+    )
+  }
+
+  const renderEnvioList = (
+    items: EnvioEstado[],
+    emptyLabel: string,
+    badgeLabel: (envio: EnvioEstado) => string,
+    badgeClassName: (envio: EnvioEstado) => string,
+    extraLine: (envio: EnvioEstado) => string | null,
+  ) => {
+    if (items.length === 0) {
+      return <p className="text-xs text-gray-500">{emptyLabel}</p>
+    }
+
+    return items.map((envio) => {
+      const isSelected = envio.id === selectedEnvioId
+      return (
+        <button
+          key={envio.id}
+          type="button"
+          onClick={() => onEnvioSelect?.(envio)}
+          className={`w-full rounded border-t border-gray-800 px-2 py-1.5 text-left transition-colors hover:bg-violet-900/20 ${
+            isSelected ? 'bg-sky-900/20 border-l-2 border-l-sky-500' : ''
+          }`}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${badgeClassName(envio)}`}>
+                  {badgeLabel(envio)}
+                </span>
+                <span className="truncate text-[10px] font-medium text-gray-300">{envio.id}</span>
+              </div>
+              <div className="mt-0.5 truncate text-[10px] text-gray-500">
+                {getAirportCityCountryResolved(envio.origen, airportLookup)} -&gt; {getAirportCityCountryResolved(envio.destino, airportLookup)}
+              </div>
+              {extraLine(envio) && (
+                <div className="text-[10px] text-gray-500">{extraLine(envio)}</div>
+              )}
+              {renderUtInfo(envio)}
+            </div>
+            <span className="whitespace-nowrap text-[10px] text-amber-400">
+              {envio.cantidad} maleta{envio.cantidad !== 1 ? 's' : ''}
+            </span>
+          </div>
+        </button>
+      )
+    })
+  }
+
+  const renderMaletaList = (items: EnvioEstado[], emptyLabel: string, tagLabel: string) => {
+    if (items.length === 0) {
+      return <p className="text-xs text-gray-500">{emptyLabel}</p>
+    }
+
+    return items.map((envio) => {
+      const isExpanded = expandedEnvioId === envio.id
+      return (
+        <div key={envio.id} className="rounded border-t border-gray-800 bg-gray-900/40">
+          <button
+            type="button"
+            onClick={() => setExpandedEnvioId((prev) => prev === envio.id ? null : envio.id)}
+            className="w-full px-2 py-1.5 text-left transition-colors hover:bg-gray-800/70"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="rounded bg-emerald-300/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">
+                    {tagLabel}
+                  </span>
+                  <span className="truncate text-[10px] font-medium text-gray-300">Envío {envio.id}</span>
+                </div>
+                <div className="mt-0.5 truncate text-[10px] text-gray-500">
+                  {getAirportCityCountryResolved(envio.origen, airportLookup)} -&gt; {getAirportCityCountryResolved(envio.destino, airportLookup)}
+                </div>
+                {renderUtInfo(envio)}
+              </div>
+              <span className="whitespace-nowrap text-[10px] text-amber-400">
+                {envio.cantidad} maleta{envio.cantidad !== 1 ? 's' : ''}
+              </span>
+            </div>
+          </button>
+          {isExpanded && (
+            <div className="space-y-0.5 px-2 pb-1">
+              {Array.from({ length: envio.cantidad }, (_, index) => (
+                <div
+                  key={`${envio.id}-maleta-${index + 1}`}
+                  className="flex justify-between border-t border-gray-800 py-0.5 text-[10px] text-gray-400"
+                >
+                  <span>Maleta {index + 1}</span>
+                  <span className="font-mono text-gray-500">{envio.id}-BAG-{String(index + 1).padStart(3, '0')}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )
+    })
   }
 
   return (
@@ -173,20 +279,26 @@ export default function AeropuertoDetailCard({
 
       <div className="mb-2 space-y-1 text-xs">
         <div className="flex justify-between">
+          <span className="text-gray-400">Stock del almacén</span>
+          <span className="font-medium text-amber-400">
+            {aeropuerto.ocupacionActual} / {aeropuerto.capacidadMaxima} ({stockPct}%)
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-400">Envíos en almacén</span>
+          <span className="font-medium text-sky-400">{enviosEnAlmacen.length}</span>
+        </div>
+        <div className="flex justify-between">
           <span className="text-gray-400">Maletas en almacén</span>
-          <span className="font-medium text-amber-400">{aeropuerto.ocupacionActual} / {aeropuerto.capacidadMaxima}</span>
+          <span className="font-medium text-sky-400">{maletasEnAlmacen}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-gray-400">Vuelos entrantes</span>
-          <span className="font-medium text-sky-400">{countEntrantesTransito}</span>
+          <span className="text-gray-400">Envíos planificados de entrada</span>
+          <span className="font-medium text-emerald-400">{enviosPlaneadosEntrada.length}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-gray-400">Vuelos salientes</span>
-          <span className="font-medium text-sky-400">{countSalientesTransito}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-gray-400">Vuelos cancelados</span>
-          <span className="font-medium text-red-400">{(aeropuerto.vuelosCanceladosSalientes || []).length}</span>
+          <span className="text-gray-400">Envíos planificados de salida</span>
+          <span className="font-medium text-emerald-400">{enviosPlaneadosSalida.length}</span>
         </div>
       </div>
 
@@ -196,17 +308,17 @@ export default function AeropuertoDetailCard({
           placeholder={
             expandedSection === 'envios-almacen'
               ? 'Buscar envío en almacén...'
-              : expandedSection === 'envios-asociados'
-                ? 'Buscar envío asociado...'
-                : expandedSection === 'paquetes-asociados'
-                  ? 'Buscar envío/paquete asociado...'
-                  : expandedSection === 'entrantes'
-              ? (filtroEntrantes === 'id' ? 'Buscar por ID de vuelo...' : 'Buscar por ciudad de origen...')
-              : expandedSection === 'salientes'
-                ? (filtroSalientes === 'id' ? 'Buscar por ID de vuelo...' : 'Buscar por ciudad de destino...')
-                : expandedSection === 'cancelados'
-                  ? (filtroCancelados === 'id' ? 'Buscar por ID de vuelo...' : 'Buscar por ciudad de destino...')
-                  : 'Expandir una sección para buscar...'
+              : expandedSection === 'maletas-almacen'
+                ? 'Buscar maleta en almacén...'
+                : expandedSection === 'envios-entrada'
+                  ? 'Buscar envío planificado de entrada...'
+                  : expandedSection === 'maletas-entrada'
+                    ? 'Buscar maleta planificada de entrada...'
+                    : expandedSection === 'envios-salida'
+                      ? 'Buscar envío planificado de salida...'
+                      : expandedSection === 'maletas-salida'
+                        ? 'Buscar maleta planificada de salida...'
+                        : 'Expandir una sección para buscar...'
           }
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
@@ -214,304 +326,136 @@ export default function AeropuertoDetailCard({
         />
       </div>
 
-      <div className="max-h-[22rem] space-y-1 overflow-y-auto">
+      <div className="max-h-[24rem] space-y-1 overflow-y-auto">
         <div className="rounded-lg border border-gray-700">
           <button
             onClick={() => toggleSection('envios-almacen')}
             className="flex w-full items-center justify-between rounded-t-lg px-2 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-800"
           >
-            <span>Envíos en almacén ({enviosEnAlmacen.length})</span>
+            <span>Lista de envíos en el almacén ({enviosEnAlmacen.length})</span>
             <span>{expandedSection === 'envios-almacen' ? '▼' : '▶'}</span>
           </button>
           {expandedSection === 'envios-almacen' && (
             <div className="space-y-1 px-3 pb-2">
-              {enviosEnAlmacenFiltrados.length === 0 ? (
-                <p className="text-xs text-gray-500">No hay envíos en este almacén</p>
-              ) : enviosEnAlmacenFiltrados.map((envio) => {
-                const isSelected = envio.id === selectedEnvioId
-                const ut = envio.vueloActual || envio.vueloEsperado || envio.ultimoVuelo
-                return (
-                  <button
-                    key={envio.id}
-                    type="button"
-                    onClick={() => onEnvioSelect?.(envio)}
-                    className={`w-full rounded border-t border-gray-800 px-2 py-1.5 text-left transition-colors hover:bg-violet-900/20 ${
-                      isSelected ? 'bg-sky-900/20 border-l-2 border-l-sky-500' : ''
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[10px] font-medium text-gray-300">{envio.id}</div>
-                        <div className="truncate text-[10px] text-gray-500">
-                          {getAirportCityCountryResolved(envio.origen, airportLookup)} -&gt; {getAirportCityCountryResolved(envio.destino, airportLookup)}
-                        </div>
-                        {ut && <div className="text-[10px] text-gray-500">UT: {ut}</div>}
-                      </div>
-                      <span className="whitespace-nowrap text-[10px] text-amber-400">{envio.cantidad} maleta{envio.cantidad !== 1 ? 's' : ''}</span>
-                    </div>
-                  </button>
-                )
-              })}
+              {renderEnvioList(
+                enviosEnAlmacenFiltrados,
+                'No hay envíos en este almacén',
+                (envio) => envio.destino === aeropuerto.codigoOACI ? 'Destino final' : 'En tránsito',
+                (envio) => envio.destino === aeropuerto.codigoOACI
+                  ? 'bg-amber-300/10 text-amber-300'
+                  : 'bg-sky-300/10 text-sky-300',
+                (envio) => envio.destino === aeropuerto.codigoOACI
+                  ? 'Este almacén es el destino final'
+                  : 'Este almacén es una escala de tránsito',
+              )}
             </div>
           )}
         </div>
 
         <div className="rounded-lg border border-gray-700">
           <button
-            onClick={() => toggleSection('envios-asociados')}
+            onClick={() => toggleSection('maletas-almacen')}
             className="flex w-full items-center justify-between rounded-t-lg px-2 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-800"
           >
-            <span>Envíos asociados ({enviosAsociados.length})</span>
-            <span>{expandedSection === 'envios-asociados' ? '▼' : '▶'}</span>
+            <span>Lista de maletas en el almacén ({maletasEnAlmacen})</span>
+            <span>{expandedSection === 'maletas-almacen' ? '▼' : '▶'}</span>
           </button>
-          {expandedSection === 'envios-asociados' && (
+          {expandedSection === 'maletas-almacen' && (
             <div className="space-y-1 px-3 pb-2">
-              {enviosAsociadosFiltrados.length === 0 ? (
-                <p className="text-xs text-gray-500">No hay envíos asociados a este almacén</p>
-              ) : enviosAsociadosFiltrados.map((envio) => {
-                const isSelected = envio.id === selectedEnvioId
-                const relacion = envio.destino === aeropuerto.codigoOACI ? 'Destino final' : 'Escala'
-                return (
-                  <button
-                    key={envio.id}
-                    type="button"
-                    onClick={() => onEnvioSelect?.(envio)}
-                    className={`w-full rounded border-t border-gray-800 px-2 py-1.5 text-left transition-colors hover:bg-violet-900/20 ${
-                      isSelected ? 'bg-sky-900/20 border-l-2 border-l-sky-500' : ''
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="rounded bg-amber-300/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">{relacion}</span>
-                          <span className="truncate text-[10px] font-medium text-gray-300">{envio.id}</span>
-                        </div>
-                        <div className="mt-0.5 truncate text-[10px] text-gray-500">
-                          {getAirportCityCountryResolved(envio.origen, airportLookup)} -&gt; {getAirportCityCountryResolved(envio.destino, airportLookup)}
-                        </div>
-                      </div>
-                      <span className="whitespace-nowrap text-[10px] text-emerald-400">{envio.cantidad} paquetes</span>
-                    </div>
-                  </button>
-                )
-              })}
+              <p className="text-[10px] text-gray-500">
+                Cada fila agrupa las maletas de un envío. Al expandirla se muestra la lista individual de maletas.
+              </p>
+              {renderMaletaList(enviosEnAlmacenFiltrados, 'No hay maletas en este almacén', 'En almacén')}
             </div>
           )}
         </div>
 
         <div className="rounded-lg border border-gray-700">
           <button
-            onClick={() => toggleSection('paquetes-asociados')}
+            onClick={() => toggleSection('envios-entrada')}
             className="flex w-full items-center justify-between rounded-t-lg px-2 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-800"
           >
-            <span>Paquetes asociados ({paquetesAsociados})</span>
-            <span>{expandedSection === 'paquetes-asociados' ? '▼' : '▶'}</span>
+            <span>Envíos planificados que entran ({enviosPlaneadosEntrada.length})</span>
+            <span>{expandedSection === 'envios-entrada' ? '▼' : '▶'}</span>
           </button>
-          {expandedSection === 'paquetes-asociados' && (
+          {expandedSection === 'envios-entrada' && (
             <div className="space-y-1 px-3 pb-2">
-              {enviosAsociadosFiltrados.length === 0 ? (
-                <p className="text-xs text-gray-500">No hay paquetes asociados a este almacén</p>
-              ) : enviosAsociadosFiltrados.map((envio) => {
-                const relacion = envio.destino === aeropuerto.codigoOACI ? 'Destino final' : 'Escala'
-                return (
-                  <button
-                    key={`pkg-${envio.id}`}
-                    type="button"
-                    onClick={() => onEnvioSelect?.(envio)}
-                    className="w-full rounded border-t border-gray-800 px-2 py-1.5 text-left transition-colors hover:bg-violet-900/20"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="rounded bg-emerald-300/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">{relacion}</span>
-                          <span className="truncate text-[10px] font-medium text-gray-300">{envio.id}</span>
-                        </div>
-                        <div className="mt-0.5 truncate text-[10px] text-gray-500">
-                          {getAirportCityCountryResolved(envio.origen, airportLookup)} -&gt; {getAirportCityCountryResolved(envio.destino, airportLookup)}
-                        </div>
-                      </div>
-                      <span className="whitespace-nowrap text-[10px] text-emerald-400">{envio.cantidad}</span>
-                    </div>
-                  </button>
-                )
-              })}
+              {renderEnvioList(
+                enviosPlaneadosEntradaFiltrados,
+                'No hay envíos planificados de entrada',
+                (envio) => envio.destino === aeropuerto.codigoOACI ? 'Destino final' : 'Entrada en tránsito',
+                (envio) => envio.destino === aeropuerto.codigoOACI
+                  ? 'bg-amber-300/10 text-amber-300'
+                  : 'bg-emerald-300/10 text-emerald-300',
+                (envio) => {
+                  const currentStop = getAirportCityCountryResolved(envio.aeropuertoActual, airportLookup)
+                  return `Viene desde ${currentStop}`
+                },
+              )}
             </div>
           )}
         </div>
 
         <div className="rounded-lg border border-gray-700">
           <button
-            onClick={() => toggleSection('entrantes')}
+            onClick={() => toggleSection('maletas-entrada')}
             className="flex w-full items-center justify-between rounded-t-lg px-2 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-800"
           >
-            <span>Vuelos entrantes ({filteredEntrantes.length})</span>
-            <span>{expandedSection === 'entrantes' ? '▼' : '▶'}</span>
+            <span>Maletas planificadas que entran ({maletasPlaneadasEntrada})</span>
+            <span>{expandedSection === 'maletas-entrada' ? '▼' : '▶'}</span>
           </button>
-          {expandedSection === 'entrantes' && (
+          {expandedSection === 'maletas-entrada' && (
             <div className="space-y-1 px-3 pb-2">
-              <div className="mb-2 flex gap-2">
-                <label className="flex cursor-pointer items-center gap-1 text-xs text-gray-400">
-                  <input type="radio" name="filtro-entrantes-panel" checked={filtroEntrantes === 'ciudad'} onChange={() => setFiltroEntrantes('ciudad')} className="h-3 w-3" />
-                  Ciudad origen
-                </label>
-                <label className="flex cursor-pointer items-center gap-1 text-xs text-gray-400">
-                  <input type="radio" name="filtro-entrantes-panel" checked={filtroEntrantes === 'id'} onChange={() => setFiltroEntrantes('id')} className="h-3 w-3" />
-                  ID vuelo
-                </label>
-              </div>
-              {filteredEntrantes.length === 0 ? (
-                <p className="text-xs text-gray-500">Ninguno</p>
-              ) : filteredEntrantes.map((id) => {
-                const vuelo = vuelosMap.get(id)
-                const enviosEntrantes = enviosByFlight.get(id) || []
-                const isFlightExpanded = expandedIncomingFlightId === id
-                return (
-                  <div key={id} className="border-t border-gray-800">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setExpandedIncomingFlightId(isFlightExpanded ? null : id)
-                        setExpandedEnvioId(null)
-                      }}
-                      disabled={!vuelo}
-                      className="w-full rounded px-1 py-1 text-left text-xs text-gray-400 transition-colors hover:bg-violet-900/20 disabled:cursor-default"
-                    >
-                      <div className="flex justify-between gap-2">
-                        <span className="font-medium text-gray-300">{id}</span>
-                        <span className="truncate text-sky-400">Desde: {vuelo ? getAirportCityCountryResolved(vuelo.origen, airportLookup) : '?'}</span>
-                      </div>
-                      {vuelo && (
-                        <div className="text-gray-500">
-                          Llegada: {formatDateInTimezone(vuelo.llegadaUtc, tzOffset)} {formatTimeInTimezone(vuelo.llegadaUtc, tzOffset)}
-                        </div>
-                      )}
-                      <div className="text-[10px] text-gray-500">
-                        {enviosEntrantes.length} envío{enviosEntrantes.length !== 1 ? 's' : ''} entrante{enviosEntrantes.length !== 1 ? 's' : ''}
-                      </div>
-                    </button>
-                    {isFlightExpanded && (
-                      <div className="mb-1 ml-2 space-y-1 border-l border-gray-700 pl-2">
-                        {enviosEntrantes.length === 0 ? (
-                          <p className="py-1 text-[10px] text-gray-500">No hay envíos asociados a este vuelo</p>
-                        ) : enviosEntrantes.map((envio) => {
-                          const isEnvioExpanded = expandedEnvioId === envio.id
-                          return (
-                            <div key={envio.id} className="rounded border border-gray-800 bg-gray-900/60">
-                              <button
-                                type="button"
-                                onClick={() => setExpandedEnvioId(isEnvioExpanded ? null : envio.id)}
-                                className="w-full px-2 py-1 text-left transition-colors hover:bg-gray-800/70"
-                              >
-                                <div className="flex justify-between gap-2">
-                                  <span className="truncate text-[10px] font-medium text-gray-300">{envio.id}</span>
-                                  <span className="whitespace-nowrap text-[10px] text-amber-400">{envio.cantidad} maleta{envio.cantidad !== 1 ? 's' : ''}</span>
-                                </div>
-                                <div className="truncate text-[10px] text-gray-500">
-                                  {getAirportCityCountryResolved(envio.origen, airportLookup)} -&gt; {getAirportCityCountryResolved(envio.destino, airportLookup)}
-                                </div>
-                              </button>
-                              {isEnvioExpanded && (
-                                <div className="space-y-0.5 px-2 pb-1">
-                                  {Array.from({ length: envio.cantidad }, (_, index) => (
-                                    <div key={`${envio.id}-maleta-${index + 1}`} className="flex justify-between border-t border-gray-800 py-0.5 text-[10px] text-gray-400">
-                                      <span>Maleta {index + 1}</span>
-                                      <span className="font-mono text-gray-500">{envio.id}-BAG-{String(index + 1).padStart(3, '0')}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+              <p className="text-[10px] text-gray-500">
+                Cada fila agrupa las maletas de un envío planificado de entrada.
+              </p>
+              {renderMaletaList(enviosPlaneadosEntradaFiltrados, 'No hay maletas planificadas de entrada', 'Entrada')}
             </div>
           )}
         </div>
 
         <div className="rounded-lg border border-gray-700">
-          <button onClick={() => toggleSection('salientes')} className="flex w-full items-center justify-between rounded-t-lg px-2 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-800">
-            <span>Vuelos salientes ({filteredSalientes.length})</span>
-            <span>{expandedSection === 'salientes' ? '▼' : '▶'}</span>
+          <button
+            onClick={() => toggleSection('envios-salida')}
+            className="flex w-full items-center justify-between rounded-t-lg px-2 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-800"
+          >
+            <span>Envíos planificados que salen ({enviosPlaneadosSalida.length})</span>
+            <span>{expandedSection === 'envios-salida' ? '▼' : '▶'}</span>
           </button>
-          {expandedSection === 'salientes' && (
+          {expandedSection === 'envios-salida' && (
             <div className="space-y-1 px-3 pb-2">
-              <div className="mb-2 flex gap-2">
-                <label className="flex cursor-pointer items-center gap-1 text-xs text-gray-400">
-                  <input type="radio" name="filtro-salientes-panel" checked={filtroSalientes === 'ciudad'} onChange={() => setFiltroSalientes('ciudad')} className="h-3 w-3" />
-                  Ciudad destino
-                </label>
-                <label className="flex cursor-pointer items-center gap-1 text-xs text-gray-400">
-                  <input type="radio" name="filtro-salientes-panel" checked={filtroSalientes === 'id'} onChange={() => setFiltroSalientes('id')} className="h-3 w-3" />
-                  ID vuelo
-                </label>
-              </div>
-              {filteredSalientes.length === 0 ? (
-                <p className="text-xs text-gray-500">Ninguno</p>
-              ) : filteredSalientes.map((id) => {
-                const vuelo = vuelosMap.get(id)
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => vuelo && onVueloSelect?.(vuelo)}
-                    disabled={!vuelo}
-                    className="w-full rounded border-t border-gray-800 px-1 py-1 text-left text-xs text-gray-400 transition-colors hover:bg-violet-900/20 disabled:cursor-default"
-                  >
-                    <div className="flex justify-between gap-2">
-                      <span className="font-medium text-gray-300">{id}</span>
-                      <span className="text-emerald-400">Hacia: {vuelo ? getAirportCityCountryResolved(vuelo.destino, airportLookup) : '?'}</span>
-                    </div>
-                    {vuelo && (
-                      <div className="text-gray-500">
-                        Salida: {formatDateInTimezone(vuelo.salidaUtc, tzOffset)} {formatTimeInTimezone(vuelo.salidaUtc, tzOffset)}
-                      </div>
-                    )}
-                  </button>
-                )
-              })}
+              {renderEnvioList(
+                enviosPlaneadosSalidaFiltrados,
+                'No hay envíos planificados de salida',
+                () => 'Salida planificada',
+                () => 'bg-violet-300/10 text-violet-300',
+                (envio) => {
+                  const route = envio.rutaAeropuertos || []
+                  const currentIndex = route.indexOf(aeropuerto.codigoOACI)
+                  const nextStop = currentIndex >= 0 ? route[currentIndex + 1] : null
+                  return nextStop
+                    ? `Próxima escala: ${getAirportCityCountryResolved(nextStop, airportLookup)}`
+                    : 'Sin próxima escala registrada'
+                },
+              )}
             </div>
           )}
         </div>
 
         <div className="rounded-lg border border-gray-700">
-          <button onClick={() => toggleSection('cancelados')} className="flex w-full items-center justify-between rounded-t-lg px-2 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-800">
-            <span>Vuelos cancelados ({filteredCancelados.length})</span>
-            <span>{expandedSection === 'cancelados' ? '▼' : '▶'}</span>
+          <button
+            onClick={() => toggleSection('maletas-salida')}
+            className="flex w-full items-center justify-between rounded-t-lg px-2 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-800"
+          >
+            <span>Maletas planificadas que salen ({maletasPlaneadasSalida})</span>
+            <span>{expandedSection === 'maletas-salida' ? '▼' : '▶'}</span>
           </button>
-          {expandedSection === 'cancelados' && (
+          {expandedSection === 'maletas-salida' && (
             <div className="space-y-1 px-3 pb-2">
-              <div className="mb-2 flex gap-2">
-                <label className="flex cursor-pointer items-center gap-1 text-xs text-gray-400">
-                  <input type="radio" name="filtro-cancelados-panel" checked={filtroCancelados === 'ciudad'} onChange={() => setFiltroCancelados('ciudad')} className="h-3 w-3" />
-                  Ciudad destino
-                </label>
-                <label className="flex cursor-pointer items-center gap-1 text-xs text-gray-400">
-                  <input type="radio" name="filtro-cancelados-panel" checked={filtroCancelados === 'id'} onChange={() => setFiltroCancelados('id')} className="h-3 w-3" />
-                  ID vuelo
-                </label>
-              </div>
-              {filteredCancelados.length === 0 ? (
-                <p className="text-xs text-gray-500">Ninguno</p>
-              ) : filteredCancelados.map((id) => {
-                const vuelo = vuelosMap.get(id)
-                return (
-                  <div key={id} className="border-t border-gray-800 pt-1 text-xs text-gray-400">
-                    <div className="flex justify-between gap-2">
-                      <span className="font-medium text-gray-300">{id}</span>
-                      <span className="text-red-400">Hacia: {vuelo ? getAirportCityCountryResolved(vuelo.destino, airportLookup) : '?'}</span>
-                    </div>
-                    {vuelo && (
-                      <div className="text-gray-500">
-                        Salida programada: {formatDateInTimezone(vuelo.salidaUtc, tzOffset)} {formatTimeInTimezone(vuelo.salidaUtc, tzOffset)}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+              <p className="text-[10px] text-gray-500">
+                Cada fila agrupa las maletas de un envío planificado de salida.
+              </p>
+              {renderMaletaList(enviosPlaneadosSalidaFiltrados, 'No hay maletas planificadas de salida', 'Salida')}
             </div>
           )}
         </div>
