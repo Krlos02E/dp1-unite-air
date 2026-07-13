@@ -601,7 +601,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       const progresoLocal = getFlightProgress(v, simulationMode, referenceTime)
       const shouldShowScheduled = simulationMode && shouldShowProgrammedFlightAtOrigin(v, referenceTime)
       const isActive = simulationMode
-        ? v.estado === 'ACTIVO' && progresoLocal > 0 && progresoLocal < 100
+        ? v.estado === 'ACTIVO' && progresoLocal >= 0 && progresoLocal < 100
         : progresoLocal > 0 && progresoLocal < 100
       const isVisible = shouldKeepFlightVisibleOnMap(v, simulationMode, selectedVueloId, referenceTime)
       if ((!isActive && !shouldShowScheduled) || !isVisible) {
@@ -993,10 +993,13 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       const progreso = getFlightProgress(v, simulationMode, referenceTime)
       const passesPanelFilter = !filteredFlightIds || filteredFlightIds.has(v.id) || v.id === selectedVueloIdRef.current
       const shouldShowScheduled = simulationMode && shouldShowProgrammedFlightAtOrigin(v, referenceTime)
+      const shouldShowActive = simulationMode
+        ? v.estado === 'ACTIVO' && progreso >= 0 && progreso < 100
+        : progreso > 0 && progreso < 100
       return (
         passesPanelFilter
         && (
-          (progreso > 0 && progreso < 100)
+          shouldShowActive
           || shouldShowScheduled
         )
       )
