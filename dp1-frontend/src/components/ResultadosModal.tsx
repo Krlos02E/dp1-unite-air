@@ -88,7 +88,7 @@ export default function ResultadosModal({ state, isOpen, onClose, onNuevaSimulac
     ? `${state.duracionUltimaPlanificacionSeg.toFixed(3)} s`
     : extractLastPlanningDuration(state.logs)
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/75 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/75 p-4">
       <div
         className="w-full max-w-6xl max-h-[90vh] overflow-y-auto rounded-3xl border border-gray-700 bg-gray-950 shadow-2xl"
         onClick={(e) => e.stopPropagation()}

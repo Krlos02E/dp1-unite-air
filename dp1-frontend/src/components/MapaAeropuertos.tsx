@@ -174,6 +174,21 @@ function bearing(from: [number, number], to: [number, number]): number {
   return ((θ * 180 / Math.PI) + 360) % 360
 }
 
+function pointsAreNearlyEqual(from: [number, number], to: [number, number]): boolean {
+  return Math.abs(from[0] - to[0]) < 1e-7 && Math.abs(from[1] - to[1]) < 1e-7
+}
+
+function resolveFlightAngle(
+  from: [number, number],
+  to: [number, number],
+  fallback?: number,
+): number {
+  if (pointsAreNearlyEqual(from, to)) {
+    return fallback ?? 0
+  }
+  return bearing(from, to)
+}
+
 function interpolatePosition(from: [number, number], to: [number, number], t: number): [number, number] {
   const lat = from[0] + ((to[0] - from[0]) * t)
   const lon = from[1] + ((to[1] - from[1]) * t)
@@ -574,7 +589,9 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       map.on('zoom', () => {
         currentZoomRef.current = map.getZoom()
         flightMarkersRef.current.forEach((mk, id) => {
-          const angle = flightAngleRef.current.get(id) ?? 0
+          const anim = flightAnimsRef.current.get(id)
+          const fallbackAngle = anim ? bearing(anim.from, anim.to) : undefined
+          const angle = flightAngleRef.current.get(id) ?? fallbackAngle ?? renderedFlightAngleRef.current.get(id) ?? 0
           updateFlightRotation(mk, id, angle, true)
         })
       })
@@ -932,9 +949,11 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         })
         markerLayerRef.current?.addLayer(mk)
         flightMarkersRef.current.set(v.id, mk)
-        const angle = bearing(
+        const directAngle = bearing(from, to)
+        const angle = resolveFlightAngle(
           interpolatePosition(from, to, Math.max(0, tNorm - 0.01)),
           interpolatePosition(from, to, Math.min(1, tNorm + 0.01)),
+          directAngle,
         )
         flightAngleRef.current.set(v.id, angle)
         updateFlightRotation(mk, v.id, angle, true)
@@ -1000,7 +1019,9 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         const tAfter = Math.min(1, tNorm + delta)
         const posBefore = interpolatePosition(anim.from, anim.to, tBefore)
         const posAfter = interpolatePosition(anim.from, anim.to, tAfter)
-        const angle = bearing(posBefore, posAfter)
+        const fallbackAngle = bearing(anim.from, anim.to)
+        const previousAngle = flightAngleRef.current.get(id) ?? renderedFlightAngleRef.current.get(id)
+        const angle = resolveFlightAngle(posBefore, posAfter, previousAngle ?? fallbackAngle)
         flightAngleRef.current.set(id, angle)
         updateFlightRotation(mk, id, angle)
 
