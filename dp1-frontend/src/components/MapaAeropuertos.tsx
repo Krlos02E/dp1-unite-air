@@ -267,12 +267,6 @@ function buildPendingRoutePoints(
   return [currentPos, ...tail]
 }
 
-function animatedProgress(anim: FlightAnim, now: number): number {
-  const elapsed = now - anim.transitionStartedAt
-  const fraction = Math.min(1, Math.max(0, elapsed / anim.transitionDurationMs))
-  return anim.startProgress + (anim.targetProgress - anim.startProgress) * fraction
-}
-
 function getTargetFrameIntervalMs(visibleFlightCount: number): number {
   if (visibleFlightCount > 1200) return 66
   if (visibleFlightCount > 600) return 50
@@ -965,22 +959,18 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       const existingAnim = flightAnimsRef.current.get(v.id)
       if (existingAnim) {
         const resumedFromHidden = simulationMode && !wasVisibleBefore
-        const currentProgress = resumedFromHidden
-          ? progresoActual
-          : (simulationMode ? existingAnim.displayedProgress : progresoActual)
+        const currentProgress = progresoActual
         const snapshotInterval = Math.min(20_000, Math.max(1_000, frameNow - existingAnim.snapshotAt))
         existingAnim.vuelo = v
         existingAnim.from = from
         existingAnim.to = to
         existingAnim.pts = pts
         existingAnim.startProgress = currentProgress
-        existingAnim.targetProgress = resumedFromHidden
-          ? progresoActual
-          : Math.max(currentProgress, progresoActual)
+        existingAnim.targetProgress = progresoActual
         existingAnim.transitionStartedAt = frameNow
         existingAnim.transitionDurationMs = resumedFromHidden
           ? 1
-          : (simulationMode ? snapshotInterval : 1)
+          : (simulationMode ? 1 : snapshotInterval)
         existingAnim.displayedProgress = currentProgress
         existingAnim.snapshotAt = frameNow
       } else {
@@ -1068,8 +1058,9 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         const mk = flightMarkersRef.current.get(id)
         if (!mk) return
 
+        const simulationNow = simulationMode ? getSimulationNow(frameNow) : null
         const currentProgress = simulationMode
-          ? animatedProgress(anim, frameNow)
+          ? getFlightProgress(anim.vuelo, true, simulationNow)
           : calcularProgresoLocal(anim.vuelo, realNow!)
         anim.displayedProgress = currentProgress
         if (id === selectedVueloIdRef.current) {
