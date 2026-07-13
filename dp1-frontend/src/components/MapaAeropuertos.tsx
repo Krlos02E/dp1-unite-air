@@ -333,6 +333,10 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
     renderedFlightAngleRef.current.set(flightId, angle)
   }
 
+  const getKnownFlightAngle = (flightId: string, fallback?: number) => {
+    return flightAngleRef.current.get(flightId) ?? renderedFlightAngleRef.current.get(flightId) ?? fallback
+  }
+
   const shouldSkipMarkerMove = (mk: L.Marker, nextPos: [number, number]) => {
     const map = mapRef.current
     if (simulationMode) return false
@@ -592,7 +596,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         flightMarkersRef.current.forEach((mk, id) => {
           const anim = flightAnimsRef.current.get(id)
           const fallbackAngle = anim ? bearing(anim.from, anim.to) : undefined
-          const angle = flightAngleRef.current.get(id) ?? fallbackAngle ?? renderedFlightAngleRef.current.get(id) ?? 0
+          const angle = getKnownFlightAngle(id, fallbackAngle) ?? 0
           updateFlightRotation(mk, id, angle, true)
         })
       })
@@ -861,7 +865,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       const carga = v?.cargaActual ?? 0
       const cap = v?.capacidad ?? 1
       mk.setIcon(getAirplaneIcon(isSelected, carga, cap))
-      const angle = flightAngleRef.current.get(id)
+      const angle = getKnownFlightAngle(id)
       if (angle !== undefined) {
         requestAnimationFrame(() => updateFlightRotation(mk, id, angle, true))
       }
@@ -964,6 +968,9 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         if (element) element.style.pointerEvents = 'auto'
         mk.setIcon(getAirplaneIcon(isSelected, v.cargaActual, v.capacidad))
         mk.setTooltipContent(tooltipText)
+        const fallbackAngle = bearing(from, to)
+        const angle = getKnownFlightAngle(v.id, fallbackAngle) ?? fallbackAngle
+        requestAnimationFrame(() => updateFlightRotation(mk!, v.id, angle, true))
       }
 
 
