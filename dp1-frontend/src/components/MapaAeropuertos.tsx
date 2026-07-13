@@ -932,6 +932,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
 
     const frameNow = performance.now()
     const referenceTime = simulationMode ? getSimulationNow(frameNow) : new Date()
+    const previousVisibleIds = new Set(visibleFlightIdsRef.current)
     const displayFlights = Array.from(persistentFlightsRef.current.values()).filter((v) => {
       const progreso = getFlightProgress(v, simulationMode, referenceTime)
       const passesPanelFilter = !filteredFlightIds || filteredFlightIds.has(v.id) || v.id === selectedVueloIdRef.current
@@ -959,19 +960,28 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         && v.estado === 'ACTIVO'
         && progresoActual > 0
         && progresoActual <= NEW_FLIGHT_SPAWN_PROGRESS_THRESHOLD
+      const wasVisibleBefore = previousVisibleIds.has(v.id)
 
       const existingAnim = flightAnimsRef.current.get(v.id)
       if (existingAnim) {
-        const currentProgress = simulationMode ? existingAnim.displayedProgress : progresoActual
+        const resumedFromHidden = simulationMode && !wasVisibleBefore
+        const currentProgress = resumedFromHidden
+          ? progresoActual
+          : (simulationMode ? existingAnim.displayedProgress : progresoActual)
         const snapshotInterval = Math.min(20_000, Math.max(1_000, frameNow - existingAnim.snapshotAt))
         existingAnim.vuelo = v
         existingAnim.from = from
         existingAnim.to = to
         existingAnim.pts = pts
         existingAnim.startProgress = currentProgress
-        existingAnim.targetProgress = Math.max(currentProgress, progresoActual)
+        existingAnim.targetProgress = resumedFromHidden
+          ? progresoActual
+          : Math.max(currentProgress, progresoActual)
         existingAnim.transitionStartedAt = frameNow
-        existingAnim.transitionDurationMs = simulationMode ? snapshotInterval : 1
+        existingAnim.transitionDurationMs = resumedFromHidden
+          ? 1
+          : (simulationMode ? snapshotInterval : 1)
+        existingAnim.displayedProgress = currentProgress
         existingAnim.snapshotAt = frameNow
       } else {
         const initialDisplayedProgress = shouldAnimateSpawnFromOrigin ? 0 : progresoActual
@@ -1024,6 +1034,9 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         if (element) element.style.pointerEvents = 'auto'
         mk.setIcon(getAirplaneIcon(isSelected, v.cargaActual, v.capacidad))
         mk.setTooltipContent(tooltipText)
+        if (simulationMode && !wasVisibleBefore) {
+          mk.setLatLng(interpolatePosition(from, to, progresoActual / 100))
+        }
         const fallbackAngle = bearing(from, to)
         const angle = getKnownFlightAngle(v.id, fallbackAngle) ?? fallbackAngle
         requestAnimationFrame(() => updateFlightRotation(mk!, v.id, angle, true))
