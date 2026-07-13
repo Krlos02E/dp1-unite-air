@@ -1,5 +1,4 @@
 import { formatDateTime } from '../utils/dateFormat'
-import { getAirportCity } from '../data/airportsData'
 import type { EnvioEstado, SimulationState } from '../types'
 
 interface Props {
@@ -25,13 +24,11 @@ export default function ResultadosModal({ state, isOpen, onClose, onNuevaSimulac
   const envios = state.envios ?? []
   const maletas = state.maletas ?? []
   const vuelos = state.vuelos ?? []
-  const aeropuertos = state.aeropuertos ?? []
-
+  const isStorageState = (estado: EnvioEstado['estado']) => estado === 'EN_ESPERA' || estado === 'EMBARCADO'
   const enviosEntregados = countEnvios(envios, 'ENTREGADO')
   const enviosEnVuelo = countEnvios(envios, 'EN_VUELO')
-  const enviosEmbarcados = countEnvios(envios, 'EMBARCADO')
-  const enviosEnEspera = countEnvios(envios, 'EN_ESPERA')
-  const enviosPendientesConRuta = envios.filter((envio) => envio.estado === 'EN_ESPERA' && envio.rutaAeropuertos?.length).length
+  const enviosEnEspera = envios.filter((envio) => isStorageState(envio.estado)).length
+  const enviosPendientesConRuta = envios.filter((envio) => isStorageState(envio.estado) && envio.rutaAeropuertos?.length).length
   const enviosConRuta = envios.filter((envio) => envio.rutaAeropuertos?.length)
   const enviosAsignados = enviosConRuta.length
 
@@ -40,10 +37,7 @@ export default function ResultadosModal({ state, isOpen, onClose, onNuevaSimulac
   const maletasEnEspera = Math.max(0, maletas.length - maletasEntregadas - maletasEnTransito)
   const maletasPlanificadas = enviosConRuta.reduce((sum, envio) => sum + envio.cantidad, 0)
 
-  const vuelosProgramados = vuelos.filter((vuelo) => vuelo.estado === 'PROGRAMADO').length
-  const vuelosActivos = vuelos.filter((vuelo) => vuelo.estado === 'ACTIVO').length
   const vuelosCulminados = vuelos.filter((vuelo) => vuelo.estado === 'CULMINADO').length
-  const vuelosCancelados = vuelos.filter((vuelo) => vuelo.estado === 'CANCELADO').length
 
   const enviosReasignados = envios.filter((envio) =>
     envio.rutaAeropuertos?.length
@@ -61,10 +55,6 @@ export default function ResultadosModal({ state, isOpen, onClose, onNuevaSimulac
   const aeropuertosInvolucrados = new Set(
     enviosConRuta.flatMap((envio) => envio.rutaAeropuertos ?? []),
   ).size
-  const aeropuertosSaturados = aeropuertos.filter((aeropuerto) =>
-    aeropuerto.capacidadMaxima > 0 && aeropuerto.ocupacionActual >= aeropuerto.capacidadMaxima
-  )
-
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/75 p-4" onClick={onClose}>
       <div
@@ -110,9 +100,9 @@ export default function ResultadosModal({ state, isOpen, onClose, onNuevaSimulac
               <p className="mt-1 text-sm text-amber-200">Totales: {maletas.length}</p>
             </div>
             <div className="rounded-2xl border border-fuchsia-800/60 bg-fuchsia-950/30 p-4">
-              <p className="text-xs uppercase tracking-wide text-fuchsia-300">Recursos usados</p>
-              <p className="mt-2 text-2xl font-bold text-white">{vuelosUtilizados}</p>
-              <p className="mt-1 text-sm text-fuchsia-200">Aeropuertos involucrados: {aeropuertosInvolucrados}</p>
+              <p className="text-xs uppercase tracking-wide text-fuchsia-300">Aeropuertos involucrados</p>
+              <p className="mt-2 text-2xl font-bold text-white">{aeropuertosInvolucrados}</p>
+              <p className="mt-1 text-sm text-fuchsia-200">Aeropuertos que aparecen en rutas asignadas</p>
             </div>
           </section>
 
@@ -141,10 +131,12 @@ export default function ResultadosModal({ state, isOpen, onClose, onNuevaSimulac
                 <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-3">
                   <p className="text-xs text-gray-400">Pendientes con ruta</p>
                   <p className="mt-1 text-lg font-semibold text-white">{enviosPendientesConRuta}</p>
+                  <p className="mt-1 text-xs text-gray-500">Siguen en almacén y ya tienen ruta asignada o pendiente de salida.</p>
                 </div>
                 <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-3">
                   <p className="text-xs text-gray-400">Entregados al corte</p>
                   <p className="mt-1 text-lg font-semibold text-white">{enviosEntregados}</p>
+                  <p className="mt-1 text-xs text-gray-500">Ya llegaron antes o exactamente en el momento del corte.</p>
                 </div>
                 <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-3">
                   <p className="text-xs text-gray-400">Colapso</p>
@@ -154,11 +146,13 @@ export default function ResultadosModal({ state, isOpen, onClose, onNuevaSimulac
               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-3">
                   <p className="text-xs text-gray-400">En ejecucion al corte</p>
-                  <p className="mt-1 text-lg font-semibold text-white">{enviosEnVuelo + enviosEmbarcados}</p>
+                  <p className="mt-1 text-lg font-semibold text-white">{enviosEnVuelo}</p>
+                  <p className="mt-1 text-xs text-gray-500">Ya están viajando entre aeropuertos.</p>
                 </div>
                 <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-3">
                   <p className="text-xs text-gray-400">En espera al corte</p>
                   <p className="mt-1 text-lg font-semibold text-white">{enviosEnEspera}</p>
+                  <p className="mt-1 text-xs text-gray-500">Siguen en almacén y no están aún en vuelo.</p>
                 </div>
               </div>
             </div>
@@ -183,6 +177,7 @@ export default function ResultadosModal({ state, isOpen, onClose, onNuevaSimulac
                 <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-3">
                   <p className="text-xs text-gray-400">Entregadas al corte</p>
                   <p className="mt-1 text-lg font-semibold text-white">{maletasEntregadas}</p>
+                  <p className="mt-1 text-xs text-gray-500">Maletas ya entregadas antes o en el corte mostrado.</p>
                 </div>
                 <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-3">
                   <p className="text-xs text-gray-400">Maletas totales</p>
@@ -192,84 +187,20 @@ export default function ResultadosModal({ state, isOpen, onClose, onNuevaSimulac
             </div>
           </section>
 
-          <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-            <div className="rounded-2xl border border-gray-800 bg-gray-900/70 p-5">
-              <h3 className="text-lg font-semibold text-gray-100">Recursos de la planificacion</h3>
-              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="rounded-xl bg-gray-800/70 p-3">
-                  <p className="text-xs text-gray-400">Vuelos utilizados</p>
-                  <p className="mt-1 text-xl font-bold text-gray-100">{vuelosUtilizados}</p>
-                </div>
-                <div className="rounded-xl bg-gray-800/70 p-3">
-                  <p className="text-xs text-gray-400">Vuelos activos</p>
-                  <p className="mt-1 text-xl font-bold text-sky-400">{vuelosActivos}</p>
-                </div>
-                <div className="rounded-xl bg-gray-800/70 p-3">
-                  <p className="text-xs text-gray-400">Vuelos culminados</p>
-                  <p className="mt-1 text-xl font-bold text-emerald-400">{vuelosCulminados}</p>
-                </div>
-                <div className="rounded-xl bg-gray-800/70 p-3">
-                  <p className="text-xs text-gray-400">Vuelos cancelados</p>
-                  <p className="mt-1 text-xl font-bold text-rose-400">{vuelosCancelados}</p>
-                </div>
+          <section className="rounded-2xl border border-gray-800 bg-gray-900/70 p-5">
+            <h3 className="text-lg font-semibold text-gray-100">Resumen operativo</h3>
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-3">
+                <p className="text-xs text-gray-400">Vuelos utilizados</p>
+                <p className="mt-1 text-lg font-semibold text-white">{vuelosUtilizados}</p>
               </div>
-              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-2">
-                <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-3">
-                  <p className="text-xs text-gray-400">Vuelos programados</p>
-                  <p className="mt-1 text-lg font-semibold text-white">{vuelosProgramados}</p>
-                </div>
-                <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-3">
-                  <p className="text-xs text-gray-400">Aeropuertos involucrados</p>
-                  <p className="mt-1 text-lg font-semibold text-white">{aeropuertosInvolucrados}</p>
-                </div>
+              <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-3">
+                <p className="text-xs text-gray-400">Vuelos culminados</p>
+                <p className="mt-1 text-lg font-semibold text-white">{vuelosCulminados}</p>
               </div>
-            </div>
-
-            <div className="rounded-2xl border border-gray-800 bg-gray-900/70 p-5">
-              <h3 className="text-lg font-semibold text-gray-100">Estado de aeropuertos</h3>
-              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-3">
-                  <p className="text-xs text-gray-400">Aeropuertos del reporte</p>
-                  <p className="mt-1 text-lg font-semibold text-white">{aeropuertos.length}</p>
-                </div>
-                <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-3">
-                  <p className="text-xs text-gray-400">Saturados</p>
-                  <p className="mt-1 text-lg font-semibold text-white">{aeropuertosSaturados.length}</p>
-                </div>
-                <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-3">
-                  <p className="text-xs text-gray-400">Con cancelaciones salientes</p>
-                  <p className="mt-1 text-lg font-semibold text-white">
-                    {aeropuertos.filter((aeropuerto) => aeropuerto.vuelosCanceladosSalientes.length > 0).length}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-4">
-                <p className="text-sm font-medium text-gray-300">Aeropuertos con mayor ocupacion</p>
-                <div className="mt-3 space-y-2">
-                  {aeropuertos
-                    .slice()
-                    .sort((a, b) => b.ocupacionActual - a.ocupacionActual)
-                    .slice(0, 5)
-                    .map((aeropuerto) => (
-                      <div key={aeropuerto.codigoOACI} className="rounded-xl bg-gray-950/60 px-3 py-2">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-semibold text-white">
-                              {getAirportCity(aeropuerto.codigoOACI) || aeropuerto.codigoOACI}
-                            </p>
-                            <p className="text-xs text-gray-500">{aeropuerto.codigoOACI}</p>
-                          </div>
-                          <p className="text-sm text-gray-300">
-                            {aeropuerto.ocupacionActual} / {aeropuerto.capacidadMaxima}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  {aeropuertos.length === 0 && (
-                    <p className="text-sm text-gray-500">No hay aeropuertos disponibles en el reporte.</p>
-                  )}
-                </div>
+              <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-3">
+                <p className="text-xs text-gray-400">Aeropuertos involucrados</p>
+                <p className="mt-1 text-lg font-semibold text-white">{aeropuertosInvolucrados}</p>
               </div>
             </div>
           </section>

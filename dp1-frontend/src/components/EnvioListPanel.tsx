@@ -4,15 +4,14 @@ import { getAirportCity, getAirportCountry } from '../data/airportsData'
 import type { EnvioEstado, MaletaEstado } from '../types'
 import EnvioDetailCard from './EnvioDetailCard'
 
-type Tab = 'pendientes' | 'planificados' | 'envuelo' | 'entregados'
+type Tab = 'pendientes' | 'envuelo' | 'entregados'
 type MainTab = 'almacen' | 'envuelo' | 'entregados'
 type FilterScope = 'directo' | 'ruta'
 type FilterMatchBy = 'codigo' | 'ciudad' | 'pais'
 
 const TAB_CONFIG: { key: Tab; label: string; estados: string; horas?: number }[] = [
   { key: 'envuelo', label: 'En vuelo', estados: 'EN_VUELO' },
-  { key: 'planificados', label: 'Embarcado', estados: 'EMBARCADO' },
-  { key: 'pendientes', label: 'Pendiente', estados: 'EN_ESPERA' },
+  { key: 'pendientes', label: 'En espera', estados: 'EN_ESPERA,EMBARCADO' },
   { key: 'entregados', label: 'Entregados', estados: 'ENTREGADO', horas: 4 },
 ]
 
@@ -21,6 +20,10 @@ const MAIN_TAB_CONFIG: { key: MainTab; label: string }[] = [
   { key: 'envuelo', label: 'En vuelo' },
   { key: 'entregados', label: 'Entregados' },
 ]
+
+function isStorageState(estado: string): boolean {
+  return estado === 'EN_ESPERA' || estado === 'EMBARCADO'
+}
 
 interface Props {
   onEnvioSelect: (envio: EnvioEstado) => void
@@ -142,7 +145,7 @@ export default function EnvioListPanel({
   const mountedRef = useRef(true)
 
   const config = TAB_CONFIG.find((c) => c.key === tab)!
-  const currentMainTab: MainTab = tab === 'pendientes' || tab === 'planificados' ? 'almacen' : tab
+  const currentMainTab: MainTab = tab === 'pendientes' ? 'almacen' : tab
   const enviosBase = enviosExternos ?? envios
   const deferredSearchOrigin = useDeferredValue(searchOrigin)
   const deferredSearchDestination = useDeferredValue(searchDestination)
@@ -161,8 +164,7 @@ export default function EnvioListPanel({
     )),
   ))
   const countsByTab: Record<Tab, number> = {
-    pendientes: enviosConFiltrosPersistentes.filter((e) => e.estado === 'EN_ESPERA').length,
-    planificados: enviosConFiltrosPersistentes.filter((e) => e.estado === 'EMBARCADO').length,
+    pendientes: enviosConFiltrosPersistentes.filter((e) => isStorageState(e.estado)).length,
     envuelo: enviosConFiltrosPersistentes.filter((e) => e.estado === 'EN_VUELO').length,
     entregados: enviosConFiltrosPersistentes.filter((e) => e.estado === 'ENTREGADO' && estaDentroDeHoras(e, 4, currentTime)).length,
   }
@@ -205,16 +207,15 @@ export default function EnvioListPanel({
 
     if (countsByTab.pendientes > 0) {
       setTab('pendientes')
-    } else if (countsByTab.planificados > 0) {
-      setTab('planificados')
     } else if (countsByTab.envuelo > 0) {
       setTab('envuelo')
     } else if (countsByTab.entregados > 0) {
       setTab('entregados')
     }
-  }, [countsByTab.pendientes, countsByTab.planificados, countsByTab.envuelo, countsByTab.entregados, tab])
+  }, [countsByTab.pendientes, countsByTab.envuelo, countsByTab.entregados, tab])
 
   const enviosVisibles = enviosConFiltrosPersistentes.filter((e) => {
+    if (tab === 'pendientes') return isStorageState(e.estado)
     if (e.estado !== config.estados) return false
     if (tab === 'entregados' && !showAll) {
       return estaDentroDeHoras(e, config.horas, currentTime)
@@ -223,7 +224,7 @@ export default function EnvioListPanel({
   })
   const tabCounts: Record<Tab, number> = countsByTab
   const mainTabCounts: Record<MainTab, number> = {
-    almacen: tabCounts.pendientes + tabCounts.planificados,
+    almacen: tabCounts.pendientes,
     envuelo: tabCounts.envuelo,
     entregados: tabCounts.entregados,
   }
@@ -255,14 +256,14 @@ export default function EnvioListPanel({
 
   const estadoLabel: Record<string, string> = {
     EN_ESPERA: 'En espera',
-    EMBARCADO: 'Embarcado',
+    EMBARCADO: 'En espera',
     EN_VUELO: 'En vuelo',
     ENTREGADO: 'Entregado',
   }
 
   const estadoColor: Record<string, string> = {
     EN_ESPERA: 'text-amber-400 bg-amber-400/10',
-    EMBARCADO: 'text-sky-400 bg-sky-400/10',
+    EMBARCADO: 'text-amber-400 bg-amber-400/10',
     EN_VUELO: 'text-emerald-400 bg-emerald-400/10',
     ENTREGADO: 'text-gray-400 bg-gray-400/10',
   }
@@ -413,11 +414,7 @@ export default function EnvioListPanel({
               key={main.key}
               onClick={() => {
                 if (main.key === 'almacen') {
-                  setTab((current) => (
-                    current === 'pendientes' || current === 'planificados'
-                      ? current
-                      : (tabCounts.pendientes > 0 ? 'pendientes' : 'planificados')
-                  ))
+                  setTab('pendientes')
                   return
                 }
                 setTab(main.key)
@@ -433,28 +430,6 @@ export default function EnvioListPanel({
             </button>
           ))}
         </div>
-        {currentMainTab === 'almacen' && (
-          <div className="flex gap-1 px-3 py-2 bg-gray-900/70">
-            {(['pendientes', 'planificados'] as const).map((subtab) => {
-              const isActive = tab === subtab
-              const label = TAB_CONFIG.find((entry) => entry.key === subtab)?.label || subtab
-              return (
-                <button
-                  key={subtab}
-                  onClick={() => setTab(subtab)}
-                  className={`rounded-full px-2.5 py-1 text-[10px] font-medium transition-colors ${
-                    isActive
-                      ? 'bg-sky-500/20 text-sky-400 border border-sky-500/40'
-                      : 'bg-gray-800 text-violet-300/80 border border-gray-700 hover:text-violet-200'
-                  }`}
-                >
-                  {label}
-                  <span className="ml-1">({tabCounts[subtab]})</span>
-                </button>
-              )
-            })}
-          </div>
-        )}
       </div>
 
       {/* Content */}

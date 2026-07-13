@@ -15,14 +15,14 @@ interface Props {
 
 const estadoLabels: Record<string, { label: string; color: string }> = {
   EN_ESPERA: { label: 'En espera', color: 'text-amber-400' },
-  EMBARCADO: { label: 'Embarcado', color: 'text-sky-400' },
+  EMBARCADO: { label: 'En espera', color: 'text-amber-400' },
   EN_VUELO: { label: 'En vuelo', color: 'text-emerald-400' },
   ENTREGADO: { label: 'Entregado', color: 'text-gray-400' },
 }
 
 const maletaEstadoColors: Record<string, string> = {
   EN_ESPERA: 'text-amber-400 bg-amber-400/10',
-  EMBARCADO: 'text-sky-400 bg-sky-400/10',
+  EMBARCADO: 'text-amber-400 bg-amber-400/10',
   EN_VUELO: 'text-emerald-400 bg-emerald-400/10',
   ENTREGADO: 'text-gray-400 bg-gray-400/10',
 }

@@ -4,13 +4,12 @@ import { getAirportCity } from '../data/airportsData'
 import type { MaletaEstado } from '../types'
 import MaletaDetailCard from './MaletaDetailCard'
 
-type Tab = 'pendientes' | 'planificados' | 'envuelo' | 'entregados'
+type Tab = 'pendientes' | 'envuelo' | 'entregados'
 type MainTab = 'almacen' | 'envuelo' | 'entregados'
 
 const TAB_CONFIG: { key: Tab; label: string; estados: string; horas?: number }[] = [
   { key: 'envuelo', label: 'En vuelo', estados: 'EN_VUELO' },
-  { key: 'planificados', label: 'Embarcado', estados: 'EMBARCADO' },
-  { key: 'pendientes', label: 'Pendiente', estados: 'EN_ESPERA' },
+  { key: 'pendientes', label: 'En espera', estados: 'EN_ESPERA,EMBARCADO' },
   { key: 'entregados', label: 'Entregadas', estados: 'ENTREGADO', horas: 4 },
 ]
 
@@ -19,6 +18,10 @@ const MAIN_TAB_CONFIG: { key: MainTab; label: string }[] = [
   { key: 'envuelo', label: 'En vuelo' },
   { key: 'entregados', label: 'Entregadas' },
 ]
+
+function isStorageState(estado: string): boolean {
+  return estado === 'EN_ESPERA' || estado === 'EMBARCADO'
+}
 
 interface Props {
   onMaletaSelect: (maleta: MaletaEstado) => void
@@ -76,7 +79,7 @@ export default function MaletaListPanel({
   const mountedRef = useRef(true)
 
   const config = TAB_CONFIG.find((c) => c.key === tab)!
-  const currentMainTab: MainTab = tab === 'pendientes' || tab === 'planificados' ? 'almacen' : tab
+  const currentMainTab: MainTab = tab === 'pendientes' ? 'almacen' : tab
   const sourceMaletas = maletasExternas ?? maletas
   const maletasFiltrables = filterEnvioId
     ? sourceMaletas.filter((m) => m.envioId === filterEnvioId)
@@ -117,8 +120,7 @@ export default function MaletaListPanel({
 
   useEffect(() => {
     const counts: Record<Tab, number> = {
-      pendientes: maletasFiltrables.filter((m) => m.estado === 'EN_ESPERA').length,
-      planificados: maletasFiltrables.filter((m) => m.estado === 'EMBARCADO').length,
+      pendientes: maletasFiltrables.filter((m) => isStorageState(m.estado)).length,
       envuelo: maletasFiltrables.filter((m) => m.estado === 'EN_VUELO').length,
       entregados: maletasFiltrables.filter((m) =>
         m.estado === 'ENTREGADO' && estaDentroDeHoras(m, 4, currentTime)
@@ -129,8 +131,6 @@ export default function MaletaListPanel({
 
     if (counts.pendientes > 0) {
       setTab('pendientes')
-    } else if (counts.planificados > 0) {
-      setTab('planificados')
     } else if (counts.envuelo > 0) {
       setTab('envuelo')
     } else if (counts.entregados > 0) {
@@ -139,6 +139,7 @@ export default function MaletaListPanel({
   }, [maletasFiltrables, currentTime, tab])
 
   const maletasVisibles = maletasFiltrables.filter((m) => {
+        if (tab === 'pendientes') return isStorageState(m.estado)
         if (m.estado !== config.estados) return false
         if (tab === 'entregados' && !showAll) {
           return estaDentroDeHoras(m, config.horas, currentTime)
@@ -146,13 +147,12 @@ export default function MaletaListPanel({
         return true
       })
   const tabCounts: Record<Tab, number> = {
-    pendientes: maletasFiltrables.filter((m) => m.estado === 'EN_ESPERA').length,
-    planificados: maletasFiltrables.filter((m) => m.estado === 'EMBARCADO').length,
+    pendientes: maletasFiltrables.filter((m) => isStorageState(m.estado)).length,
     envuelo: maletasFiltrables.filter((m) => m.estado === 'EN_VUELO').length,
     entregados: maletasFiltrables.filter((m) => m.estado === 'ENTREGADO' && estaDentroDeHoras(m, 4, currentTime)).length,
   }
   const mainTabCounts: Record<MainTab, number> = {
-    almacen: tabCounts.pendientes + tabCounts.planificados,
+    almacen: tabCounts.pendientes,
     envuelo: tabCounts.envuelo,
     entregados: tabCounts.entregados,
   }
@@ -208,11 +208,7 @@ export default function MaletaListPanel({
               key={main.key}
               onClick={() => {
                 if (main.key === 'almacen') {
-                  setTab((current) => (
-                    current === 'pendientes' || current === 'planificados'
-                      ? current
-                      : (tabCounts.pendientes > 0 ? 'pendientes' : 'planificados')
-                  ))
+                  setTab('pendientes')
                   return
                 }
                 setTab(main.key)
@@ -228,28 +224,6 @@ export default function MaletaListPanel({
             </button>
           ))}
         </div>
-        {currentMainTab === 'almacen' && (
-          <div className="flex gap-1 px-3 py-2 bg-gray-900/70">
-            {(['pendientes', 'planificados'] as const).map((subtab) => {
-              const isActive = tab === subtab
-              const label = TAB_CONFIG.find((entry) => entry.key === subtab)?.label || subtab
-              return (
-                <button
-                  key={subtab}
-                  onClick={() => setTab(subtab)}
-                  className={`rounded-full px-2.5 py-1 text-[10px] font-medium transition-colors ${
-                    isActive
-                      ? 'bg-sky-500/20 text-sky-400 border border-sky-500/40'
-                      : 'bg-gray-800 text-violet-300/80 border border-gray-700 hover:text-violet-200'
-                  }`}
-                >
-                  {label}
-                  <span className="ml-1">({tabCounts[subtab]})</span>
-                </button>
-              )
-            })}
-          </div>
-        )}
       </div>
 
       <div className="flex-1 overflow-y-auto">

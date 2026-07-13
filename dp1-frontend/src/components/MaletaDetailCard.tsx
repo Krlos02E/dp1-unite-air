@@ -12,7 +12,7 @@ interface Props {
 
 const estadoLabels: Record<string, { label: string; color: string }> = {
   EN_ESPERA: { label: 'En espera', color: 'text-amber-400' },
-  EMBARCADO: { label: 'Embarcada', color: 'text-sky-400' },
+  EMBARCADO: { label: 'En espera', color: 'text-amber-400' },
   EN_VUELO: { label: 'En vuelo', color: 'text-emerald-400' },
   ENTREGADO: { label: 'Entregada', color: 'text-gray-400' },
 }
