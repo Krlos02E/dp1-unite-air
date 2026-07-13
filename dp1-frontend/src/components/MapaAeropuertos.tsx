@@ -78,7 +78,7 @@ function getAirplaneIcon(selected: boolean, cargaActual: number, capacidad: numb
     ? 'filter:drop-shadow(0 0 5px #8b5cf6) drop-shadow(0 0 10px #8b5cf6);'
     : 'filter:drop-shadow(0 1px 3px rgba(0,0,0,0.5));'
   return L.divIcon({
-    className: '',
+    className: 'flight-marker-icon',
     html: `<div class="airplane-body" style="width:${size}px;height:${size}px;will-change:transform;${glowFilter}">
       <svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M1 13 L10.2 8.5 L10.5 12.5 Z" fill="${color}"/>
