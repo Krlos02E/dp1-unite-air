@@ -244,7 +244,14 @@ interface SimClockSnapshot {
   rateMsPerRealMs: number
 }
 
+interface PointerSnapshot {
+  clientX: number
+  clientY: number
+}
+
 const DEFAULT_SIM_CLOCK_RATE = 240
+const NEW_FLIGHT_SPAWN_PROGRESS_THRESHOLD = 15
+const NEW_FLIGHT_SPAWN_ANIMATION_MS = 1800
 
 function buildPendingRoutePoints(
   from: [number, number],
@@ -271,6 +278,20 @@ function getTargetFrameIntervalMs(visibleFlightCount: number): number {
   if (visibleFlightCount > 600) return 50
   if (visibleFlightCount > 250) return 33
   return 16
+}
+
+function isPointerStillOverMarker(marker: L.Marker, pointer: PointerSnapshot | null): boolean {
+  if (!pointer) return false
+  const element = marker.getElement() as HTMLElement | null
+  if (!element) return false
+  const rect = element.getBoundingClientRect()
+  const padding = 6
+  return (
+    pointer.clientX >= rect.left - padding
+    && pointer.clientX <= rect.right + padding
+    && pointer.clientY >= rect.top - padding
+    && pointer.clientY <= rect.bottom + padding
+  )
 }
 
 function shouldKeepFlightVisibleOnMap(vuelo: VueloDTO, simulationMode: boolean, selectedVueloId?: string | null): boolean {
@@ -322,6 +343,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
   const isZoomingRef = useRef(false)
   const simClockRef = useRef<SimClockSnapshot | null>(null)
   const currentZoomRef = useRef(2)
+  const pointerRef = useRef<PointerSnapshot | null>(null)
 
   const updateFlightRotation = (mk: L.Marker, flightId: string, angle: number, force = false) => {
     const previousRendered = renderedFlightAngleRef.current.get(flightId)
@@ -562,6 +584,27 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       }
     })
   }, [vuelos, selectedVueloId, simulationMode])
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      pointerRef.current = {
+        clientX: event.clientX,
+        clientY: event.clientY,
+      }
+    }
+
+    const handlePointerLeaveWindow = () => {
+      pointerRef.current = null
+    }
+
+    window.addEventListener('pointermove', handlePointerMove, { passive: true })
+    window.addEventListener('pointerleave', handlePointerLeaveWindow)
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerleave', handlePointerLeaveWindow)
+    }
+  }, [])
 
   useEffect(() => {
     if (mapContainerRef.current && !mapRef.current) {
@@ -912,7 +955,10 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       const tooltipText = tooltipForFlight(v, airportLookup, simulationMode, referenceTime ?? undefined)
       const pts = bezierPoints(from, to, ROUTE_POINT_COUNT)
       const progresoActual = getFlightProgress(v, simulationMode, referenceTime)
-      const tNorm = progresoActual / 100
+      const shouldAnimateSpawnFromOrigin = simulationMode
+        && v.estado === 'ACTIVO'
+        && progresoActual > 0
+        && progresoActual <= NEW_FLIGHT_SPAWN_PROGRESS_THRESHOLD
 
       const existingAnim = flightAnimsRef.current.get(v.id)
       if (existingAnim) {
@@ -928,36 +974,46 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         existingAnim.transitionDurationMs = simulationMode ? snapshotInterval : 1
         existingAnim.snapshotAt = frameNow
       } else {
+        const initialDisplayedProgress = shouldAnimateSpawnFromOrigin ? 0 : progresoActual
         flightAnimsRef.current.set(v.id, {
           vuelo: v,
           from,
           to,
           pts,
-          displayedProgress: progresoActual,
-          startProgress: progresoActual,
+          displayedProgress: initialDisplayedProgress,
+          startProgress: initialDisplayedProgress,
           targetProgress: progresoActual,
           transitionStartedAt: frameNow,
-          transitionDurationMs: 1,
+          transitionDurationMs: shouldAnimateSpawnFromOrigin ? NEW_FLIGHT_SPAWN_ANIMATION_MS : 1,
           snapshotAt: frameNow,
         })
       }
 
       let mk = flightMarkersRef.current.get(v.id)
       if (!mk) {
-        const startPos = interpolatePosition(from, to, tNorm)
+        const initialProgress = shouldAnimateSpawnFromOrigin ? 0 : progresoActual
+        const startPos = interpolatePosition(from, to, initialProgress / 100)
         mk = L.marker(startPos, { icon: getAirplaneIcon(isSelected, v.cargaActual, v.capacidad) })
-        mk.bindTooltip(tooltipText, { direction: 'top', offset: L.point(0, -14) })
+        mk.bindTooltip(tooltipText, {
+          direction: 'top',
+          offset: L.point(0, -14),
+          interactive: false,
+          className: 'flight-map-tooltip',
+        })
         const flightId = v.id
         mk.on('click', () => {
           const current = flightAnimsRef.current.get(flightId)?.vuelo
           if (current) onVueloClickRef.current?.(current)
         })
+        mk.on('mouseout', () => {
+          mk?.closeTooltip()
+        })
         markerLayerRef.current?.addLayer(mk)
         flightMarkersRef.current.set(v.id, mk)
         const directAngle = bearing(from, to)
         const angle = resolveFlightAngle(
-          interpolatePosition(from, to, Math.max(0, tNorm - 0.01)),
-          interpolatePosition(from, to, Math.min(1, tNorm + 0.01)),
+          interpolatePosition(from, to, Math.max(0, (initialProgress / 100) - 0.01)),
+          interpolatePosition(from, to, Math.min(1, (initialProgress / 100) + 0.01)),
           directAngle,
         )
         flightAngleRef.current.set(v.id, angle)
@@ -1020,6 +1076,10 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         const pos = interpolatePosition(anim.from, anim.to, tNorm)
         if (!shouldSkipMarkerMove(mk, pos)) {
           mk.setLatLng(pos)
+        }
+
+        if (mk.isTooltipOpen() && !isPointerStillOverMarker(mk, pointerRef.current)) {
+          mk.closeTooltip()
         }
 
         const delta = 0.005

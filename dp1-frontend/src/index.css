@@ -26,3 +26,7 @@ input[type="time"]:disabled::-webkit-datetime-edit-hour-field,
 input[type="time"]:disabled::-webkit-datetime-edit-minute-field {
   color: #6b7280;
 }
+
+.flight-map-tooltip {
+  pointer-events: none;
+}
