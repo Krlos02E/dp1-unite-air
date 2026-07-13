@@ -19,6 +19,11 @@ public class SimulationState {
     private LocalDateTime startedAt;
     private LocalDateTime simulationTime;
     private LocalDateTime fechaInicio;
+    private LocalDateTime ultimaPlanificacionSimulada;
+    private Integer horizontePlanificacionMinutos;
+    private Double duracionUltimaPlanificacionSeg;
+    private Integer ultimaPlanificacionSinRuta;
+    private Boolean planificacionEstable;
     private List<VueloDTO> vuelos;
     private List<AeropuertoDTO> aeropuertos;
     private int maletasEntregadas;

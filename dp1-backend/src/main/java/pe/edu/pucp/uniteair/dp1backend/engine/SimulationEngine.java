@@ -78,6 +78,12 @@ public class SimulationEngine {
             LocalDateTime simTime
     ) {}
 
+    private record PlanificacionSnapshot(
+            LocalDateTime simTime,
+            int sinRuta,
+            double duracionSeg
+    ) {}
+
     public SimulationEngine(SimulationCache simulationCache,
                             SimulationSessionRepository sessionRepository,
                             CargaArchivosService cargaArchivosService,
@@ -147,6 +153,7 @@ public class SimulationEngine {
                 final int[] stepRef = {0};
                 final LocalDateTime[] simTimeRef = {fechaInicio};
                 final Solucion[] solucionRef = {null};
+                final double[] duracionPlanificacionInicialRef = {0.0};
                 final Map<String, Ruta> rutasAnteriores = new ConcurrentHashMap<>();
                 final Map<String, AsignacionPaquete> asignacionesSplit = new ConcurrentHashMap<>();
 
@@ -164,7 +171,7 @@ public class SimulationEngine {
                         + " ventanaPlanificacionMin=" + ROLLING_LOOKAHEAD_MINUTES
                         + " stepMin=" + SIMULATION_STEP_MINUTES);
                 actualizarEstadoEnCache(sessionId, fechaInicio, dataset, cargaVuelo, ocupacionAeropuerto,
-                        0, 0, 0, duracionMinutos, false, null, logs, "PLANIFICANDO", fechaInicio, null, rutasAnteriores, asignacionesSplit);
+                        0, 0, 0, duracionMinutos, false, null, logs, "PLANIFICANDO", fechaInicio, null, rutasAnteriores, asignacionesSplit, null);
 
                 // Hilo de planificación
                 Thread planificadorThread = new Thread(() -> {
@@ -199,6 +206,7 @@ public class SimulationEngine {
                     long tPlanEnd = System.nanoTime();
                     long duracionMs = (tPlanEnd - tPlanStart) / 1_000_000;
                     double duracionSeg = duracionMs / 1000.0;
+                    duracionPlanificacionInicialRef[0] = duracionSeg;
                     System.out.printf("[4/4] Planificación completada [%dms | %.3fs]%n", duracionMs, duracionSeg);
                     System.out.printf("[VENTANA] Paquetes iniciales planificados: %d%n", paquetesIniciales.size());
                     solucionRef[0] = sol;
@@ -227,6 +235,11 @@ public class SimulationEngine {
                         ROLLING_LOOKAHEAD_MINUTES
                 );
                 boolean hayColapso = false;
+                PlanificacionSnapshot ultimaPlanificacion = new PlanificacionSnapshot(
+                        fechaInicio,
+                        noAsignados.size(),
+                        duracionPlanificacionInicialRef[0]
+                );
                 MaletasResumen resumenInicial = calcularResumenMaletas(datasetActual, rutas, fechaInicio, fechaInicio);
                 maletasEntregadas = resumenInicial.entregadas();
                 maletasEnTransito = resumenInicial.enTransito();
@@ -346,6 +359,11 @@ public class SimulationEngine {
                                             resultado.duracionSeg()
                                     ))
                                     .build());
+                            ultimaPlanificacion = new PlanificacionSnapshot(
+                                    resultado.simTime(),
+                                    resultado.sinRuta(),
+                                    resultado.duracionSeg()
+                            );
                         } catch (Exception e) {
                             System.err.println("[Simulacion] Error aplicando re-planificacion t=" + simTime
                                     + ": " + e.getMessage());
@@ -419,7 +437,7 @@ public class SimulationEngine {
                     }
 
                     actualizarEstadoEnCache(sessionId, simTime, datasetActual, cargaVuelo, ocupacionAeropuerto,
-                            maletasEntregadas, maletasEnTransito, step * SIMULATION_STEP_MINUTES, duracionMinutos, false, null, logs, "EJECUTANDO", fechaInicio, rutas, rutasAnteriores, asignacionesSplit);
+                            maletasEntregadas, maletasEnTransito, step * SIMULATION_STEP_MINUTES, duracionMinutos, false, null, logs, "EJECUTANDO", fechaInicio, rutas, rutasAnteriores, asignacionesSplit, ultimaPlanificacion);
 
                     long sleepMs = (long) ((15000.0 * SIMULATION_STEP_MINUTES / 60.0) / Math.max(0.5, velocidad));
                     if (sleepMs > 0) {
@@ -445,6 +463,11 @@ public class SimulationEngine {
                                 .startedAt(finalState.getStartedAt())
                                 .simulationTime(finalState.getSimulationTime())
                                 .fechaInicio(finalState.getFechaInicio())
+                                .ultimaPlanificacionSimulada(finalState.getUltimaPlanificacionSimulada())
+                                .horizontePlanificacionMinutos(finalState.getHorizontePlanificacionMinutos())
+                                .duracionUltimaPlanificacionSeg(finalState.getDuracionUltimaPlanificacionSeg())
+                                .ultimaPlanificacionSinRuta(finalState.getUltimaPlanificacionSinRuta())
+                                .planificacionEstable(finalState.getPlanificacionEstable())
                                 .vuelos(finalState.getVuelos())
                                 .aeropuertos(finalState.getAeropuertos())
                                 .maletasEntregadas(finalState.getMaletasEntregadas())
@@ -1104,7 +1127,8 @@ public class SimulationEngine {
                                           LocalDateTime fechaInicio,
                                           Map<String, Ruta> rutasAsignadas,
                                           Map<String, Ruta> rutasAnteriores,
-                                          Map<String, AsignacionPaquete> asignacionesSplit) {
+                                          Map<String, AsignacionPaquete> asignacionesSplit,
+                                          PlanificacionSnapshot ultimaPlanificacion) {
         // Monotonicity guard: never let simulation time/progress go backwards
         SimulationState prevState = simulationCache.get(sessionId);
         int prevHora = 0;
@@ -1311,12 +1335,25 @@ public class SimulationEngine {
             }
         }
 
+        int enviosSinRuta = (int) enviosDTO.stream()
+                .filter(envio -> envio.getRutaAeropuertos() == null || envio.getRutaAeropuertos().isEmpty())
+                .count();
+        boolean planificacionEstable = !colapsada
+                && ultimaPlanificacion != null
+                && ultimaPlanificacion.sinRuta() == 0
+                && enviosSinRuta == 0;
+
         SimulationState state = SimulationState.builder()
                 .sessionId(sessionId)
                 .status(status)
                 .startedAt(startedAt)
                 .simulationTime(simTime)
                 .fechaInicio(fechaInicio)
+                .ultimaPlanificacionSimulada(ultimaPlanificacion != null ? ultimaPlanificacion.simTime() : null)
+                .horizontePlanificacionMinutos(ROLLING_LOOKAHEAD_MINUTES)
+                .duracionUltimaPlanificacionSeg(ultimaPlanificacion != null ? ultimaPlanificacion.duracionSeg() : null)
+                .ultimaPlanificacionSinRuta(ultimaPlanificacion != null ? ultimaPlanificacion.sinRuta() : null)
+                .planificacionEstable(planificacionEstable)
                 .vuelos(vuelosDTO)
                 .aeropuertos(aeropuertosDTO)
                 .maletasEntregadas(maletasEntregadas)
@@ -1333,13 +1370,18 @@ public class SimulationEngine {
                 .build();
 
         simulationCache.put(sessionId, state);
-        if (esEstadoEstable(status)) {
+        if (esEstadoEstable(state)) {
             simulationCache.putStable(sessionId, state);
         }
     }
 
-    private boolean esEstadoEstable(String status) {
-        return "EJECUTANDO".equals(status) || "COMPLETADA".equals(status);
+    private boolean esEstadoEstable(SimulationState state) {
+        if (state == null) {
+            return false;
+        }
+        String status = state.getStatus();
+        return ("EJECUTANDO".equals(status) || "COMPLETADA".equals(status))
+                && Boolean.TRUE.equals(state.getPlanificacionEstable());
     }
 
     private Long extraerProgramacionId(String vueloId) {

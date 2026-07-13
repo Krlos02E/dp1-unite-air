@@ -70,7 +70,7 @@ export interface PlanificacionLogDTO {
 
 export interface LogEntry {
   timestamp: string;
-  tipo: 'INFO' | 'WARN' | 'ERROR' | 'COLAPSO';
+  tipo: 'INFO' | 'WARN' | 'ERROR' | 'COLAPSO' | 'REPLAN';
   mensaje: string;
   modulo?: string;
   detalle?: string;
@@ -81,6 +81,12 @@ export interface SimulationState {
   status?: string;
   startedAt?: string;
   simulationTime: string;
+  fechaInicio?: string;
+  ultimaPlanificacionSimulada?: string;
+  horizontePlanificacionMinutos?: number;
+  duracionUltimaPlanificacionSeg?: number;
+  ultimaPlanificacionSinRuta?: number;
+  planificacionEstable?: boolean;
   vuelos: VueloDTO[];
   aeropuertos: AeropuertoDTO[];
   maletasEntregadas: number;
