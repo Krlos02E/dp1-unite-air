@@ -335,6 +335,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
 
   const shouldSkipMarkerMove = (mk: L.Marker, nextPos: [number, number]) => {
     const map = mapRef.current
+    if (simulationMode) return false
     if (!map || currentZoomRef.current >= ROTATION_ZOOM_THRESHOLD) return false
     const current = mk.getLatLng()
     const currentPoint = map.latLngToContainerPoint(current)
