@@ -41,7 +41,7 @@ sshpass -p "${VM_PASS}" rsync -e "ssh -o StrictHostKeyChecking=no" -avz --delete
 echo "====================================="
 echo "[2/7] Uploading frontend dist..."
 echo "====================================="
-sshpass -p "${VM_PASS}" ssh -o StrictHostKeyChecking=no ${VM_USER}@${VM_HOST} "sudo mkdir -p /var/www/${DOMAIN}"
+${SSH} "${SUDO} mkdir -p /var/www/${DOMAIN} && ${SUDO} chown ${VM_USER}:${VM_USER} /var/www/${DOMAIN}"
 sshpass -p "${VM_PASS}" rsync -e "ssh -o StrictHostKeyChecking=no" -avz --delete \
   "${PROJECT_ROOT}/dp1-frontend/dist/" \
   ${VM_USER}@${VM_HOST}:/var/www/${DOMAIN}/
