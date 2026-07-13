@@ -251,9 +251,8 @@ interface PointerSnapshot {
 }
 
 const DEFAULT_SIM_CLOCK_RATE = 240
-const NEW_FLIGHT_SPAWN_PROGRESS_THRESHOLD = 15
-const NEW_FLIGHT_SPAWN_ANIMATION_MS = 1800
 const MARKER_SMOOTHING_MS = 140
+const PREDEPARTURE_VISIBILITY_WINDOW_MS = 10 * 60 * 1000
 
 function buildPendingRoutePoints(
   from: [number, number],
@@ -303,9 +302,29 @@ function isPointerStillOverMarker(marker: L.Marker, pointer: PointerSnapshot | n
   )
 }
 
-function shouldKeepFlightVisibleOnMap(vuelo: VueloDTO, simulationMode: boolean, selectedVueloId?: string | null): boolean {
+function shouldShowProgrammedFlightAtOrigin(vuelo: VueloDTO, simulationNow: Date | null): boolean {
+  if (vuelo.estado !== 'PROGRAMADO' || !simulationNow) return false
+  const salida = parseUtc(vuelo.salidaUtc)
+  const diffMs = salida.getTime() - simulationNow.getTime()
+  return diffMs >= 0 && diffMs <= PREDEPARTURE_VISIBILITY_WINDOW_MS
+}
+
+function shouldKeepFlightVisibleOnMap(
+  vuelo: VueloDTO,
+  simulationMode: boolean,
+  selectedVueloId?: string | null,
+  simulationNow?: Date | null,
+): boolean {
   if (vuelo.id === selectedVueloId) return true
-  if (simulationMode) return vuelo.estado === 'ACTIVO' && shouldDisplayFlight(vuelo.id)
+  if (simulationMode) {
+    return (
+      shouldDisplayFlight(vuelo.id)
+      && (
+        vuelo.estado === 'ACTIVO'
+        || shouldShowProgrammedFlightAtOrigin(vuelo, simulationNow ?? null)
+      )
+    )
+  }
   return Boolean(vuelo.editable) || shouldDisplayFlight(vuelo.id)
 }
 
@@ -580,11 +599,12 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
     const referenceTime = simulationMode ? getSimulationNow(performance.now()) : new Date()
     vuelos.forEach((v) => {
       const progresoLocal = getFlightProgress(v, simulationMode, referenceTime)
+      const shouldShowScheduled = simulationMode && shouldShowProgrammedFlightAtOrigin(v, referenceTime)
       const isActive = simulationMode
         ? v.estado === 'ACTIVO' && progresoLocal > 0 && progresoLocal < 100
         : progresoLocal > 0 && progresoLocal < 100
-      const isVisible = shouldKeepFlightVisibleOnMap(v, simulationMode, selectedVueloId)
-      if (!isActive || !isVisible) {
+      const isVisible = shouldKeepFlightVisibleOnMap(v, simulationMode, selectedVueloId, referenceTime)
+      if ((!isActive && !shouldShowScheduled) || !isVisible) {
         persistentFlightsRef.current.delete(v.id)
         const mk = flightMarkersRef.current.get(v.id)
         if (mk) {
@@ -972,7 +992,14 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
     const displayFlights = Array.from(persistentFlightsRef.current.values()).filter((v) => {
       const progreso = getFlightProgress(v, simulationMode, referenceTime)
       const passesPanelFilter = !filteredFlightIds || filteredFlightIds.has(v.id) || v.id === selectedVueloIdRef.current
-      return progreso > 0 && progreso < 100 && passesPanelFilter
+      const shouldShowScheduled = simulationMode && shouldShowProgrammedFlightAtOrigin(v, referenceTime)
+      return (
+        passesPanelFilter
+        && (
+          (progreso > 0 && progreso < 100)
+          || shouldShowScheduled
+        )
+      )
     })
     const displayIds = new Set(displayFlights.map((v) => v.id))
     visibleFlightIdsRef.current = displayIds
@@ -992,10 +1019,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       const tooltipText = tooltipForFlight(v, airportLookup, simulationMode, referenceTime ?? undefined)
       const pts = bezierPoints(from, to, ROUTE_POINT_COUNT)
       const progresoActual = getFlightProgress(v, simulationMode, referenceTime)
-      const shouldAnimateSpawnFromOrigin = simulationMode
-        && v.estado === 'ACTIVO'
-        && progresoActual > 0
-        && progresoActual <= NEW_FLIGHT_SPAWN_PROGRESS_THRESHOLD
+      const shouldShowScheduled = simulationMode && shouldShowProgrammedFlightAtOrigin(v, referenceTime)
       const wasVisibleBefore = previousVisibleIds.has(v.id)
 
       const existingAnim = flightAnimsRef.current.get(v.id)
@@ -1015,11 +1039,11 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
           : (simulationMode ? 1 : snapshotInterval)
         existingAnim.displayedProgress = currentProgress
         if (simulationMode && !wasVisibleBefore) {
-          existingAnim.displayedPosition = interpolatePosition(from, to, progresoActual / 100)
+          existingAnim.displayedPosition = interpolatePosition(from, to, shouldShowScheduled ? 0 : progresoActual / 100)
         }
         existingAnim.snapshotAt = frameNow
       } else {
-        const initialDisplayedProgress = shouldAnimateSpawnFromOrigin ? 0 : progresoActual
+        const initialDisplayedProgress = shouldShowScheduled ? 0 : progresoActual
         const initialDisplayedPosition = interpolatePosition(from, to, initialDisplayedProgress / 100)
         flightAnimsRef.current.set(v.id, {
           vuelo: v,
@@ -1031,14 +1055,14 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
           startProgress: initialDisplayedProgress,
           targetProgress: progresoActual,
           transitionStartedAt: frameNow,
-          transitionDurationMs: shouldAnimateSpawnFromOrigin ? NEW_FLIGHT_SPAWN_ANIMATION_MS : 1,
+          transitionDurationMs: 1,
           snapshotAt: frameNow,
         })
       }
 
       let mk = flightMarkersRef.current.get(v.id)
       if (!mk) {
-        const initialProgress = shouldAnimateSpawnFromOrigin ? 0 : progresoActual
+        const initialProgress = shouldShowScheduled ? 0 : progresoActual
         const startPos = interpolatePosition(from, to, initialProgress / 100)
         mk = L.marker(startPos, { icon: getAirplaneIcon(isSelected, v.cargaActual, v.capacidad) })
         mk.bindTooltip(tooltipText, {
@@ -1077,7 +1101,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         }
         mk.setTooltipContent(tooltipText)
         if (simulationMode && !wasVisibleBefore) {
-          mk.setLatLng(interpolatePosition(from, to, progresoActual / 100))
+          mk.setLatLng(interpolatePosition(from, to, shouldShowScheduled ? 0 : progresoActual / 100))
         }
         const fallbackAngle = bearing(from, to)
         const angle = getKnownFlightAngle(v.id, fallbackAngle) ?? fallbackAngle
