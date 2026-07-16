@@ -84,10 +84,6 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
   }, [stopPolling])
 
   const refreshActiveSimulation = useCallback(async () => {
-    if (activeSocketConnectedRef.current) {
-      setCheckingActiveSimulation(false)
-      return
-    }
     if (activeRefreshInFlightRef.current) return
     activeRefreshInFlightRef.current = true
     try {

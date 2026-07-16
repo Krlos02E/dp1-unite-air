@@ -21,6 +21,7 @@ const SIM_LAST_REPORT_KEY = 'uniteair_lastSimReport'
 const SIM_DISMISSED_REPORT_KEY = 'uniteair_dismissedReportSessionId'
 const DURACION_FIJA = 5
 const EMPTY_FLIGHTS: VueloDTO[] = []
+const EMPTY_AIRPORTS: AeropuertoDTO[] = []
 const SHARED_SIMULATION_CONTEXT_POLL_MS = 10000
 
 const aeropuertosFallback: AeropuertoDTO[] = Object.values(AIRPORTS_DATA).map((a) => ({
@@ -566,13 +567,6 @@ export default function Simulacion() {
 
           if (finished) {
             setSimulationState(latestState)
-            if (
-              (latestState.status === 'COMPLETADA' || latestState.progreso >= 100)
-              && !hasShownResults.current
-            ) {
-              const reportPayload = saveLastReportToStorage(latestState)
-              showReportSnapshot(latestState, reportPayload.savedAt)
-            }
             return
           }
         } catch {
@@ -585,7 +579,7 @@ export default function Simulacion() {
     }
     void syncFromActiveSimulation()
     return () => { cancelled = true }
-  }, [activeSimulation, isRunning, sessionId, simulationState?.sessionId, startPolling, resetSimulation, isCompleted, isColapsada, isError, saveLastReportToStorage, setSimulationState, showReportSnapshot])
+  }, [activeSimulation, isRunning, sessionId, simulationState?.sessionId, startPolling, resetSimulation, isCompleted, isColapsada, isError, setSimulationState])
 
   useEffect(() => {
     const syncWhenVisible = () => {
@@ -609,14 +603,35 @@ export default function Simulacion() {
   }, [refreshActiveSimulation, tryConsumeStoredReport])
 
   useEffect(() => {
+    let cancelled = false
     const latestFinishedState = activeSimulation?.latestFinishedState
     if (!latestFinishedState) return
     if (latestFinishedState.status !== 'COMPLETADA' && latestFinishedState.progreso < 100) return
-    const reportPayload = saveLastReportToStorage(latestFinishedState)
-    showReportSnapshot(latestFinishedState, reportPayload.savedAt)
+
+    const showAuthoritativeReport = async () => {
+      let authoritativeState = latestFinishedState
+      try {
+        const fetchedState = await simulationService.estado(latestFinishedState.sessionId)
+        if (!cancelled && (fetchedState.status === 'COMPLETADA' || fetchedState.progreso >= 100)) {
+          authoritativeState = fetchedState
+        }
+      } catch {
+        // Fall back to the latest finished state announced by the backend active channel.
+      }
+
+      if (cancelled) return
+      const reportPayload = saveLastReportToStorage(authoritativeState)
+      showReportSnapshot(authoritativeState, reportPayload.savedAt)
+    }
+
+    void showAuthoritativeReport()
     if (!activeSimulation?.activa) {
       clearSimulationViewState()
       void refreshSimulacionContextData()
+    }
+
+    return () => {
+      cancelled = true
     }
   }, [
     activeSimulation?.activa,
@@ -695,15 +710,6 @@ export default function Simulacion() {
       setSelectedVuelo((prev) => (prev ? { ...prev, progresoVuelo: 100 } : prev))
     }
   }, [vuelos, simulationState?.status, selectedVuelo])
-
-  // Show results modal when simulation completes
-  useEffect(() => {
-    const shouldShow = simulationState && (simulationState.status === 'COMPLETADA' || simulationState.progreso >= 100)
-    if (shouldShow && !hasShownResults.current) {
-      const reportPayload = saveLastReportToStorage(simulationState)
-      showReportSnapshot(simulationState, reportPayload.savedAt)
-    }
-  }, [saveLastReportToStorage, showReportSnapshot, simulationState])
 
   // (eliminado: beforeunload ya no detiene la simulación, para permitir multi-pestaña)
   function formatElapsed(seconds: number): string {
@@ -785,29 +791,13 @@ export default function Simulacion() {
 
   const handleDetenerConfirmado = async () => {
     if (!sessionId) return
-    let finalState: SimulationState | null = null
     try {
-      finalState = await simulationService.detener(sessionId)
+      await simulationService.detener(sessionId)
     } catch {
       // ignore
     }
-    if (!finalState && simulationState) {
-      finalState = {
-        ...simulationState,
-        status: 'COMPLETADA',
-      }
-    }
-    if (finalState) {
-      clearDismissedReportSessionId()
-      const reportPayload = saveLastReportToStorage(finalState)
-      showReportSnapshot(finalState, reportPayload.savedAt)
-      broadcastSimMessage('STOPPED', {
-        sessionId,
-        reportSavedAt: reportPayload.savedAt,
-      })
-    } else {
-      broadcastSimMessage('STOPPED', { sessionId })
-    }
+    clearDismissedReportSessionId()
+    broadcastSimMessage('STOPPED', { sessionId })
     clearSimulationViewState()
     setShowStopConfirm(false)
     await refreshActiveSimulation()
@@ -816,7 +806,6 @@ export default function Simulacion() {
   const handleNuevaSimulacion = () => {
     clearSimulationViewState()
     clearLastReportStorage()
-    clearDismissedReportSessionId()
     hasShownResults.current = false
     setResultSnapshot(null)
     setShowResultados(false)
@@ -839,11 +828,13 @@ export default function Simulacion() {
     return () => window.clearTimeout(timeoutId)
   }, [panelCollapsed])
 
+  const displayAirports = hasSimulationStarted ? aeropuertos : EMPTY_AIRPORTS
+  const displayFlights = hasSimulationStarted ? vuelos : EMPTY_FLIGHTS
   const enviosActivos = hasSimulationStarted ? (simulationState?.envios || []) : []
   const maletasActivas = hasSimulationStarted ? (simulationState?.maletas || []) : []
 
-  const rawSimulationFlights = simulationState?.vuelos ?? EMPTY_FLIGHTS
-  const rawSimulationAirports = simulationState?.aeropuertos ?? aeropuertosFallback
+  const rawSimulationFlights = hasSimulationStarted ? (simulationState?.vuelos ?? EMPTY_FLIGHTS) : EMPTY_FLIGHTS
+  const rawSimulationAirports = hasSimulationStarted ? (simulationState?.aeropuertos ?? EMPTY_AIRPORTS) : EMPTY_AIRPORTS
 
   const flightStats = useMemo(() => rawSimulationFlights.reduce((stats, vuelo) => {
     if (vuelo.estado === 'ACTIVO' && vuelo.cargaActual <= 0) stats.vaciosEnTransito++
@@ -883,8 +874,8 @@ export default function Simulacion() {
       <div className="flex gap-2 flex-1 min-h-0">
         <div className="relative flex-1 bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
           <MapaAeropuertos
-            aeropuertos={aeropuertos}
-            vuelos={vuelos}
+            aeropuertos={displayAirports}
+            vuelos={displayFlights}
             selectedVueloId={selectedVuelo?.id || null}
             selectedAeropuertoId={selectedAeropuerto?.codigoOACI || null}
             selectedEnvio={selectedMaleta ?? selectedEnvio}
@@ -1145,8 +1136,8 @@ export default function Simulacion() {
           </div>
           {panelMode === 'almacenes' ? (
             <AlmacenListPanel
-              aeropuertos={aeropuertos}
-              vuelos={vuelos}
+              aeropuertos={displayAirports}
+              vuelos={displayFlights}
               envios={enviosActivos}
               onEnvioSelect={handleEnvioSelect}
               selectedEnvioId={selectedEnvio?.id}
@@ -1162,9 +1153,9 @@ export default function Simulacion() {
             />
           ) : panelMode === 'aviones' ? (
             <VueloListPanel
-              vuelos={vuelos}
+              vuelos={displayFlights}
               contexto="SIMULACION"
-              aeropuertosDisponibles={aeropuertos}
+              aeropuertosDisponibles={displayAirports}
               envios={enviosActivos}
               onEnvioSelect={handleEnvioSelect}
               selectedEnvioId={selectedEnvio?.id}
