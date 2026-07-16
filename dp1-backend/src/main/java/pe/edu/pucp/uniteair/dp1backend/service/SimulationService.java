@@ -1,5 +1,6 @@
 package pe.edu.pucp.uniteair.dp1backend.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import pe.edu.pucp.uniteair.dp1backend.config.AeropuertoCoordenadas;
 import pe.edu.pucp.uniteair.dp1backend.dto.AeropuertoDTO;
@@ -43,6 +44,7 @@ public class SimulationService {
     private final DatasetContextService datasetContextService;
     private final AlmacenService almacenService;
     private final SimulationContextService simulationContextService;
+    private final ObjectMapper objectMapper;
 
     public SimulationService(SimulationSessionRepository sessionRepository,
                              SimulationCache simulationCache,
@@ -50,7 +52,8 @@ public class SimulationService {
                              CargaArchivosService cargaArchivosService,
                              DatasetContextService datasetContextService,
                              AlmacenService almacenService,
-                             SimulationContextService simulationContextService) {
+                             SimulationContextService simulationContextService,
+                             ObjectMapper objectMapper) {
         this.sessionRepository = sessionRepository;
         this.simulationCache = simulationCache;
         this.simulationEngine = simulationEngine;
@@ -58,6 +61,7 @@ public class SimulationService {
         this.datasetContextService = datasetContextService;
         this.almacenService = almacenService;
         this.simulationContextService = simulationContextService;
+        this.objectMapper = objectMapper;
     }
 
     public SimulationState iniciarSimulacion(SimulacionConfigRequest req, Dataset dataset) {
@@ -189,7 +193,7 @@ public class SimulationService {
     }
 
     public Map<String, Object> obtenerInfoSesionActivaDesdeEstado(SimulationState state) {
-        SimulationState lastFinishedState = simulationCache.getLastFinishedState();
+        SimulationState lastFinishedState = obtenerUltimoReporteFinal();
         if (state == null) {
             Map<String, Object> payload = new HashMap<>();
             payload.put("activa", false);
@@ -221,7 +225,15 @@ public class SimulationService {
     }
 
     public SimulationState obtenerUltimoReporteFinal() {
-        return simulationCache.getLastFinishedState();
+        SimulationState cachedState = simulationCache.getLastFinishedState();
+        if (cachedState != null) {
+            return cachedState;
+        }
+
+        return sessionRepository
+                .findTopByEstadoInOrderByCreatedAtDesc(Arrays.asList("COMPLETADA", "COLAPSADA", "ERROR"))
+                .map(this::loadPersistedStateSnapshot)
+                .orElse(null);
     }
 
     public SimulationState obtenerEstado(String sessionId) {
@@ -232,6 +244,10 @@ public class SimulationService {
         if (state == null) {
             var session = sessionRepository.findById(sessionId).orElse(null);
             if (session != null) {
+                SimulationState persistedState = loadPersistedStateSnapshot(session);
+                if (persistedState != null) {
+                    return persistedState;
+                }
                 long elapsed = session.getCreatedAt() != null
                         ? Duration.between(session.getCreatedAt(), LocalDateTime.now()).getSeconds()
                         : 0;
@@ -368,11 +384,37 @@ public class SimulationService {
                     .build();
             simulationCache.put(sessionId, completedState);
             simulationCache.putStable(sessionId, completedState);
+            persistStateSnapshot(sessionId, completedState);
             simulationContextService.reiniciarContextoSimulacion();
             return completedState;
         }
         simulationContextService.reiniciarContextoSimulacion();
         return null;
+    }
+
+    private void persistStateSnapshot(String sessionId, SimulationState state) {
+        if (sessionId == null || state == null) {
+            return;
+        }
+        sessionRepository.findById(sessionId).ifPresent(session -> {
+            try {
+                session.setDatasetJson(objectMapper.writeValueAsString(state));
+                sessionRepository.save(session);
+            } catch (Exception ignored) {
+                // Keep the simulation responsive even if snapshot persistence fails.
+            }
+        });
+    }
+
+    private SimulationState loadPersistedStateSnapshot(SimulationSession session) {
+        if (session == null || session.getDatasetJson() == null || session.getDatasetJson().isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(session.getDatasetJson(), SimulationState.class);
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     public void pausarSimulacion(String sessionId) {

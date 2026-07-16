@@ -1,5 +1,6 @@
 package pe.edu.pucp.uniteair.dp1backend.engine;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import pe.edu.pucp.uniteair.dp1backend.cache.SimulationCache;
@@ -54,6 +55,7 @@ public class SimulationEngine {
     private final DatasetContextService datasetContextService;
     private final ContextSyncStateService contextSyncStateService;
     private final SimulationContextService simulationContextService;
+    private final ObjectMapper objectMapper;
     private final Map<String, CompletableFuture<Void>> activeSimulations = new ConcurrentHashMap<>();
     private final Map<String, Boolean> cancellationFlags = new ConcurrentHashMap<>();
     private final Map<String, Boolean> pauseFlags = new ConcurrentHashMap<>();
@@ -92,7 +94,8 @@ public class SimulationEngine {
                             AlmacenService almacenService,
                             DatasetContextService datasetContextService,
                             ContextSyncStateService contextSyncStateService,
-                            SimulationContextService simulationContextService) {
+                            SimulationContextService simulationContextService,
+                            ObjectMapper objectMapper) {
         this.simulationCache = simulationCache;
         this.sessionRepository = sessionRepository;
         this.cargaArchivosService = cargaArchivosService;
@@ -100,10 +103,25 @@ public class SimulationEngine {
         this.datasetContextService = datasetContextService;
         this.contextSyncStateService = contextSyncStateService;
         this.simulationContextService = simulationContextService;
+        this.objectMapper = objectMapper;
     }
 
     public void pausarSimulacion(String sessionId) {
         pauseFlags.put(sessionId, true);
+    }
+
+    private void persistStateSnapshot(String sessionId, SimulationState state) {
+        if (sessionId == null || state == null) {
+            return;
+        }
+        sessionRepository.findById(sessionId).ifPresent(session -> {
+            try {
+                session.setDatasetJson(objectMapper.writeValueAsString(state));
+                sessionRepository.save(session);
+            } catch (Exception ignored) {
+                // Avoid breaking the simulation loop if persistence fails.
+            }
+        });
     }
 
     public void reanudarSimulacion(String sessionId) {
@@ -488,6 +506,7 @@ public class SimulationEngine {
                                 .build();
                         simulationCache.put(sessionId, completed);
                         simulationCache.putStable(sessionId, completed);
+                        persistStateSnapshot(sessionId, completed);
                     }
                     simulationContextService.reiniciarContextoSimulacion();
                 }
