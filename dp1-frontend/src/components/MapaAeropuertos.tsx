@@ -250,7 +250,6 @@ interface PointerSnapshot {
   clientY: number
 }
 
-const DEFAULT_SIM_CLOCK_RATE = 240
 const MARKER_SMOOTHING_MS = 140
 const PREDEPARTURE_VISIBILITY_WINDOW_MS = 10 * 60 * 1000
 
@@ -317,13 +316,15 @@ function shouldKeepFlightVisibleOnMap(
 ): boolean {
   if (vuelo.id === selectedVueloId) return true
   if (simulationMode) {
-    return (
-      shouldDisplayFlight(vuelo.id)
-      && (
-        vuelo.estado === 'ACTIVO'
-        || shouldShowProgrammedFlightAtOrigin(vuelo, simulationNow ?? null)
-      )
-    )
+    if (!shouldDisplayFlight(vuelo.id)) return false
+    if (vuelo.estado === 'ACTIVO') return true
+    if (vuelo.estado === 'CANCELADO' || vuelo.estado === 'CULMINADO') return false
+    if (vuelo.estado === 'PROGRAMADO' && simulationNow) {
+      const salida = parseUtc(vuelo.salidaUtc)
+      const diffMs = salida.getTime() - simulationNow.getTime()
+      if (diffMs <= 0) return true
+    }
+    return shouldShowProgrammedFlightAtOrigin(vuelo, simulationNow ?? null)
   }
   return Boolean(vuelo.editable) || shouldDisplayFlight(vuelo.id)
 }
@@ -506,18 +507,21 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
     const simulationDate = parseUtc(simulationTime)
     const now = performance.now()
     const previous = simClockRef.current
-    let rateMsPerRealMs = previous?.rateMsPerRealMs ?? DEFAULT_SIM_CLOCK_RATE
+    let rateMsPerRealMs = previous?.rateMsPerRealMs ?? 0
     let simulationTimeMs = simulationDate.getTime()
 
     if (previous) {
       const realDelta = now - previous.receivedAtMs
       const simulationDelta = simulationDate.getTime() - previous.simulationTimeMs
-      const projectedSimulationNow = previous.simulationTimeMs + (Math.max(0, realDelta) * previous.rateMsPerRealMs)
-      simulationTimeMs = Math.max(simulationTimeMs, projectedSimulationNow)
+      simulationTimeMs = simulationDate.getTime()
 
       if (realDelta > 0 && simulationDelta > 0) {
         const instantRate = simulationDelta / realDelta
-        rateMsPerRealMs = (previous.rateMsPerRealMs * 0.85) + (instantRate * 0.15)
+        if (previous.rateMsPerRealMs <= 0) {
+          rateMsPerRealMs = instantRate
+        } else {
+          rateMsPerRealMs = (previous.rateMsPerRealMs * 0.85) + (instantRate * 0.15)
+        }
       }
     }
 
@@ -601,7 +605,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       const progresoLocal = getFlightProgress(v, simulationMode, referenceTime)
       const shouldShowScheduled = simulationMode && shouldShowProgrammedFlightAtOrigin(v, referenceTime)
       const isActive = simulationMode
-        ? v.estado === 'ACTIVO' && progresoLocal >= 0 && progresoLocal < 100
+        ? (v.estado === 'ACTIVO' || (v.estado === 'PROGRAMADO' && progresoLocal > 0)) && progresoLocal >= 0 && progresoLocal < 100
         : progresoLocal > 0 && progresoLocal < 100
       const isVisible = shouldKeepFlightVisibleOnMap(v, simulationMode, selectedVueloId, referenceTime)
       if ((!isActive && !shouldShowScheduled) || !isVisible) {
@@ -994,7 +998,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       const passesPanelFilter = !filteredFlightIds || filteredFlightIds.has(v.id) || v.id === selectedVueloIdRef.current
       const shouldShowScheduled = simulationMode && shouldShowProgrammedFlightAtOrigin(v, referenceTime)
       const shouldShowActive = simulationMode
-        ? v.estado === 'ACTIVO' && progreso >= 0 && progreso < 100
+        ? (v.estado === 'ACTIVO' || (v.estado === 'PROGRAMADO' && progreso > 0)) && progreso >= 0 && progreso < 100
         : progreso > 0 && progreso < 100
       return (
         passesPanelFilter
@@ -1028,21 +1032,33 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       const existingAnim = flightAnimsRef.current.get(v.id)
       if (existingAnim) {
         const resumedFromHidden = simulationMode && !wasVisibleBefore
-        const currentProgress = progresoActual
         const snapshotInterval = Math.min(20_000, Math.max(1_000, frameNow - existingAnim.snapshotAt))
         existingAnim.vuelo = v
         existingAnim.from = from
         existingAnim.to = to
         existingAnim.pts = pts
-        existingAnim.startProgress = currentProgress
-        existingAnim.targetProgress = progresoActual
-        existingAnim.transitionStartedAt = frameNow
-        existingAnim.transitionDurationMs = resumedFromHidden
-          ? 1
-          : (simulationMode ? 1 : snapshotInterval)
-        existingAnim.displayedProgress = currentProgress
-        if (simulationMode && !wasVisibleBefore) {
+        if (resumedFromHidden) {
+          existingAnim.startProgress = progresoActual
+          existingAnim.targetProgress = progresoActual
+          existingAnim.transitionStartedAt = frameNow
+          existingAnim.transitionDurationMs = 1
+          existingAnim.displayedProgress = progresoActual
           existingAnim.displayedPosition = interpolatePosition(from, to, shouldShowScheduled ? 0 : progresoActual / 100)
+        } else {
+          const backward = progresoActual < existingAnim.displayedProgress
+          if (backward) {
+            existingAnim.startProgress = progresoActual
+            existingAnim.targetProgress = progresoActual
+            existingAnim.transitionStartedAt = frameNow
+            existingAnim.transitionDurationMs = 1
+            existingAnim.displayedProgress = progresoActual
+            existingAnim.displayedPosition = interpolatePosition(from, to, progresoActual / 100)
+          } else {
+            existingAnim.startProgress = existingAnim.displayedProgress
+            existingAnim.targetProgress = progresoActual
+            existingAnim.transitionStartedAt = frameNow
+            existingAnim.transitionDurationMs = simulationMode ? 250 : snapshotInterval
+          }
         }
         existingAnim.snapshotAt = frameNow
       } else {
@@ -1140,10 +1156,20 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         const mk = flightMarkersRef.current.get(id)
         if (!mk) return
 
-        const simulationNow = simulationMode ? getSimulationNow(frameNow) : null
-        const currentProgress = simulationMode
-          ? getFlightProgress(anim.vuelo, true, simulationNow)
-          : calcularProgresoLocal(anim.vuelo, realNow!)
+        let currentProgress
+        if (simulationMode) {
+          const elapsed = frameNow - anim.transitionStartedAt
+          if (elapsed < anim.transitionDurationMs && anim.transitionDurationMs > 1) {
+            const t = Math.min(1, elapsed / anim.transitionDurationMs)
+            const easeT = 1 - (1 - t) * (1 - t)
+            currentProgress = anim.startProgress + (anim.targetProgress - anim.startProgress) * easeT
+          } else {
+            const simulationNow = getSimulationNow(frameNow)
+            currentProgress = getFlightProgress(anim.vuelo, true, simulationNow)
+          }
+        } else {
+          currentProgress = calcularProgresoLocal(anim.vuelo, realNow!)
+        }
         anim.displayedProgress = currentProgress
         if (id === selectedVueloIdRef.current) {
           updateSelectedFlightRouteOverlay(id, currentProgress)
@@ -1175,7 +1201,9 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         const posAfter = nextDisplayedPos
         const fallbackAngle = bearing(anim.from, anim.to)
         const previousAngle = flightAngleRef.current.get(id) ?? renderedFlightAngleRef.current.get(id)
-        const angle = resolveFlightAngle(posBefore, posAfter, previousAngle ?? fallbackAngle)
+        const rawAngle = resolveFlightAngle(posBefore, posAfter, previousAngle ?? fallbackAngle)
+        const delta = normalizeAngleDelta(rawAngle, previousAngle ?? fallbackAngle)
+        const angle = simulationMode && delta > 90 ? (previousAngle ?? fallbackAngle) : rawAngle
         flightAngleRef.current.set(id, angle)
         updateFlightRotation(mk, id, angle)
 
