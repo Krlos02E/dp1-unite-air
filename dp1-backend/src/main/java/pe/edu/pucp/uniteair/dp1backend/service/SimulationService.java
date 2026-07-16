@@ -24,6 +24,7 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -190,10 +191,12 @@ public class SimulationService {
     public Map<String, Object> obtenerInfoSesionActivaDesdeEstado(SimulationState state) {
         SimulationState lastFinishedState = simulationCache.getLastFinishedState();
         if (state == null) {
-            return Map.of(
-                    "activa", false,
-                    "latestFinishedState", lastFinishedState
-            );
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("activa", false);
+            if (lastFinishedState != null) {
+                payload.put("latestFinishedState", lastFinishedState);
+            }
+            return payload;
         }
         long elapsed = state.getStartedAt() != null
                 ? Duration.between(state.getStartedAt(), LocalDateTime.now()).getSeconds()
@@ -202,17 +205,19 @@ public class SimulationService {
                 && !"COMPLETADA".equals(state.getStatus())
                 && !"COLAPSADA".equals(state.getStatus())
                 && !"ERROR".equals(state.getStatus());
-        return Map.of(
-                "activa", activa,
-                "sessionId", state.getSessionId(),
-                "status", state.getStatus(),
-                "progreso", state.getProgreso(),
-                "startedAt", state.getStartedAt(),
-                "simulationStartedAt", state.getFechaInicio(),
-                "elapsedRealtimeSeconds", Math.max(0, elapsed),
-                "fechaInicio", state.getFechaInicio(),
-                "latestFinishedState", lastFinishedState
-        );
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("activa", activa);
+        payload.put("sessionId", state.getSessionId());
+        payload.put("status", state.getStatus());
+        payload.put("progreso", state.getProgreso());
+        payload.put("startedAt", state.getStartedAt());
+        payload.put("simulationStartedAt", state.getFechaInicio());
+        payload.put("elapsedRealtimeSeconds", Math.max(0, elapsed));
+        payload.put("fechaInicio", state.getFechaInicio());
+        if (lastFinishedState != null) {
+            payload.put("latestFinishedState", lastFinishedState);
+        }
+        return payload;
     }
 
     public SimulationState obtenerUltimoReporteFinal() {

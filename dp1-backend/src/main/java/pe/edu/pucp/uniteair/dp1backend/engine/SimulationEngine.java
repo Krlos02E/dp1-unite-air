@@ -953,7 +953,6 @@ public class SimulationEngine {
             future.cancel(true);
         }
         activeSimulations.remove(sessionId);
-        cancellationFlags.remove(sessionId);
         pauseFlags.remove(sessionId);
         airportBaseCache.remove(sessionId);
         flightCoordCache.remove(sessionId);

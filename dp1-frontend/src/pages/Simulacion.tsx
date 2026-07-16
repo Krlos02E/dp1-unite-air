@@ -18,6 +18,7 @@ import { broadcastSimMessage, listenSimMessages } from '../utils/broadcast'
 const SIM_CONFIG_KEY = 'uniteair_simConfig'
 const SIM_ACTIVE_CONFIG_KEY = 'uniteair_activeSimConfig'
 const SIM_LAST_REPORT_KEY = 'uniteair_lastSimReport'
+const SIM_DISMISSED_REPORT_KEY = 'uniteair_dismissedReportSessionId'
 const DURACION_FIJA = 5
 const EMPTY_FLIGHTS: VueloDTO[] = []
 const SHARED_SIMULATION_CONTEXT_POLL_MS = 10000
@@ -276,6 +277,7 @@ export default function Simulacion() {
   const [resultSnapshot, setResultSnapshot] = useState<SimulationState | null>(null)
   const hasShownResults = useRef(false)
   const lastConsumedReportAtRef = useRef(0)
+  const lockedReportSessionIdRef = useRef<string | null>(null)
 
   const hasSimulationStarted = Boolean(sessionId || simulationState)
   const hasSimulationFlightSnapshot = (simulationState?.vuelos?.length ?? 0) > 0
@@ -358,39 +360,80 @@ export default function Simulacion() {
 
   const saveLastReportToStorage = useCallback((state: SimulationState) => {
     const payload = {
-      state,
+      sessionId: state.sessionId,
       savedAt: Date.now(),
     }
-    localStorage.setItem(SIM_LAST_REPORT_KEY, JSON.stringify(payload))
+    try {
+      localStorage.setItem(SIM_LAST_REPORT_KEY, JSON.stringify(payload))
+    } catch {
+      // Ignore storage quota issues; the backend remains the source of truth.
+    }
     return payload
   }, [])
 
   const clearLastReportStorage = useCallback(() => {
     localStorage.removeItem(SIM_LAST_REPORT_KEY)
     lastConsumedReportAtRef.current = 0
+    lockedReportSessionIdRef.current = null
+  }, [])
+
+  const getDismissedReportSessionId = useCallback((): string | null => {
+    return localStorage.getItem(SIM_DISMISSED_REPORT_KEY)
+  }, [])
+
+  const clearDismissedReportSessionId = useCallback(() => {
+    localStorage.removeItem(SIM_DISMISSED_REPORT_KEY)
+  }, [])
+
+  const dismissReportSession = useCallback((sessionId: string) => {
+    localStorage.setItem(SIM_DISMISSED_REPORT_KEY, sessionId)
   }, [])
 
   const showReportSnapshot = useCallback((state: SimulationState, savedAt?: number) => {
+    if (getDismissedReportSessionId() === state.sessionId) return
+    if (lockedReportSessionIdRef.current === state.sessionId) return
     if (savedAt && savedAt <= lastConsumedReportAtRef.current) return
     if (savedAt) {
       lastConsumedReportAtRef.current = savedAt
     }
+    lockedReportSessionIdRef.current = state.sessionId
     hasShownResults.current = true
     setResultSnapshot({ ...state })
     setShowResultados(true)
-  }, [])
+  }, [getDismissedReportSessionId])
 
-  const tryConsumeStoredReport = useCallback((rawValue: string | null) => {
+  const tryConsumeStoredReport = useCallback(async (rawValue: string | null) => {
     if (!rawValue) return false
     try {
-      const parsed = JSON.parse(rawValue) as { state?: SimulationState; savedAt?: number }
-      if (!parsed.state || !parsed.savedAt) return false
-      showReportSnapshot(parsed.state, parsed.savedAt)
+      const parsed = JSON.parse(rawValue) as { sessionId?: string; savedAt?: number }
+      if (!parsed.sessionId || !parsed.savedAt) return false
+      if (parsed.savedAt <= lastConsumedReportAtRef.current) return true
+
+      let state: SimulationState | null = null
+      if (activeSimulation?.latestFinishedState?.sessionId === parsed.sessionId) {
+        state = activeSimulation.latestFinishedState
+      } else if (simulationState?.sessionId === parsed.sessionId
+        && (simulationState.status === 'COMPLETADA' || simulationState.progreso >= 100)) {
+        state = simulationState
+      } else {
+        try {
+          const fetched = await simulationService.estado(parsed.sessionId)
+          if (fetched.status === 'COMPLETADA' || fetched.progreso >= 100) {
+            state = fetched
+          }
+        } catch {
+          return false
+        }
+      }
+
+      if (!state) return false
+      if (getDismissedReportSessionId() === state.sessionId) return true
+      showReportSnapshot(state, parsed.savedAt)
       return true
     } catch {
       return false
     }
-  }, [showReportSnapshot])
+  }, [activeSimulation?.latestFinishedState, getDismissedReportSessionId, showReportSnapshot, simulationState])
 
   // Restore config from sessionStorage on mount
   useEffect(() => {
@@ -548,12 +591,12 @@ export default function Simulacion() {
     const syncWhenVisible = () => {
       if (document.visibilityState !== 'visible') return
       void refreshActiveSimulation()
-      tryConsumeStoredReport(localStorage.getItem(SIM_LAST_REPORT_KEY))
+      void tryConsumeStoredReport(localStorage.getItem(SIM_LAST_REPORT_KEY))
     }
 
     const syncWhenFocused = () => {
       void refreshActiveSimulation()
-      tryConsumeStoredReport(localStorage.getItem(SIM_LAST_REPORT_KEY))
+      void tryConsumeStoredReport(localStorage.getItem(SIM_LAST_REPORT_KEY))
     }
 
     document.addEventListener('visibilitychange', syncWhenVisible)
@@ -594,7 +637,7 @@ export default function Simulacion() {
       }
       if (msg.type === 'STOPPED') {
         void refreshActiveSimulation()
-        tryConsumeStoredReport(localStorage.getItem(SIM_LAST_REPORT_KEY))
+        void tryConsumeStoredReport(localStorage.getItem(SIM_LAST_REPORT_KEY))
       }
     })
 
@@ -606,7 +649,7 @@ export default function Simulacion() {
   useEffect(() => {
     const handleStorage = (event: StorageEvent) => {
       if (event.key === SIM_LAST_REPORT_KEY) {
-        tryConsumeStoredReport(event.newValue)
+        void tryConsumeStoredReport(event.newValue)
       }
     }
 
@@ -721,6 +764,7 @@ export default function Simulacion() {
       saveConfigToStorage({ fechaInicio, horaInicio })
       saveActiveConfigToStorage({ sessionId: state.sessionId, fechaInicio, horaInicio })
       clearLastReportStorage()
+      clearDismissedReportSessionId()
       hasShownResults.current = false
       setResultSnapshot(null)
       setSessionId(state.sessionId)
@@ -757,6 +801,7 @@ export default function Simulacion() {
       }
     }
     if (finalState) {
+      clearDismissedReportSessionId()
       const reportPayload = saveLastReportToStorage(finalState)
       showReportSnapshot(finalState, reportPayload.savedAt)
       broadcastSimMessage('STOPPED', {
@@ -774,6 +819,7 @@ export default function Simulacion() {
   const handleNuevaSimulacion = () => {
     clearSimulationViewState()
     clearLastReportStorage()
+    clearDismissedReportSessionId()
     hasShownResults.current = false
     setResultSnapshot(null)
     setShowResultados(false)
@@ -1177,10 +1223,18 @@ export default function Simulacion() {
         state={resultSnapshot ?? simulationState}
         isOpen={showResultados}
         onClose={() => {
+          if (resultSnapshot?.sessionId) {
+            dismissReportSession(resultSnapshot.sessionId)
+          }
           setShowResultados(false)
           setResultSnapshot(null)
+          hasShownResults.current = false
+          lockedReportSessionIdRef.current = null
         }}
         onNuevaSimulacion={() => {
+          if (resultSnapshot?.sessionId) {
+            dismissReportSession(resultSnapshot.sessionId)
+          }
           setShowResultados(false)
           setResultSnapshot(null)
           handleNuevaSimulacion()
