@@ -668,10 +668,7 @@ export default function Simulacion() {
     })
     vuelosEstaticos.forEach((vuelo) => {
       const current = combinados.get(vuelo.id)
-      if (!current) {
-        combinados.set(vuelo.id, vuelo)
-        return
-      }
+      if (!current) return
       combinados.set(vuelo.id, {
         ...current,
         latOrigen: vuelo.latOrigen,
