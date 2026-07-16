@@ -516,7 +516,6 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
     if (previous) {
       const realDelta = now - previous.receivedAtMs
       const simulationDelta = simulationDate.getTime() - previous.simulationTimeMs
-      simulationTimeMs = simulationDate.getTime()
 
       if (realDelta > 0 && simulationDelta > 0) {
         const instantRate = simulationDelta / realDelta
@@ -528,6 +527,12 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       } else if (previous.rateMsPerRealMs <= 0 && simulationDelta >= 0) {
         rateMsPerRealMs = DEFAULT_SIM_CLOCK_RATE
       }
+
+      // Ensure monotonicity: never let the simulation clock go backward
+      // This prevents all planes from appearing to move backward when a
+      // backend poll arrives with a simulationTime behind the extrapolated clock
+      const extrapolatedNow = previous.simulationTimeMs + (realDelta * previous.rateMsPerRealMs)
+      simulationTimeMs = Math.max(simulationDate.getTime(), extrapolatedNow)
     }
 
     simClockRef.current = {
