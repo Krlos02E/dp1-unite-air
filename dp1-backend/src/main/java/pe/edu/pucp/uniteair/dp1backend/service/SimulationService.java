@@ -1,6 +1,5 @@
 package pe.edu.pucp.uniteair.dp1backend.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import pe.edu.pucp.uniteair.dp1backend.config.AeropuertoCoordenadas;
 import pe.edu.pucp.uniteair.dp1backend.dto.AeropuertoDTO;
@@ -17,6 +16,7 @@ import pe.edu.pucp.uniteair.dp1backend.repository.SimulationSessionRepository;
 import tasf.config.Config_Simulacion;
 import tasf.core.Dataset;
 import tasf.model.Vuelo;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
 import java.time.LocalDate;
