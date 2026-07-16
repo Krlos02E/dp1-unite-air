@@ -319,6 +319,43 @@ export default function Simulacion() {
   const isColapsada = simulationState?.status === 'COLAPSADA'
   const isError = simulationState?.status === 'ERROR'
 
+  const saveConfigToStorage = (cfg: { fechaInicio: string; horaInicio: string }) => {
+    sessionStorage.setItem(SIM_CONFIG_KEY, JSON.stringify(cfg))
+  }
+
+  const saveActiveConfigToStorage = (cfg: { sessionId: string; fechaInicio: string; horaInicio: string }) => {
+    localStorage.setItem(SIM_ACTIVE_CONFIG_KEY, JSON.stringify(cfg))
+  }
+
+  const getActiveConfigFromStorage = (): { sessionId: string; fechaInicio: string; horaInicio: string } | null => {
+    const saved = localStorage.getItem(SIM_ACTIVE_CONFIG_KEY)
+    if (!saved) return null
+    try {
+      const cfg = JSON.parse(saved)
+      if (!cfg?.sessionId || !cfg?.fechaInicio || !cfg?.horaInicio) return null
+      return cfg
+    } catch {
+      return null
+    }
+  }
+
+  const clearConfigStorage = () => {
+    sessionStorage.removeItem(SIM_CONFIG_KEY)
+  }
+
+  const clearActiveConfigStorage = () => {
+    localStorage.removeItem(SIM_ACTIVE_CONFIG_KEY)
+  }
+
+  const clearSimulationViewState = useCallback(() => {
+    resetSimulation()
+    setSessionId('')
+    setIsPaused(false)
+    resetElapsedTimer()
+    clearConfigStorage()
+    clearActiveConfigStorage()
+  }, [resetElapsedTimer, resetSimulation, setIsPaused])
+
   const saveLastReportToStorage = useCallback((state: SimulationState) => {
     const payload = {
       state,
@@ -534,7 +571,18 @@ export default function Simulacion() {
     if (latestFinishedState.status !== 'COMPLETADA' && latestFinishedState.progreso < 100) return
     const reportPayload = saveLastReportToStorage(latestFinishedState)
     showReportSnapshot(latestFinishedState, reportPayload.savedAt)
-  }, [activeSimulation?.latestFinishedState, saveLastReportToStorage, showReportSnapshot])
+    if (!activeSimulation?.activa) {
+      clearSimulationViewState()
+      void refreshSimulacionContextData()
+    }
+  }, [
+    activeSimulation?.activa,
+    activeSimulation?.latestFinishedState,
+    clearSimulationViewState,
+    refreshSimulacionContextData,
+    saveLastReportToStorage,
+    showReportSnapshot,
+  ])
 
   // Sincronización local entre pestañas del mismo navegador.
   // El backend sigue siendo la fuente de verdad para estado compartido real.
@@ -650,34 +698,6 @@ export default function Simulacion() {
     return Math.max(0, Math.floor((simulationNowMs - simulationStartMs) / 1000))
   }, [simulationState?.simulationTime, fechaInicio, horaInicio])
 
-  const saveConfigToStorage = (cfg: { fechaInicio: string; horaInicio: string }) => {
-    sessionStorage.setItem(SIM_CONFIG_KEY, JSON.stringify(cfg))
-  }
-
-  const saveActiveConfigToStorage = (cfg: { sessionId: string; fechaInicio: string; horaInicio: string }) => {
-    localStorage.setItem(SIM_ACTIVE_CONFIG_KEY, JSON.stringify(cfg))
-  }
-
-  const getActiveConfigFromStorage = (): { sessionId: string; fechaInicio: string; horaInicio: string } | null => {
-    const saved = localStorage.getItem(SIM_ACTIVE_CONFIG_KEY)
-    if (!saved) return null
-    try {
-      const cfg = JSON.parse(saved)
-      if (!cfg?.sessionId || !cfg?.fechaInicio || !cfg?.horaInicio) return null
-      return cfg
-    } catch {
-      return null
-    }
-  }
-
-  const clearConfigStorage = () => {
-    sessionStorage.removeItem(SIM_CONFIG_KEY)
-  }
-
-  const clearActiveConfigStorage = () => {
-    localStorage.removeItem(SIM_ACTIVE_CONFIG_KEY)
-  }
-
   const handleIniciar = async () => {
     if (!fechaInicio || !horaInicio) {
       setError('Complete todos los campos')
@@ -746,23 +766,13 @@ export default function Simulacion() {
     } else {
       broadcastSimMessage('STOPPED', { sessionId })
     }
-    resetSimulation()
-    setSessionId('')
-    setIsPaused(false)
-    resetElapsedTimer()
-    clearConfigStorage()
-    clearActiveConfigStorage()
+    clearSimulationViewState()
     setShowStopConfirm(false)
     await refreshActiveSimulation()
   }
 
   const handleNuevaSimulacion = () => {
-    resetSimulation()
-    setSessionId('')
-    setIsPaused(false)
-    resetElapsedTimer()
-    clearConfigStorage()
-    clearActiveConfigStorage()
+    clearSimulationViewState()
     clearLastReportStorage()
     hasShownResults.current = false
     setResultSnapshot(null)

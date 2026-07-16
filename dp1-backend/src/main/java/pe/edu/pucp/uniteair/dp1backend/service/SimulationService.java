@@ -41,19 +41,22 @@ public class SimulationService {
     private final CargaArchivosService cargaArchivosService;
     private final DatasetContextService datasetContextService;
     private final AlmacenService almacenService;
+    private final SimulationContextService simulationContextService;
 
     public SimulationService(SimulationSessionRepository sessionRepository,
                              SimulationCache simulationCache,
                              SimulationEngine simulationEngine,
                              CargaArchivosService cargaArchivosService,
                              DatasetContextService datasetContextService,
-                             AlmacenService almacenService) {
+                             AlmacenService almacenService,
+                             SimulationContextService simulationContextService) {
         this.sessionRepository = sessionRepository;
         this.simulationCache = simulationCache;
         this.simulationEngine = simulationEngine;
         this.cargaArchivosService = cargaArchivosService;
         this.datasetContextService = datasetContextService;
         this.almacenService = almacenService;
+        this.simulationContextService = simulationContextService;
     }
 
     public SimulationState iniciarSimulacion(SimulacionConfigRequest req, Dataset dataset) {
@@ -321,12 +324,50 @@ public class SimulationService {
 
     public SimulationState detenerSimulacion(String sessionId) {
         simulationEngine.detenerSimulacion(sessionId);
+        SimulationState state = simulationCache.get(sessionId);
+        if (state == null) {
+            state = simulationCache.getStable(sessionId);
+        }
         var session = sessionRepository.findById(sessionId).orElse(null);
         if (session != null) {
             session.setEstado("COMPLETADA");
+            session.setProgresoPorcentaje(100);
             sessionRepository.save(session);
         }
-        return simulationCache.get(sessionId);
+        if (state != null) {
+            SimulationState completedState = SimulationState.builder()
+                    .sessionId(state.getSessionId())
+                    .status("COMPLETADA")
+                    .startedAt(state.getStartedAt())
+                    .simulationTime(state.getSimulationTime())
+                    .fechaInicio(state.getFechaInicio())
+                    .ultimaPlanificacionSimulada(state.getUltimaPlanificacionSimulada())
+                    .horizontePlanificacionMinutos(state.getHorizontePlanificacionMinutos())
+                    .duracionUltimaPlanificacionSeg(state.getDuracionUltimaPlanificacionSeg())
+                    .ultimaPlanificacionSinRuta(state.getUltimaPlanificacionSinRuta())
+                    .planificacionEstable(state.getPlanificacionEstable())
+                    .vuelos(state.getVuelos())
+                    .aeropuertos(state.getAeropuertos())
+                    .maletasEntregadas(state.getMaletasEntregadas())
+                    .maletasEnTransito(state.getMaletasEnTransito())
+                    .vuelosCulminados(state.getVuelosCulminados())
+                    .vuelosEnTransito(state.getVuelosEnTransito())
+                    .vuelosCancelados(state.getVuelosCancelados())
+                    .progreso(100)
+                    .colapsada(false)
+                    .motivoColapso(state.getMotivoColapso())
+                    .elapsedRealtimeSeconds(state.getElapsedRealtimeSeconds())
+                    .logs(state.getLogs())
+                    .envios(state.getEnvios())
+                    .maletas(state.getMaletas())
+                    .build();
+            simulationCache.put(sessionId, completedState);
+            simulationCache.putStable(sessionId, completedState);
+            simulationContextService.reiniciarContextoSimulacion();
+            return completedState;
+        }
+        simulationContextService.reiniciarContextoSimulacion();
+        return null;
     }
 
     public void pausarSimulacion(String sessionId) {

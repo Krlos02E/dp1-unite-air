@@ -12,6 +12,7 @@ import pe.edu.pucp.uniteair.dp1backend.service.AlmacenService;
 import pe.edu.pucp.uniteair.dp1backend.service.CargaArchivosService;
 import pe.edu.pucp.uniteair.dp1backend.service.ContextSyncStateService;
 import pe.edu.pucp.uniteair.dp1backend.service.DatasetContextService;
+import pe.edu.pucp.uniteair.dp1backend.service.SimulationContextService;
 import tasf.config.Config_Simulacion;
 import tasf.core.AsignacionPaquete;
 import tasf.core.Dataset;
@@ -52,6 +53,7 @@ public class SimulationEngine {
     private final AlmacenService almacenService;
     private final DatasetContextService datasetContextService;
     private final ContextSyncStateService contextSyncStateService;
+    private final SimulationContextService simulationContextService;
     private final Map<String, CompletableFuture<Void>> activeSimulations = new ConcurrentHashMap<>();
     private final Map<String, Boolean> cancellationFlags = new ConcurrentHashMap<>();
     private final Map<String, Boolean> pauseFlags = new ConcurrentHashMap<>();
@@ -89,13 +91,15 @@ public class SimulationEngine {
                             CargaArchivosService cargaArchivosService,
                             AlmacenService almacenService,
                             DatasetContextService datasetContextService,
-                            ContextSyncStateService contextSyncStateService) {
+                            ContextSyncStateService contextSyncStateService,
+                            SimulationContextService simulationContextService) {
         this.simulationCache = simulationCache;
         this.sessionRepository = sessionRepository;
         this.cargaArchivosService = cargaArchivosService;
         this.almacenService = almacenService;
         this.datasetContextService = datasetContextService;
         this.contextSyncStateService = contextSyncStateService;
+        this.simulationContextService = simulationContextService;
     }
 
     public void pausarSimulacion(String sessionId) {
@@ -485,6 +489,7 @@ public class SimulationEngine {
                         simulationCache.put(sessionId, completed);
                         simulationCache.putStable(sessionId, completed);
                     }
+                    simulationContextService.reiniciarContextoSimulacion();
                 }
                 future.complete(null);
             } catch (InterruptedException e) {
