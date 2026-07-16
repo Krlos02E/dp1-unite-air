@@ -24,6 +24,18 @@ const EMPTY_FLIGHTS: VueloDTO[] = []
 const EMPTY_AIRPORTS: AeropuertoDTO[] = []
 const SHARED_SIMULATION_CONTEXT_POLL_MS = 10000
 
+function isFinishedSimulationState(state: SimulationState | null | undefined): state is SimulationState {
+  return Boolean(
+    state
+    && (
+      state.status === 'COMPLETADA'
+      || state.status === 'COLAPSADA'
+      || state.status === 'ERROR'
+      || state.progreso >= 100
+    )
+  )
+}
+
 const aeropuertosFallback: AeropuertoDTO[] = Object.values(AIRPORTS_DATA).map((a) => ({
   codigoOACI: a.codigoOACI,
   latitud: a.latitud,
@@ -606,13 +618,13 @@ export default function Simulacion() {
     let cancelled = false
     const latestFinishedState = activeSimulation?.latestFinishedState
     if (!latestFinishedState) return
-    if (latestFinishedState.status !== 'COMPLETADA' && latestFinishedState.progreso < 100) return
+    if (!isFinishedSimulationState(latestFinishedState)) return
 
     const showAuthoritativeReport = async () => {
       let authoritativeState = latestFinishedState
       try {
         const fetchedState = await simulationService.estado(latestFinishedState.sessionId)
-        if (!cancelled && (fetchedState.status === 'COMPLETADA' || fetchedState.progreso >= 100)) {
+        if (!cancelled && isFinishedSimulationState(fetchedState)) {
           authoritativeState = fetchedState
         }
       } catch {
@@ -641,6 +653,13 @@ export default function Simulacion() {
     saveLastReportToStorage,
     showReportSnapshot,
   ])
+
+  useEffect(() => {
+    if (!isFinishedSimulationState(simulationState)) return
+
+    const reportPayload = saveLastReportToStorage(simulationState)
+    showReportSnapshot(simulationState, reportPayload.savedAt)
+  }, [saveLastReportToStorage, showReportSnapshot, simulationState])
 
   // Sincronización local entre pestañas del mismo navegador.
   // El backend sigue siendo la fuente de verdad para estado compartido real.
@@ -791,12 +810,17 @@ export default function Simulacion() {
 
   const handleDetenerConfirmado = async () => {
     if (!sessionId) return
+    let stoppedState: SimulationState | null = null
     try {
-      await simulationService.detener(sessionId)
+      stoppedState = await simulationService.detener(sessionId)
     } catch {
       // ignore
     }
     clearDismissedReportSessionId()
+    if (isFinishedSimulationState(stoppedState)) {
+      const reportPayload = saveLastReportToStorage(stoppedState)
+      showReportSnapshot(stoppedState, reportPayload.savedAt)
+    }
     broadcastSimMessage('STOPPED', { sessionId })
     clearSimulationViewState()
     setShowStopConfirm(false)
