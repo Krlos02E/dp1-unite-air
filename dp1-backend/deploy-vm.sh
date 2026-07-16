@@ -98,6 +98,19 @@ server {
         proxy_connect_timeout 75s;
         proxy_send_timeout 300s;
     }
+
+    location /ws/ {
+        proxy_pass http://localhost:${APP_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_cache_bypass \$http_upgrade;
+        proxy_read_timeout 86400s;
+    }
 }
 EOF
 sshpass -p "${VM_PASS}" scp -o StrictHostKeyChecking=no /tmp/nginx-${DOMAIN}.conf ${VM_USER}@${VM_HOST}:/tmp/nginx-${DOMAIN}.conf
