@@ -1059,7 +1059,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
           existingAnim.displayedPosition = interpolatePosition(from, to, shouldShowScheduled ? 0 : serverProgreso / 100)
         } else if (simulationMode) {
           existingAnim.startProgress = existingAnim.displayedProgress
-          existingAnim.targetProgress = serverProgreso
+          existingAnim.targetProgress = Math.max(serverProgreso, existingAnim.displayedProgress)
           existingAnim.transitionStartedAt = frameNow
           existingAnim.transitionDurationMs = 250
         } else {
