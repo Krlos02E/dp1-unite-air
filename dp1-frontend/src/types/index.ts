@@ -103,6 +103,18 @@ export interface SimulationState {
   maletas?: MaletaEstado[];
 }
 
+export interface ActiveSimulationInfo {
+  activa: boolean;
+  sessionId?: string;
+  status?: string;
+  progreso?: number;
+  startedAt?: string;
+  simulationStartedAt?: string;
+  fechaInicio?: string;
+  elapsedRealtimeSeconds?: number;
+  latestFinishedState?: SimulationState;
+}
+
 export interface AuthResponse {
   success: boolean;
   username: string;

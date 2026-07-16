@@ -24,12 +24,12 @@ public class ActiveSimulationWebSocketHandler extends TextWebSocketHandler {
         realtimeService.registerActiveSession(session);
         var activeSession = simulationService.obtenerSesionActiva();
         if (activeSession == null) {
-            realtimeService.sendMessage(session, "SIMULATION_ACTIVE_CHANGED", java.util.Map.of("activa", false));
+            realtimeService.sendMessage(session, "SIMULATION_ACTIVE_CHANGED", simulationService.obtenerInfoSesionActivaDesdeEstado(null));
             return;
         }
         var state = simulationService.obtenerEstado(activeSession.getSessionId());
         if (state == null) {
-            realtimeService.sendMessage(session, "SIMULATION_ACTIVE_CHANGED", java.util.Map.of("activa", false));
+            realtimeService.sendMessage(session, "SIMULATION_ACTIVE_CHANGED", simulationService.obtenerInfoSesionActivaDesdeEstado(null));
             return;
         }
         realtimeService.sendMessage(session, "SIMULATION_ACTIVE_CHANGED", simulationService.obtenerInfoSesionActivaDesdeEstado(state));

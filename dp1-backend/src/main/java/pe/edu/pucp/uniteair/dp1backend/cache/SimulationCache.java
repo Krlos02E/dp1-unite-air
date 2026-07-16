@@ -18,6 +18,7 @@ public class SimulationCache {
     private Cache<String, SimulationState> cache;
     private Cache<String, SimulationState> stableCache;
     private String activeSessionId;
+    private volatile SimulationState lastFinishedState;
 
     public SimulationCache(SimulationRealtimeService simulationRealtimeService) {
         this.simulationRealtimeService = simulationRealtimeService;
@@ -39,6 +40,9 @@ public class SimulationCache {
         cache.put(sessionId, state);
         if ("PLANIFICANDO".equals(state.getStatus()) || "EJECUTANDO".equals(state.getStatus())) {
             this.activeSessionId = sessionId;
+            this.lastFinishedState = null;
+        } else if (state != null && state.getStatus() != null) {
+            this.lastFinishedState = state;
         }
         simulationRealtimeService.broadcastSimulationState(state);
     }
@@ -49,6 +53,9 @@ public class SimulationCache {
 
     public void putStable(String sessionId, SimulationState state) {
         stableCache.put(sessionId, state);
+        if (state != null && state.getStatus() != null) {
+            this.lastFinishedState = state;
+        }
     }
 
     public SimulationState getStable(String sessionId) {
@@ -61,7 +68,7 @@ public class SimulationCache {
         if (sessionId.equals(this.activeSessionId)) {
             this.activeSessionId = null;
         }
-        simulationRealtimeService.broadcastNoActiveSimulation();
+        simulationRealtimeService.broadcastNoActiveSimulation(lastFinishedState);
     }
 
     public boolean containsKey(String sessionId) {
@@ -73,10 +80,14 @@ public class SimulationCache {
         SimulationState state = cache.getIfPresent(activeSessionId);
         if (state == null || "COLAPSADA".equals(state.getStatus()) || "COMPLETADA".equals(state.getStatus()) || "ERROR".equals(state.getStatus())) {
             activeSessionId = null;
-            simulationRealtimeService.broadcastNoActiveSimulation();
+            simulationRealtimeService.broadcastNoActiveSimulation(lastFinishedState);
             return null;
         }
         return activeSessionId;
+    }
+
+    public SimulationState getLastFinishedState() {
+        return lastFinishedState;
     }
 
     public Map<String, SimulationState> getAll() {

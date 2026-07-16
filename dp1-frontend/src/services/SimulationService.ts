@@ -1,5 +1,5 @@
 import { HttpClient } from './HttpClient'
-import type { SimulationState } from '../types'
+import type { ActiveSimulationInfo, SimulationState } from '../types'
 
 class SimulationService extends HttpClient {
   iniciar(config: { duracionDias: number; fechaInicio: string; horaInicio: string; algoritmo: string; velocidad?: number }): Promise<SimulationState> {
@@ -26,17 +26,8 @@ class SimulationService extends HttpClient {
     return this.get<SimulationState>(`/simulacion/${sessionId}/poll`)
   }
 
-  activa(): Promise<{
-    activa: boolean
-    sessionId?: string
-    status?: string
-    progreso?: number
-    startedAt?: string
-    elapsedRealtimeSeconds?: number
-    simulationStartedAt?: string
-    fechaInicio?: string
-  }> {
-    return this.get(`/simulacion/activa`)
+  activa(): Promise<ActiveSimulationInfo> {
+    return this.get<ActiveSimulationInfo>(`/simulacion/activa`)
   }
 
   reiniciarContexto(): Promise<{ success: boolean }> {

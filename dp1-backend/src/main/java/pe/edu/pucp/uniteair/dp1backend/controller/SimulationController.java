@@ -38,26 +38,14 @@ public class SimulationController {
     public ResponseEntity<Map<String, Object>> activa() {
         var activeSession = simulationService.obtenerSesionActiva();
         if (activeSession == null) {
-            return ResponseEntity.ok(Map.of("activa", false));
+            return ResponseEntity.ok(simulationService.obtenerInfoSesionActivaDesdeEstado(null));
         }
         String sessionId = activeSession.getSessionId();
         SimulationState state = simulationService.obtenerEstado(sessionId);
         if (state == null) {
-            return ResponseEntity.ok(Map.of("activa", false));
+            return ResponseEntity.ok(simulationService.obtenerInfoSesionActivaDesdeEstado(null));
         }
-        long elapsed = state.getStartedAt() != null
-                ? Duration.between(state.getStartedAt(), LocalDateTime.now()).getSeconds()
-                : 0;
-        return ResponseEntity.ok(Map.of(
-                "activa", true,
-                "sessionId", sessionId,
-                "status", state.getStatus(),
-                "progreso", state.getProgreso(),
-                "startedAt", state.getStartedAt(),
-                "simulationStartedAt", activeSession.getFechaInicio(),
-                "elapsedRealtimeSeconds", Math.max(0, elapsed),
-                "fechaInicio", state.getFechaInicio()
-        ));
+        return ResponseEntity.ok(simulationService.obtenerInfoSesionActivaDesdeEstado(state));
     }
 
     @PostMapping("/iniciar")

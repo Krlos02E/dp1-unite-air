@@ -70,6 +70,9 @@ public class SimulationRealtimeService {
             payload.put("startedAt", state.getStartedAt());
             payload.put("simulationStartedAt", state.getFechaInicio());
             payload.put("fechaInicio", state.getFechaInicio());
+            if (!activa) {
+                payload.put("latestFinishedState", state);
+            }
             long elapsed = state.getStartedAt() != null
                     ? Duration.between(state.getStartedAt(), LocalDateTime.now()).getSeconds()
                     : 0;
@@ -78,8 +81,13 @@ public class SimulationRealtimeService {
         broadcastToSessions(activeSessions, "SIMULATION_ACTIVE_CHANGED", payload);
     }
 
-    public void broadcastNoActiveSimulation() {
-        broadcastToSessions(activeSessions, "SIMULATION_ACTIVE_CHANGED", Map.of("activa", false));
+    public void broadcastNoActiveSimulation(SimulationState lastFinishedState) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("activa", false);
+        if (lastFinishedState != null) {
+            payload.put("latestFinishedState", lastFinishedState);
+        }
+        broadcastToSessions(activeSessions, "SIMULATION_ACTIVE_CHANGED", payload);
     }
 
     public void broadcastContextSnapshot(AlmacenContexto contexto, Map<String, Object> snapshot) {

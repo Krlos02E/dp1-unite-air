@@ -9,6 +9,7 @@ export interface ActiveSimulationInfo {
   simulationStartedAt?: string
   fechaInicio?: string
   elapsedRealtimeSeconds?: number
+  latestFinishedState?: SimulationState
 }
 
 export interface RealtimeEnvelope<T> {

@@ -185,8 +185,12 @@ public class SimulationService {
     }
 
     public Map<String, Object> obtenerInfoSesionActivaDesdeEstado(SimulationState state) {
+        SimulationState lastFinishedState = simulationCache.getLastFinishedState();
         if (state == null) {
-            return Map.of("activa", false);
+            return Map.of(
+                    "activa", false,
+                    "latestFinishedState", lastFinishedState
+            );
         }
         long elapsed = state.getStartedAt() != null
                 ? Duration.between(state.getStartedAt(), LocalDateTime.now()).getSeconds()
@@ -203,8 +207,13 @@ public class SimulationService {
                 "startedAt", state.getStartedAt(),
                 "simulationStartedAt", state.getFechaInicio(),
                 "elapsedRealtimeSeconds", Math.max(0, elapsed),
-                "fechaInicio", state.getFechaInicio()
+                "fechaInicio", state.getFechaInicio(),
+                "latestFinishedState", lastFinishedState
         );
+    }
+
+    public SimulationState obtenerUltimoReporteFinal() {
+        return simulationCache.getLastFinishedState();
     }
 
     public SimulationState obtenerEstado(String sessionId) {

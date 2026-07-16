@@ -17,6 +17,7 @@ import { broadcastSimMessage, listenSimMessages } from '../utils/broadcast'
 
 const SIM_CONFIG_KEY = 'uniteair_simConfig'
 const SIM_ACTIVE_CONFIG_KEY = 'uniteair_activeSimConfig'
+const SIM_LAST_REPORT_KEY = 'uniteair_lastSimReport'
 const DURACION_FIJA = 5
 const EMPTY_FLIGHTS: VueloDTO[] = []
 const SHARED_SIMULATION_CONTEXT_POLL_MS = 10000
@@ -274,6 +275,7 @@ export default function Simulacion() {
   const [showResultados, setShowResultados] = useState(false)
   const [resultSnapshot, setResultSnapshot] = useState<SimulationState | null>(null)
   const hasShownResults = useRef(false)
+  const lastConsumedReportAtRef = useRef(0)
 
   const hasSimulationStarted = Boolean(sessionId || simulationState)
   const hasSimulationFlightSnapshot = (simulationState?.vuelos?.length ?? 0) > 0
@@ -316,6 +318,42 @@ export default function Simulacion() {
   const isCompleted = simulationState?.status === 'COMPLETADA' || (simulationState && simulationState.progreso >= 100)
   const isColapsada = simulationState?.status === 'COLAPSADA'
   const isError = simulationState?.status === 'ERROR'
+
+  const saveLastReportToStorage = useCallback((state: SimulationState) => {
+    const payload = {
+      state,
+      savedAt: Date.now(),
+    }
+    localStorage.setItem(SIM_LAST_REPORT_KEY, JSON.stringify(payload))
+    return payload
+  }, [])
+
+  const clearLastReportStorage = useCallback(() => {
+    localStorage.removeItem(SIM_LAST_REPORT_KEY)
+    lastConsumedReportAtRef.current = 0
+  }, [])
+
+  const showReportSnapshot = useCallback((state: SimulationState, savedAt?: number) => {
+    if (savedAt && savedAt <= lastConsumedReportAtRef.current) return
+    if (savedAt) {
+      lastConsumedReportAtRef.current = savedAt
+    }
+    hasShownResults.current = true
+    setResultSnapshot({ ...state })
+    setShowResultados(true)
+  }, [])
+
+  const tryConsumeStoredReport = useCallback((rawValue: string | null) => {
+    if (!rawValue) return false
+    try {
+      const parsed = JSON.parse(rawValue) as { state?: SimulationState; savedAt?: number }
+      if (!parsed.state || !parsed.savedAt) return false
+      showReportSnapshot(parsed.state, parsed.savedAt)
+      return true
+    } catch {
+      return false
+    }
+  }, [showReportSnapshot])
 
   // Restore config from sessionStorage on mount
   useEffect(() => {
@@ -452,9 +490,8 @@ export default function Simulacion() {
               (latestState.status === 'COMPLETADA' || latestState.progreso >= 100)
               && !hasShownResults.current
             ) {
-              hasShownResults.current = true
-              setResultSnapshot({ ...latestState })
-              setShowResultados(true)
+              const reportPayload = saveLastReportToStorage(latestState)
+              showReportSnapshot(latestState, reportPayload.savedAt)
             }
             return
           }
@@ -468,16 +505,18 @@ export default function Simulacion() {
     }
     void syncFromActiveSimulation()
     return () => { cancelled = true }
-  }, [activeSimulation, isRunning, sessionId, simulationState?.sessionId, startPolling, resetSimulation, isCompleted, isColapsada, isError, setSimulationState])
+  }, [activeSimulation, isRunning, sessionId, simulationState?.sessionId, startPolling, resetSimulation, isCompleted, isColapsada, isError, saveLastReportToStorage, setSimulationState, showReportSnapshot])
 
   useEffect(() => {
     const syncWhenVisible = () => {
       if (document.visibilityState !== 'visible') return
       void refreshActiveSimulation()
+      tryConsumeStoredReport(localStorage.getItem(SIM_LAST_REPORT_KEY))
     }
 
     const syncWhenFocused = () => {
       void refreshActiveSimulation()
+      tryConsumeStoredReport(localStorage.getItem(SIM_LAST_REPORT_KEY))
     }
 
     document.addEventListener('visibilitychange', syncWhenVisible)
@@ -487,21 +526,47 @@ export default function Simulacion() {
       document.removeEventListener('visibilitychange', syncWhenVisible)
       window.removeEventListener('focus', syncWhenFocused)
     }
-  }, [refreshActiveSimulation])
+  }, [refreshActiveSimulation, tryConsumeStoredReport])
+
+  useEffect(() => {
+    const latestFinishedState = activeSimulation?.latestFinishedState
+    if (!latestFinishedState) return
+    if (latestFinishedState.status !== 'COMPLETADA' && latestFinishedState.progreso < 100) return
+    const reportPayload = saveLastReportToStorage(latestFinishedState)
+    showReportSnapshot(latestFinishedState, reportPayload.savedAt)
+  }, [activeSimulation?.latestFinishedState, saveLastReportToStorage, showReportSnapshot])
 
   // Sincronización local entre pestañas del mismo navegador.
   // El backend sigue siendo la fuente de verdad para estado compartido real.
   useEffect(() => {
     const unlisten = listenSimMessages((msg) => {
-      if (msg.type === 'STARTED' || msg.type === 'STOPPED') {
+      if (msg.type === 'STARTED') {
+        clearLastReportStorage()
         void refreshActiveSimulation()
+      }
+      if (msg.type === 'STOPPED') {
+        void refreshActiveSimulation()
+        tryConsumeStoredReport(localStorage.getItem(SIM_LAST_REPORT_KEY))
       }
     })
 
     return () => {
       unlisten()
     }
-  }, [refreshActiveSimulation])
+  }, [clearLastReportStorage, refreshActiveSimulation, tryConsumeStoredReport])
+
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === SIM_LAST_REPORT_KEY) {
+        tryConsumeStoredReport(event.newValue)
+      }
+    }
+
+    window.addEventListener('storage', handleStorage)
+    return () => {
+      window.removeEventListener('storage', handleStorage)
+    }
+  }, [tryConsumeStoredReport])
 
   const vuelos = useMemo(() => {
     if (!hasSimulationFlightSnapshot) return EMPTY_FLIGHTS
@@ -547,11 +612,10 @@ export default function Simulacion() {
   useEffect(() => {
     const shouldShow = simulationState && (simulationState.status === 'COMPLETADA' || simulationState.progreso >= 100)
     if (shouldShow && !hasShownResults.current) {
-      hasShownResults.current = true
-      setResultSnapshot({ ...simulationState })
-      setShowResultados(true)
+      const reportPayload = saveLastReportToStorage(simulationState)
+      showReportSnapshot(simulationState, reportPayload.savedAt)
     }
-  }, [simulationState])
+  }, [saveLastReportToStorage, showReportSnapshot, simulationState])
 
   // (eliminado: beforeunload ya no detiene la simulación, para permitir multi-pestaña)
   function formatElapsed(seconds: number): string {
@@ -636,6 +700,7 @@ export default function Simulacion() {
       }
       saveConfigToStorage({ fechaInicio, horaInicio })
       saveActiveConfigToStorage({ sessionId: state.sessionId, fechaInicio, horaInicio })
+      clearLastReportStorage()
       hasShownResults.current = false
       setResultSnapshot(null)
       setSessionId(state.sessionId)
@@ -659,15 +724,27 @@ export default function Simulacion() {
 
   const handleDetenerConfirmado = async () => {
     if (!sessionId) return
-    const snapshot = simulationState ? { ...simulationState } : null
+    let finalState: SimulationState | null = null
     try {
-      await simulationService.detener(sessionId)
+      finalState = await simulationService.detener(sessionId)
     } catch {
       // ignore
     }
-    if (snapshot) {
-      setResultSnapshot(snapshot)
-      setShowResultados(true)
+    if (!finalState && simulationState) {
+      finalState = {
+        ...simulationState,
+        status: 'COMPLETADA',
+      }
+    }
+    if (finalState) {
+      const reportPayload = saveLastReportToStorage(finalState)
+      showReportSnapshot(finalState, reportPayload.savedAt)
+      broadcastSimMessage('STOPPED', {
+        sessionId,
+        reportSavedAt: reportPayload.savedAt,
+      })
+    } else {
+      broadcastSimMessage('STOPPED', { sessionId })
     }
     resetSimulation()
     setSessionId('')
@@ -675,8 +752,6 @@ export default function Simulacion() {
     resetElapsedTimer()
     clearConfigStorage()
     clearActiveConfigStorage()
-    broadcastSimMessage('STOPPED')
-    hasShownResults.current = false
     setShowStopConfirm(false)
     await refreshActiveSimulation()
   }
@@ -688,6 +763,7 @@ export default function Simulacion() {
     resetElapsedTimer()
     clearConfigStorage()
     clearActiveConfigStorage()
+    clearLastReportStorage()
     hasShownResults.current = false
     setResultSnapshot(null)
     setShowResultados(false)
