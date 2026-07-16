@@ -828,7 +828,18 @@ export default function Simulacion() {
     return () => window.clearTimeout(timeoutId)
   }, [panelCollapsed])
 
-  const displayAirports = hasSimulationStarted ? aeropuertos : EMPTY_AIRPORTS
+  const idleAirports = useMemo(
+    () => aeropuertosFallback.map((airport) => ({
+      ...airport,
+      ocupacionActual: 0,
+      vuelosEntrantes: [],
+      vuelosSalientes: [],
+      vuelosCanceladosSalientes: [],
+    })),
+    [],
+  )
+
+  const displayAirports = hasSimulationStarted ? aeropuertos : idleAirports
   const displayFlights = hasSimulationStarted ? vuelos : EMPTY_FLIGHTS
   const enviosActivos = hasSimulationStarted ? (simulationState?.envios || []) : []
   const maletasActivas = hasSimulationStarted ? (simulationState?.maletas || []) : []
