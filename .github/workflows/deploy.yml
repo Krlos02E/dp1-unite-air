@@ -1,7 +1,8 @@
 name: Deploy to VM PUCP
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [main]
 
 jobs:
   deploy:
