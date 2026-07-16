@@ -273,11 +273,6 @@ export default function SimulacionEjecucion({ sessionId, onColapso, onBack }: Pr
         onClose={() => {
           setShowResultados(false)
           setResultSnapshot(null)
-          onBack()
-        }}
-        onNuevaSimulacion={() => {
-          setShowResultados(false)
-          setResultSnapshot(null)
           handleNuevaSimulacion()
         }}
       />

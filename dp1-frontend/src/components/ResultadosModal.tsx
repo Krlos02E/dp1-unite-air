@@ -5,7 +5,6 @@ interface Props {
   state: SimulationState | null
   isOpen: boolean
   onClose: () => void
-  onNuevaSimulacion: () => void
 }
 
 function sameRoute(actual?: string[] | null, anterior?: string[] | null) {
@@ -56,7 +55,7 @@ function extractLastPlanningDuration(logs: SimulationState['logs']): string {
   return match ? `${match[1]} s` : '--'
 }
 
-export default function ResultadosModal({ state, isOpen, onClose, onNuevaSimulacion }: Props) {
+export default function ResultadosModal({ state, isOpen, onClose }: Props) {
   if (!isOpen || !state) return null
 
   const envios = state.envios ?? []
@@ -94,8 +93,7 @@ export default function ResultadosModal({ state, isOpen, onClose, onNuevaSimulac
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sticky top-0 z-10 border-b border-gray-800 bg-gray-950/95 px-6 py-5 backdrop-blur">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 flex-1">
+          <div className="min-w-0">
               <h2 className="text-2xl font-bold text-emerald-400">Reporte de la Última Planificación Estable</h2>
               <p className="mt-1 text-sm text-gray-300">
                 Resumen de la última planificación válida lograda por el sistema
@@ -134,14 +132,6 @@ export default function ResultadosModal({ state, isOpen, onClose, onNuevaSimulac
                   <p className="mt-2 text-base font-semibold text-gray-100">{duracionUltimaPlanificacion}</p>
                 </div>
               </div>
-            </div>
-            <button
-              onClick={onClose}
-              className="text-3xl leading-none text-gray-400 transition-colors hover:text-white"
-              aria-label="Cerrar"
-            >
-              &times;
-            </button>
           </div>
         </div>
 
@@ -203,18 +193,12 @@ export default function ResultadosModal({ state, isOpen, onClose, onNuevaSimulac
         </div>
 
         <div className="sticky bottom-0 border-t border-gray-800 bg-gray-950/95 px-6 py-4 backdrop-blur">
-          <div className="flex gap-3">
+          <div className="flex">
             <button
               onClick={onClose}
               className="flex-1 rounded-xl bg-gray-700 py-3 font-medium transition-colors hover:bg-gray-600"
             >
               Cerrar
-            </button>
-            <button
-              onClick={onNuevaSimulacion}
-              className="flex-1 rounded-xl bg-emerald-600 py-3 font-medium transition-colors hover:bg-emerald-700"
-            >
-              Nueva Simulación
             </button>
           </div>
         </div>

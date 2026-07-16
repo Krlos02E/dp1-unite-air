@@ -1227,15 +1227,6 @@ export default function Simulacion() {
           }
           setShowResultados(false)
           setResultSnapshot(null)
-          hasShownResults.current = false
-          lockedReportSessionIdRef.current = null
-        }}
-        onNuevaSimulacion={() => {
-          if (resultSnapshot?.sessionId) {
-            dismissReportSession(resultSnapshot.sessionId)
-          }
-          setShowResultados(false)
-          setResultSnapshot(null)
           handleNuevaSimulacion()
         }}
       />
