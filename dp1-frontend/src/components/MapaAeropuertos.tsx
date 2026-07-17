@@ -778,7 +778,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       const cityName = getAirportCityResolved(a.codigoOACI, airportLookup) || a.codigoOACI
       const label = cityName === a.codigoOACI
         ? a.codigoOACI
-        : `${cityName} (${a.codigoOACI})`
+        : `${a.codigoOACI} · ${cityName}`
       const passesPanelFilter = !filteredAirportIds || filteredAirportIds.has(a.codigoOACI) || a.codigoOACI === selectedAeropuertoIdRef.current
 
       const staticData = AIRPORTS_DATA[a.codigoOACI]

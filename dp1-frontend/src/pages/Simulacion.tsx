@@ -588,7 +588,9 @@ export default function Simulacion() {
             || latestState.progreso >= 100
 
           if (finished) {
-            setSimulationState(latestState)
+            const reportPayload = saveLastReportToStorage(latestState)
+            clearSimulationViewState()
+            showReportSnapshot(latestState, reportPayload.savedAt)
             return
           }
         } catch {
@@ -601,7 +603,21 @@ export default function Simulacion() {
     }
     void syncFromActiveSimulation()
     return () => { cancelled = true }
-  }, [activeSimulation, isRunning, sessionId, simulationState?.sessionId, startPolling, resetSimulation, isCompleted, isColapsada, isError, setSimulationState])
+  }, [
+    activeSimulation,
+    clearSimulationViewState,
+    isRunning,
+    sessionId,
+    simulationState?.sessionId,
+    startPolling,
+    resetSimulation,
+    isCompleted,
+    isColapsada,
+    isError,
+    saveLastReportToStorage,
+    setSimulationState,
+    showReportSnapshot,
+  ])
 
   useEffect(() => {
     const syncWhenVisible = () => {
@@ -681,15 +697,17 @@ export default function Simulacion() {
         void refreshActiveSimulation()
       }
       if (msg.type === 'STOPPED') {
-        void refreshActiveSimulation()
-        void tryConsumeStoredReport(localStorage.getItem(SIM_LAST_REPORT_KEY))
+        clearSimulationViewState()
+        void refreshActiveSimulation().finally(() => {
+          void tryConsumeStoredReport(localStorage.getItem(SIM_LAST_REPORT_KEY))
+        })
       }
     })
 
     return () => {
       unlisten()
     }
-  }, [clearLastReportStorage, refreshActiveSimulation, tryConsumeStoredReport])
+  }, [clearLastReportStorage, clearSimulationViewState, refreshActiveSimulation, tryConsumeStoredReport])
 
   useEffect(() => {
     const handleStorage = (event: StorageEvent) => {
