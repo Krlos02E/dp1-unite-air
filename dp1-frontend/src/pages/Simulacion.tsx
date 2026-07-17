@@ -981,6 +981,7 @@ export default function Simulacion() {
                           type="date"
                           value={fechaInicio}
                           onChange={(e) => setFechaInicio(e.target.value)}
+                          disabled={loading}
                           className="mt-1 w-full rounded-lg border border-gray-600 bg-gray-800/90 px-2 py-1.5 text-xs text-gray-100 transition-colors hover:bg-gray-800 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
                         />
                       </label>
@@ -990,18 +991,24 @@ export default function Simulacion() {
                           type="time"
                           value={horaInicio}
                           onChange={(e) => setHoraInicio(e.target.value)}
+                          disabled={loading}
                           className="mt-1 w-full rounded-lg border border-gray-600 bg-gray-800/90 px-2 py-1.5 text-xs text-gray-100 transition-colors hover:bg-gray-800 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
                         />
                       </label>
                     </div>
                     {error && <p className="text-xs font-medium text-red-400">{error}</p>}
+                    {loading && (
+                      <div className="rounded-lg border border-sky-800/70 bg-sky-950/35 px-3 py-2 text-[11px] text-sky-200">
+                        Preparando la simulación inicial y calculando el primer estado...
+                      </div>
+                    )}
                     <button
                       type="button"
                       onClick={handleIniciar}
                       disabled={loading}
-                      className="w-full rounded-lg bg-sky-600 px-4 py-1.5 text-xs font-medium text-white transition-colors hover:bg-sky-500 disabled:bg-gray-600 cursor-pointer"
+                      className="w-full rounded-lg bg-sky-600 px-4 py-1.5 text-xs font-medium text-white transition-colors hover:bg-sky-500 disabled:cursor-wait disabled:bg-sky-900"
                     >
-                      {loading ? 'Iniciando...' : 'Iniciar'}
+                      {loading ? 'Iniciando simulación...' : 'Iniciar'}
                     </button>
                   </>
                 ) : (
@@ -1286,6 +1293,22 @@ export default function Simulacion() {
                 <h3 className="text-base font-semibold text-gray-100">Deteniendo simulación</h3>
                 <p className="mt-1 text-sm text-gray-400">
                   Estamos cerrando la ejecución y generando el reporte final.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {loading && !simulationState && (
+        <div className="fixed inset-0 z-[2050] flex items-center justify-center bg-black/45 px-4">
+          <div className="w-full max-w-md rounded-2xl border border-gray-700 bg-gray-950 p-6 shadow-2xl">
+            <div className="flex items-center gap-4">
+              <div className="h-10 w-10 animate-spin rounded-full border-2 border-sky-500/25 border-t-sky-400" />
+              <div>
+                <h3 className="text-base font-semibold text-gray-100">Iniciando simulación</h3>
+                <p className="mt-1 text-sm text-gray-400">
+                  Estamos cargando los datos y generando la planificación inicial.
                 </p>
               </div>
             </div>
