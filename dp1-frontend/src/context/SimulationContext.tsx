@@ -37,6 +37,22 @@ function shouldPreserveFlightSnapshot(nextState: SimulationState, currentState: 
   return totalFlightLoad(nextState) === 0 && totalFlightLoad(currentState) > 0
 }
 
+function deriveElapsedRealtimeSeconds(state?: Pick<SimulationState, 'startedAt' | 'elapsedRealtimeSeconds'> | null): number | null {
+  if (!state) return null
+  const values: number[] = []
+  if (typeof state.elapsedRealtimeSeconds === 'number' && Number.isFinite(state.elapsedRealtimeSeconds)) {
+    values.push(Math.max(0, Math.floor(state.elapsedRealtimeSeconds)))
+  }
+  if (state.startedAt) {
+    const parsed = Date.parse(state.startedAt)
+    if (!Number.isNaN(parsed)) {
+      values.push(Math.max(0, Math.floor((Date.now() - parsed) / 1000)))
+    }
+  }
+  if (values.length === 0) return null
+  return Math.max(...values)
+}
+
 export function SimulationProvider({ children }: { children: ReactNode }) {
   const [simulationState, setSimulationState] = useState<SimulationState | null>(null)
   const [activeSimulation, setActiveSimulation] = useState<ActiveSimulationInfo | null>(null)
@@ -112,10 +128,11 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
 
   const applySimulationState = useCallback((state: SimulationState) => {
     pollErrorCountRef.current = 0
-    if (state.elapsedRealtimeSeconds !== undefined) {
-      serverElapsedRef.current = state.elapsedRealtimeSeconds
+    const derivedElapsed = deriveElapsedRealtimeSeconds(state)
+    if (derivedElapsed !== null) {
+      serverElapsedRef.current = Math.max(serverElapsedRef.current, derivedElapsed)
       serverPollTimeRef.current = performance.now()
-      setElapsedRealSeconds(state.elapsedRealtimeSeconds)
+      setElapsedRealSeconds((current) => Math.max(current, serverElapsedRef.current))
     }
     setSimulationState((current) => {
       if (!shouldPreserveFlightSnapshot(state, current)) {
@@ -258,18 +275,14 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
     }))
     setIsRunning(true)
     setIsPaused(false)
-    if (initialElapsed !== undefined) {
-      serverElapsedRef.current = initialElapsed
+    const initialDerivedElapsed = deriveElapsedRealtimeSeconds({
+      startedAt,
+      elapsedRealtimeSeconds: initialElapsed,
+    })
+    if (initialDerivedElapsed !== null) {
+      serverElapsedRef.current = Math.max(serverElapsedRef.current, initialDerivedElapsed)
       serverPollTimeRef.current = performance.now()
-      setElapsedRealSeconds(initialElapsed)
-    } else if (startedAt) {
-      const parsed = Date.parse(startedAt)
-      if (!isNaN(parsed)) {
-        const elapsed = Math.max(0, Math.floor((Date.now() - parsed) / 1000))
-        serverElapsedRef.current = elapsed
-        serverPollTimeRef.current = performance.now()
-        setElapsedRealSeconds(elapsed)
-      }
+      setElapsedRealSeconds((current) => Math.max(current, serverElapsedRef.current))
     } else {
       setElapsedRealSeconds(0)
       serverElapsedRef.current = 0
