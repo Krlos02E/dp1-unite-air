@@ -41,7 +41,7 @@ public class SimulationCache {
         if ("PLANIFICANDO".equals(state.getStatus()) || "EJECUTANDO".equals(state.getStatus())) {
             this.activeSessionId = sessionId;
             this.lastFinishedState = null;
-        } else if (state != null && state.getStatus() != null) {
+        } else if (esEstadoFinal(state)) {
             this.lastFinishedState = state;
         }
         simulationRealtimeService.broadcastSimulationState(state);
@@ -53,7 +53,7 @@ public class SimulationCache {
 
     public void putStable(String sessionId, SimulationState state) {
         stableCache.put(sessionId, state);
-        if (state != null && state.getStatus() != null) {
+        if (esEstadoFinal(state)) {
             this.lastFinishedState = state;
         }
     }
@@ -87,7 +87,16 @@ public class SimulationCache {
     }
 
     public SimulationState getLastFinishedState() {
-        return lastFinishedState;
+        return esEstadoFinal(lastFinishedState) ? lastFinishedState : null;
+    }
+
+    private boolean esEstadoFinal(SimulationState state) {
+        if (state == null || state.getStatus() == null) {
+            return false;
+        }
+        return "COMPLETADA".equals(state.getStatus())
+                || "COLAPSADA".equals(state.getStatus())
+                || "ERROR".equals(state.getStatus());
     }
 
     public Map<String, SimulationState> getAll() {
