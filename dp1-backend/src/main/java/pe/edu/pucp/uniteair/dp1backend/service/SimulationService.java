@@ -36,6 +36,7 @@ import java.util.stream.Collectors;
 
 @Service
 public class SimulationService {
+    private static final int DEFAULT_SIMULATION_LOOKAHEAD_MINUTES = 120;
 
     private final SimulationSessionRepository sessionRepository;
     private final SimulationCache simulationCache;
@@ -121,7 +122,7 @@ public class SimulationService {
                     .startedAt(LocalDateTime.now())
                     .simulationTime(fechaInicio)
                     .fechaInicio(fechaInicio)
-                    .horizontePlanificacionMinutos(180)
+                    .horizontePlanificacionMinutos(DEFAULT_SIMULATION_LOOKAHEAD_MINUTES)
                     .planificacionEstable(false)
                     .vuelos(new ArrayList<>())
                     .aeropuertos(new ArrayList<>())
@@ -169,7 +170,7 @@ public class SimulationService {
                 .startedAt(session.getCreatedAt())
                 .simulationTime(fechaInicio)
                 .fechaInicio(fechaInicio)
-                .horizontePlanificacionMinutos(180)
+                .horizontePlanificacionMinutos(DEFAULT_SIMULATION_LOOKAHEAD_MINUTES)
                 .planificacionEstable(false)
                 .vuelos(new ArrayList<>())
                 .aeropuertos(new ArrayList<>())
@@ -257,7 +258,7 @@ public class SimulationService {
                         .startedAt(session.getCreatedAt())
                         .simulationTime(session.getFechaActualSimulacion())
                         .fechaInicio(session.getFechaInicio())
-                        .horizontePlanificacionMinutos(180)
+                        .horizontePlanificacionMinutos(DEFAULT_SIMULATION_LOOKAHEAD_MINUTES)
                         .planificacionEstable(false)
                         .maletasEntregadas(0)
                         .maletasEnTransito(0)

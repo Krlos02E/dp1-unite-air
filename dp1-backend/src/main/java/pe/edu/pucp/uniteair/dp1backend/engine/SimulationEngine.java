@@ -44,7 +44,7 @@ public class SimulationEngine {
 
     private static final int REPLAN_SIM_INTERVAL_HOURS = 1;
     private static final int SIMULATION_STEP_MINUTES = 5;
-    private static final int ROLLING_LOOKAHEAD_MINUTES = 180;
+    private static final int ROLLING_LOOKAHEAD_MINUTES = 120;
     private static final int FLIGHT_WINDOW_LOOKBACK_HOURS = 24;
     private static final int FLIGHT_WINDOW_FORWARD_BUFFER_HOURS = 48;
 
