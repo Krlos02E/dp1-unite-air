@@ -30,6 +30,7 @@ import tasf.strategy.PlanificadorRutasStrategy;
 import tasf.strategy.alns.ALNS_RutasPlanner;
 import tools.jackson.databind.ObjectMapper;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -500,6 +501,7 @@ public class SimulationEngine {
                                 .progreso(100)
                                 .colapsada(false)
                                 .motivoColapso(finalState.getMotivoColapso())
+                                .elapsedRealtimeSeconds(calcularElapsedRealtimeSeconds(finalState.getStartedAt()))
                                 .logs(finalState.getLogs())
                                 .envios(finalState.getEnvios())
                                 .maletas(finalState.getMaletas())
@@ -1387,6 +1389,7 @@ public class SimulationEngine {
                 .progreso(progresoSim)
                 .colapsada(colapsada)
                 .motivoColapso(motivo)
+                .elapsedRealtimeSeconds(calcularElapsedRealtimeSeconds(startedAt))
                 .logs(new ArrayList<>(logs))
                 .envios(enviosDTO)
                 .maletas(maletasDTO)
@@ -1423,10 +1426,11 @@ public class SimulationEngine {
     }
 
     private void actualizarEstadoColapsado(String sessionId, LocalDateTime simTime, LocalDateTime fechaInicio, String motivo, List<LogEntry> logs) {
+        LocalDateTime startedAt = LocalDateTime.now();
         SimulationState updated = SimulationState.builder()
                 .sessionId(sessionId)
                 .status("COLAPSADA")
-                .startedAt(LocalDateTime.now())
+                .startedAt(startedAt)
                 .simulationTime(simTime)
                 .fechaInicio(fechaInicio)
                 .vuelos(new ArrayList<>())
@@ -1436,10 +1440,18 @@ public class SimulationEngine {
                 .progreso(0)
                 .colapsada(true)
                 .motivoColapso(motivo)
+                .elapsedRealtimeSeconds(calcularElapsedRealtimeSeconds(startedAt))
                 .logs(logs)
                 .envios(new ArrayList<>())
                 .maletas(new ArrayList<>())
                 .build();
         simulationCache.put(sessionId, updated);
+    }
+
+    private long calcularElapsedRealtimeSeconds(LocalDateTime startedAt) {
+        if (startedAt == null) {
+            return 0L;
+        }
+        return Math.max(0L, Duration.between(startedAt, LocalDateTime.now()).getSeconds());
     }
 }

@@ -416,6 +416,7 @@ export default function Simulacion() {
   }, [getDismissedReportSessionId])
 
   const tryConsumeStoredReport = useCallback(async (rawValue: string | null) => {
+    if (activeSimulation?.activa || isRunning || sessionId) return false
     if (!rawValue) return false
     try {
       const parsed = JSON.parse(rawValue) as { sessionId?: string; savedAt?: number }
@@ -446,7 +447,15 @@ export default function Simulacion() {
     } catch {
       return false
     }
-  }, [activeSimulation?.latestFinishedState, getDismissedReportSessionId, showReportSnapshot, simulationState])
+  }, [
+    activeSimulation?.activa,
+    activeSimulation?.latestFinishedState,
+    getDismissedReportSessionId,
+    isRunning,
+    sessionId,
+    showReportSnapshot,
+    simulationState,
+  ])
 
   // Restore config from sessionStorage on mount
   useEffect(() => {
@@ -617,6 +626,7 @@ export default function Simulacion() {
   useEffect(() => {
     let cancelled = false
     const latestFinishedState = activeSimulation?.latestFinishedState
+    if (activeSimulation?.activa) return
     if (!latestFinishedState) return
     if (!isFinishedSimulationState(latestFinishedState)) return
 
@@ -789,6 +799,7 @@ export default function Simulacion() {
       clearDismissedReportSessionId()
       hasShownResults.current = false
       setResultSnapshot(null)
+      setShowResultados(false)
       setSessionId(state.sessionId)
       startPolling(state.sessionId, undefined, state.startedAt, state.elapsedRealtimeSeconds)
       await refreshActiveSimulation()
@@ -807,6 +818,13 @@ export default function Simulacion() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (!activeSimulation?.activa && !isRunning && !sessionId) return
+    setShowResultados(false)
+    setResultSnapshot(null)
+    hasShownResults.current = false
+  }, [activeSimulation?.activa, isRunning, sessionId])
 
   const handleDetenerConfirmado = async () => {
     if (!sessionId) return

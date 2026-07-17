@@ -24,6 +24,19 @@ interface SimulationContextType {
 
 const SimulationContext = createContext<SimulationContextType | null>(null)
 
+function totalFlightLoad(state: SimulationState | null | undefined): number {
+  if (!state?.vuelos?.length) return 0
+  return state.vuelos.reduce((total, vuelo) => total + Math.max(0, vuelo.cargaActual || 0), 0)
+}
+
+function shouldPreserveFlightSnapshot(nextState: SimulationState, currentState: SimulationState | null): boolean {
+  if (!currentState) return false
+  if (nextState.colapsada || nextState.status === 'COMPLETADA' || nextState.status === 'ERROR') return false
+  if (nextState.planificacionEstable !== false) return false
+  if (!nextState.vuelos?.length || !currentState.vuelos?.length) return false
+  return totalFlightLoad(nextState) === 0 && totalFlightLoad(currentState) > 0
+}
+
 export function SimulationProvider({ children }: { children: ReactNode }) {
   const [simulationState, setSimulationState] = useState<SimulationState | null>(null)
   const [activeSimulation, setActiveSimulation] = useState<ActiveSimulationInfo | null>(null)
@@ -104,7 +117,41 @@ export function SimulationProvider({ children }: { children: ReactNode }) {
       serverPollTimeRef.current = performance.now()
       setElapsedRealSeconds(state.elapsedRealtimeSeconds)
     }
-    setSimulationState(state)
+    setSimulationState((current) => {
+      if (!shouldPreserveFlightSnapshot(state, current)) {
+        return state
+      }
+
+      const previousState = current as SimulationState
+      const previousFlights = new Map(previousState.vuelos.map((vuelo) => [vuelo.id, vuelo]))
+      const previousAirports = new Map(previousState.aeropuertos.map((aeropuerto) => [aeropuerto.codigoOACI, aeropuerto]))
+
+      return {
+        ...state,
+        vuelos: state.vuelos.map((vuelo) => {
+          const previous = previousFlights.get(vuelo.id)
+          if (!previous || vuelo.cargaActual > 0 || previous.cargaActual <= 0) {
+            return vuelo
+          }
+          return {
+            ...vuelo,
+            cargaActual: previous.cargaActual,
+          }
+        }),
+        aeropuertos: state.aeropuertos.map((aeropuerto) => {
+          const previous = previousAirports.get(aeropuerto.codigoOACI)
+          if (!previous || aeropuerto.ocupacionActual > 0 || previous.ocupacionActual <= 0) {
+            return aeropuerto
+          }
+          return {
+            ...aeropuerto,
+            ocupacionActual: previous.ocupacionActual,
+          }
+        }),
+        envios: state.envios && state.envios.length > 0 ? state.envios : previousState.envios,
+        maletas: state.maletas && state.maletas.length > 0 ? state.maletas : previousState.maletas,
+      }
+    })
     setActiveSimulation((current) => ({
       ...(current ?? {}),
       activa: !(state.colapsada || state.status === 'COMPLETADA' || state.status === 'ERROR'),

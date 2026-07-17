@@ -482,7 +482,9 @@ function VueloListPanel({
       if (result.success && result.vueloId) {
         setFlightMessage({ tipo: 'success', texto: `Vuelo ${result.vueloId} cancelado correctamente` })
         onFlightStatusChanged?.(result.vueloId, 'CANCELADO')
-        await onDataChanged?.()
+        if (contexto !== 'SIMULACION') {
+          await onDataChanged?.()
+        }
       } else {
         setFlightMessage({ tipo: 'error', texto: result.message || 'No se pudo cancelar el vuelo' })
       }
@@ -505,7 +507,9 @@ function VueloListPanel({
       if (result.success && result.vueloId) {
         setFlightMessage({ tipo: 'success', texto: `Vuelo ${result.vueloId} descancelado correctamente` })
         onFlightStatusChanged?.(result.vueloId, 'PROGRAMADO')
-        await onDataChanged?.()
+        if (contexto !== 'SIMULACION') {
+          await onDataChanged?.()
+        }
       } else {
         setFlightMessage({ tipo: 'error', texto: result.message || 'No se pudo descancelar el vuelo' })
       }
