@@ -81,6 +81,7 @@ export default function Simulacion() {
   const [selectedEnvioRouteMode, setSelectedEnvioRouteMode] = useState<'actual' | 'anterior'>('actual')
   const [selectedMaletaRouteMode, setSelectedMaletaRouteMode] = useState<'actual' | 'anterior'>('actual')
   const [showStopConfirm, setShowStopConfirm] = useState(false)
+  const [isStoppingSimulation, setIsStoppingSimulation] = useState(false)
   const [mapTz, setMapTz] = useState(0)
   const [simInfoCollapsed, setSimInfoCollapsed] = useState(false)
   const [ocuCollapsed, setOcuCollapsed] = useState(false)
@@ -827,7 +828,8 @@ export default function Simulacion() {
   }, [activeSimulation?.activa, isRunning, sessionId])
 
   const handleDetenerConfirmado = async () => {
-    if (!sessionId) return
+    if (!sessionId || isStoppingSimulation) return
+    setIsStoppingSimulation(true)
     setShowStopConfirm(false)
     let stoppedState: SimulationState | null = null
     try {
@@ -843,6 +845,7 @@ export default function Simulacion() {
     broadcastSimMessage('STOPPED', { sessionId })
     clearSimulationViewState()
     await refreshActiveSimulation()
+    setIsStoppingSimulation(false)
   }
 
   const handleNuevaSimulacion = () => {
@@ -1032,9 +1035,10 @@ export default function Simulacion() {
                       <button
                         type="button"
                         onClick={() => setShowStopConfirm(true)}
-                        className="w-full rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-500 cursor-pointer"
+                        disabled={isStoppingSimulation}
+                        className="w-full rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-500 disabled:cursor-wait disabled:bg-red-800"
                       >
-                        Detener
+                        {isStoppingSimulation ? 'Generando reporte...' : 'Detener'}
                       </button>
                     )}
                     {isCompleted && (
@@ -1273,6 +1277,22 @@ export default function Simulacion() {
         }}
       />
 
+      {isStoppingSimulation && (
+        <div className="fixed inset-0 z-[2100] flex items-center justify-center bg-black/65 px-4">
+          <div className="w-full max-w-md rounded-2xl border border-gray-700 bg-gray-950 p-6 shadow-2xl">
+            <div className="flex items-center gap-4">
+              <div className="h-10 w-10 animate-spin rounded-full border-2 border-sky-500/25 border-t-sky-400" />
+              <div>
+                <h3 className="text-base font-semibold text-gray-100">Deteniendo simulación</h3>
+                <p className="mt-1 text-sm text-gray-400">
+                  Estamos cerrando la ejecución y generando el reporte final.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal confirmación detener */}
       {showStopConfirm && (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60">
@@ -1284,7 +1304,7 @@ export default function Simulacion() {
                 onClick={handleDetenerConfirmado}
                 className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg font-medium text-sm transition-colors cursor-pointer"
               >
-                Sí
+                Sí, detener
               </button>
               <button
                 onClick={() => setShowStopConfirm(false)}
