@@ -821,11 +821,12 @@ export default function Simulacion() {
   }
 
   useEffect(() => {
+    if (showResultados || resultSnapshot) return
     if (!activeSimulation?.activa && !isRunning && !sessionId) return
     setShowResultados(false)
     setResultSnapshot(null)
     hasShownResults.current = false
-  }, [activeSimulation?.activa, isRunning, sessionId])
+  }, [activeSimulation?.activa, isRunning, resultSnapshot, sessionId, showResultados])
 
   const handleDetenerConfirmado = async () => {
     if (!sessionId || isStoppingSimulation) return
