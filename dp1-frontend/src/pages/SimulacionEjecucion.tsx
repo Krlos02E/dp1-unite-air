@@ -25,6 +25,7 @@ export default function SimulacionEjecucion({ sessionId, onColapso, onBack }: Pr
   const [resultSnapshot, setResultSnapshot] = useState<SimulationState | null>(null)
   const [mapTz, setMapTz] = useState(0)
   const logEndRef = useRef<HTMLDivElement>(null)
+  const finalSnapshotRequestedRef = useRef(false)
 
   const handleVueloClick = useCallback((v: VueloDTO) => {
     setSelectedVuelo((prev) => (prev?.id === v.id ? null : v))
@@ -60,13 +61,32 @@ export default function SimulacionEjecucion({ sessionId, onColapso, onBack }: Pr
     }
   }, [simulationState?.vuelos, simulationState?.status])
 
-  // Show results modal on completion
   useEffect(() => {
-    if (simulationState?.status === 'COMPLETADA') {
-      setResultSnapshot((current) => current ?? (simulationState ? { ...simulationState } : null))
-      setShowResultados(true)
+    finalSnapshotRequestedRef.current = false
+    setResultSnapshot(null)
+    setShowResultados(false)
+  }, [sessionId])
+
+  useEffect(() => {
+    if (!simulationState) return
+    const isFinished = simulationState.status === 'COMPLETADA' || simulationState.status === 'COLAPSADA'
+    if (!isFinished || finalSnapshotRequestedRef.current) return
+
+    finalSnapshotRequestedRef.current = true
+
+    const openResultsWithLatestState = async () => {
+      try {
+        const latestState = await simulationService.estado(sessionId)
+        setResultSnapshot(latestState)
+      } catch {
+        setResultSnapshot({ ...simulationState })
+      } finally {
+        setShowResultados(true)
+      }
     }
-  }, [simulationState?.status])
+
+    void openResultsWithLatestState()
+  }, [sessionId, simulationState])
 
   useEffect(() => {
     startPolling(sessionId, undefined, simulationState?.startedAt)
@@ -76,8 +96,6 @@ export default function SimulacionEjecucion({ sessionId, onColapso, onBack }: Pr
   useEffect(() => {
     if (simulationState?.sessionId !== sessionId) return
     if (simulationState?.colapsada) {
-      setResultSnapshot((current) => current ?? (simulationState ? { ...simulationState } : null))
-      setShowResultados(true)
       stopPolling()
       onColapso?.(simulationState)
     }
