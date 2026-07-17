@@ -267,10 +267,10 @@ public class CargaArchivosController {
             double[] dest = AeropuertoCoordenadas.get(v.getDestino().getCodigoOACI());
             Almacen almOrigen = almacenMap.get(v.getOrigen().getCodigoOACI());
             Almacen almDestino = almacenMap.get(v.getDestino().getCodigoOACI());
-            double latOrigen = almOrigen != null ? almOrigen.getLatitud() : orig[0];
-            double lonOrigen = almOrigen != null ? almOrigen.getLongitud() : orig[1];
-            double latDestino = almDestino != null ? almDestino.getLatitud() : dest[0];
-            double lonDestino = almDestino != null ? almDestino.getLongitud() : dest[1];
+            double latOrigen = resolverLatitud(almOrigen, orig);
+            double lonOrigen = resolverLongitud(almOrigen, orig);
+            double latDestino = resolverLatitud(almDestino, dest);
+            double lonDestino = resolverLongitud(almDestino, dest);
             int carga = esSimulacion ? 0 : cargaArchivosService.getCargaVuelo(v.getId());
 
             String estado;
@@ -352,6 +352,20 @@ public class CargaArchivosController {
         }
 
         return new ArrayList<>(combinados.values());
+    }
+
+    private double resolverLatitud(Almacen almacen, double[] coordenadasFallback) {
+        if (almacen != null) {
+            return almacen.getLatitud();
+        }
+        return coordenadasFallback != null && coordenadasFallback.length > 0 ? coordenadasFallback[0] : 0.0;
+    }
+
+    private double resolverLongitud(Almacen almacen, double[] coordenadasFallback) {
+        if (almacen != null) {
+            return almacen.getLongitud();
+        }
+        return coordenadasFallback != null && coordenadasFallback.length > 1 ? coordenadasFallback[1] : 0.0;
     }
 
     private Long extraerProgramacionId(String vueloId) {
