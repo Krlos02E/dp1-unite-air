@@ -829,20 +829,38 @@ export default function Simulacion() {
 
   const handleDetenerConfirmado = async () => {
     if (!sessionId || isStoppingSimulation) return
+    const stoppingSessionId = sessionId
     setIsStoppingSimulation(true)
     setShowStopConfirm(false)
     let stoppedState: SimulationState | null = null
     try {
-      stoppedState = await simulationService.detener(sessionId)
+      stoppedState = await simulationService.detener(stoppingSessionId)
     } catch {
-      // ignore
+      try {
+        const recoveredState = await simulationService.estado(stoppingSessionId)
+        if (isFinishedSimulationState(recoveredState)) {
+          stoppedState = recoveredState
+        }
+      } catch {
+        // Ignore here; we'll still try to recover from the active simulation snapshot below.
+      }
     }
     clearDismissedReportSessionId()
+    if (!isFinishedSimulationState(stoppedState)) {
+      try {
+        const recoveredState = await simulationService.estado(stoppingSessionId)
+        if (isFinishedSimulationState(recoveredState)) {
+          stoppedState = recoveredState
+        }
+      } catch {
+        // ignore
+      }
+    }
     if (isFinishedSimulationState(stoppedState)) {
       const reportPayload = saveLastReportToStorage(stoppedState)
       showReportSnapshot(stoppedState, reportPayload.savedAt)
     }
-    broadcastSimMessage('STOPPED', { sessionId })
+    broadcastSimMessage('STOPPED', { sessionId: stoppingSessionId })
     clearSimulationViewState()
     await refreshActiveSimulation()
     setIsStoppingSimulation(false)
