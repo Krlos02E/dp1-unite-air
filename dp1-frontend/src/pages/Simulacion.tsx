@@ -843,28 +843,35 @@ export default function Simulacion() {
           stoppedState = recoveredState
         }
       } catch {
-        // Ignore here; we'll still try to recover from the active simulation snapshot below.
-      }
-    }
-    clearDismissedReportSessionId()
-    if (!isFinishedSimulationState(stoppedState)) {
-      try {
-        const recoveredState = await simulationService.estado(stoppingSessionId)
-        if (isFinishedSimulationState(recoveredState)) {
-          stoppedState = recoveredState
-        }
-      } catch {
         // ignore
       }
     }
-    if (isFinishedSimulationState(stoppedState)) {
-      const reportPayload = saveLastReportToStorage(stoppedState)
-      showReportSnapshot(stoppedState, reportPayload.savedAt)
+    try {
+      clearDismissedReportSessionId()
+      clearSimulationViewState()
+      broadcastSimMessage('STOPPED', { sessionId: stoppingSessionId })
+      await refreshActiveSimulation()
+
+      if (!isFinishedSimulationState(stoppedState)) {
+        try {
+          const recoveredState = await simulationService.estado(stoppingSessionId)
+          if (isFinishedSimulationState(recoveredState)) {
+            stoppedState = recoveredState
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      if (isFinishedSimulationState(stoppedState)) {
+        const reportPayload = saveLastReportToStorage(stoppedState)
+        showReportSnapshot(stoppedState, reportPayload.savedAt)
+      } else {
+        await tryConsumeStoredReport(localStorage.getItem(SIM_LAST_REPORT_KEY))
+      }
+    } finally {
+      setIsStoppingSimulation(false)
     }
-    broadcastSimMessage('STOPPED', { sessionId: stoppingSessionId })
-    clearSimulationViewState()
-    await refreshActiveSimulation()
-    setIsStoppingSimulation(false)
   }
 
   const handleNuevaSimulacion = () => {
