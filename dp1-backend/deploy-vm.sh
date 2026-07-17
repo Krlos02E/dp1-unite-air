@@ -36,7 +36,7 @@ sshpass -p "${VM_PASS}" rsync -e "ssh -o StrictHostKeyChecking=no" -avz --delete
   --exclude='docker-compose.yml' --exclude='.gitmodules' --exclude='.dockerignore' \
   --exclude='ssh-config.txt' --exclude='limpiar-ssh.sh' --exclude='subir-tar.sh' \
   --exclude='dp1-backend/deploy.sh' --exclude='dp1-backend/deploy.bat' \
-  "${PROJECT_ROOT}" ${VM_USER}@${VM_HOST}:${VM_DIR}/
+  "${PROJECT_ROOT}/" ${VM_USER}@${VM_HOST}:${VM_DIR}/
 
 echo "====================================="
 echo "[2/7] Uploading frontend dist..."
