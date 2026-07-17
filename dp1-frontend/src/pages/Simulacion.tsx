@@ -810,6 +810,7 @@ export default function Simulacion() {
 
   const handleDetenerConfirmado = async () => {
     if (!sessionId) return
+    setShowStopConfirm(false)
     let stoppedState: SimulationState | null = null
     try {
       stoppedState = await simulationService.detener(sessionId)
@@ -823,7 +824,6 @@ export default function Simulacion() {
     }
     broadcastSimMessage('STOPPED', { sessionId })
     clearSimulationViewState()
-    setShowStopConfirm(false)
     await refreshActiveSimulation()
   }
 
