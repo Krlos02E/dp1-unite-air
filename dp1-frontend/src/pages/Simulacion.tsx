@@ -464,8 +464,11 @@ export default function Simulacion() {
     return null
   }, [])
 
-  const tryConsumeStoredReport = useCallback(async (rawValue: string | null) => {
-    if (isStartingSimulationRef.current || activeSimulation?.activa || isRunning || sessionId) return false
+  const tryConsumeStoredReport = useCallback(async (
+    rawValue: string | null,
+    options?: { force?: boolean },
+  ) => {
+    if (!options?.force && (isStartingSimulationRef.current || activeSimulation?.activa || isRunning || sessionId)) return false
     if (!rawValue) return false
     try {
       const parsed = JSON.parse(rawValue) as { sessionId?: string; savedAt?: number }
@@ -935,7 +938,7 @@ export default function Simulacion() {
       await refreshActiveSimulation()
 
       if (!isFinishedSimulationState(stoppedState)) {
-        stoppedState = await fetchFinishedState(stoppingSessionId)
+        stoppedState = await fetchFinishedState(stoppingSessionId, 12)
       }
 
       console.debug('[Simulacion] handleDetenerConfirmado:beforeShow', {
@@ -956,7 +959,10 @@ export default function Simulacion() {
         showReportSnapshot(stoppedState, reportPayload.savedAt)
         clearSimulationViewState()
       } else {
-        const storedReportShown = await tryConsumeStoredReport(localStorage.getItem(SIM_LAST_REPORT_KEY))
+        const storedReportShown = await tryConsumeStoredReport(
+          localStorage.getItem(SIM_LAST_REPORT_KEY),
+          { force: true },
+        )
         console.debug('[Simulacion] handleDetenerConfirmado:storedFallback', {
           stoppingSessionId,
           storedReportShown,
@@ -973,6 +979,22 @@ export default function Simulacion() {
             })
             setIsStoppingSimulation(false)
             showReportSnapshot(latestFinishedState, reportPayload.savedAt)
+            clearSimulationViewState()
+          }
+        }
+
+        if (!storedReportShown) {
+          const fallbackState = stoppedState ?? simulationState
+          if (fallbackState?.sessionId === stoppingSessionId) {
+            const reportPayload = saveLastReportToStorage(fallbackState)
+            console.debug('[Simulacion] handleDetenerConfirmado:showBestEffortFallback', {
+              stoppingSessionId,
+              status: fallbackState.status,
+              progreso: fallbackState.progreso,
+              savedAt: reportPayload.savedAt,
+            })
+            setIsStoppingSimulation(false)
+            showReportSnapshot(fallbackState, reportPayload.savedAt)
             clearSimulationViewState()
           }
         }
