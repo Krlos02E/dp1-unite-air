@@ -292,6 +292,7 @@ export default function Simulacion() {
   const hasShownResults = useRef(false)
   const lastConsumedReportAtRef = useRef(0)
   const lockedReportSessionIdRef = useRef<string | null>(null)
+  const isStartingSimulationRef = useRef(false)
 
   const hasSimulationStarted = Boolean(sessionId || simulationState)
   const hasSimulationFlightSnapshot = (simulationState?.vuelos?.length ?? 0) > 0
@@ -462,7 +463,7 @@ export default function Simulacion() {
   }, [])
 
   const tryConsumeStoredReport = useCallback(async (rawValue: string | null) => {
-    if (activeSimulation?.activa || isRunning || sessionId) return false
+    if (isStartingSimulationRef.current || activeSimulation?.activa || isRunning || sessionId) return false
     if (!rawValue) return false
     try {
       const parsed = JSON.parse(rawValue) as { sessionId?: string; savedAt?: number }
@@ -688,6 +689,9 @@ export default function Simulacion() {
   useEffect(() => {
     let cancelled = false
     const latestFinishedState = activeSimulation?.latestFinishedState
+    if (isStartingSimulationRef.current) return
+    if (sessionId || isRunning) return
+    if (simulationState && !isFinishedSimulationState(simulationState)) return
     if (activeSimulation?.activa) return
     if (!latestFinishedState) return
     if (!isFinishedSimulationState(latestFinishedState)) return
@@ -721,9 +725,12 @@ export default function Simulacion() {
     activeSimulation?.activa,
     activeSimulation?.latestFinishedState,
     clearSimulationViewState,
+    isRunning,
     refreshSimulacionContextData,
     saveLastReportToStorage,
+    sessionId,
     showReportSnapshot,
+    simulationState,
   ])
 
   useEffect(() => {
@@ -854,6 +861,7 @@ export default function Simulacion() {
     }
     setError(null)
     setLoading(true)
+    isStartingSimulationRef.current = true
     try {
       const state = await simulationService.iniciar({
         duracionDias: DURACION_FIJA,
@@ -889,6 +897,7 @@ export default function Simulacion() {
         || 'Error al iniciar la simulación'
       setError(msg)
     } finally {
+      isStartingSimulationRef.current = false
       setLoading(false)
     }
   }
