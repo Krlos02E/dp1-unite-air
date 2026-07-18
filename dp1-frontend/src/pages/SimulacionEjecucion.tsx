@@ -16,7 +16,7 @@ interface Props {
 }
 
 export default function SimulacionEjecucion({ sessionId, onColapso, onBack }: Props) {
-  const { simulationState, startPolling, stopPolling } = useSimulation()
+  const { simulationState, activeSimulation, startPolling, stopPolling, refreshActiveSimulation } = useSimulation()
   const [selectedVuelo, setSelectedVuelo] = useState<VueloDTO | null>(null)
   const [selectedAeropuerto, setSelectedAeropuerto] = useState<AeropuertoDTO | null>(null)
   const [selectedEnvio, setSelectedEnvio] = useState<EnvioEstado | null>(null)
@@ -26,6 +26,13 @@ export default function SimulacionEjecucion({ sessionId, onColapso, onBack }: Pr
   const [mapTz, setMapTz] = useState(0)
   const logEndRef = useRef<HTMLDivElement>(null)
   const finalSnapshotRequestedRef = useRef(false)
+
+  const openResultsWithState = useCallback((state: SimulationState) => {
+    if (finalSnapshotRequestedRef.current) return
+    finalSnapshotRequestedRef.current = true
+    setResultSnapshot(state)
+    setShowResultados(true)
+  }, [])
 
   const handleVueloClick = useCallback((v: VueloDTO) => {
     setSelectedVuelo((prev) => (prev?.id === v.id ? null : v))
@@ -72,26 +79,87 @@ export default function SimulacionEjecucion({ sessionId, onColapso, onBack }: Pr
     const isFinished = simulationState.status === 'COMPLETADA' || simulationState.status === 'COLAPSADA'
     if (!isFinished || finalSnapshotRequestedRef.current) return
 
-    finalSnapshotRequestedRef.current = true
-
     const openResultsWithLatestState = async () => {
       try {
         const latestState = await simulationService.estado(sessionId)
-        setResultSnapshot(latestState)
+        openResultsWithState(latestState)
       } catch {
-        setResultSnapshot({ ...simulationState })
-      } finally {
-        setShowResultados(true)
+        openResultsWithState({ ...simulationState })
       }
     }
 
     void openResultsWithLatestState()
-  }, [sessionId, simulationState])
+  }, [openResultsWithState, sessionId, simulationState])
+
+  useEffect(() => {
+    const latestFinishedState = activeSimulation?.latestFinishedState
+    if (activeSimulation?.activa) return
+    if (!latestFinishedState) return
+    if (latestFinishedState.sessionId !== sessionId) return
+    if (finalSnapshotRequestedRef.current) return
+
+    const openAuthoritativeResults = async () => {
+      try {
+        const latestState = await simulationService.estado(sessionId)
+        openResultsWithState(latestState)
+      } catch {
+        openResultsWithState(latestFinishedState)
+      }
+    }
+
+    void openAuthoritativeResults()
+  }, [activeSimulation?.activa, activeSimulation?.latestFinishedState, openResultsWithState, sessionId])
+
+  useEffect(() => {
+    if (finalSnapshotRequestedRef.current) return
+
+    let cancelled = false
+    const intervalId = window.setInterval(() => {
+      if (cancelled || finalSnapshotRequestedRef.current) return
+
+      void simulationService.estado(sessionId)
+        .then((latestState) => {
+          if (cancelled || finalSnapshotRequestedRef.current) return
+          const isFinished = latestState.status === 'COMPLETADA' || latestState.status === 'COLAPSADA'
+          if (isFinished) {
+            openResultsWithState(latestState)
+            stopPolling()
+          }
+        })
+        .catch(() => {
+          // Keep the fallback loop alive; websocket or the next tick may recover.
+        })
+    }, 3000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(intervalId)
+    }
+  }, [openResultsWithState, sessionId, stopPolling])
 
   useEffect(() => {
     startPolling(sessionId, undefined, simulationState?.startedAt)
     return () => stopPolling()
   }, [sessionId, startPolling, stopPolling, simulationState?.startedAt])
+
+  useEffect(() => {
+    const syncWhenVisible = () => {
+      if (document.visibilityState !== 'visible') return
+      void refreshActiveSimulation()
+    }
+
+    const syncWhenFocused = () => {
+      void refreshActiveSimulation()
+    }
+
+    document.addEventListener('visibilitychange', syncWhenVisible)
+    window.addEventListener('focus', syncWhenFocused)
+
+    return () => {
+      document.removeEventListener('visibilitychange', syncWhenVisible)
+      window.removeEventListener('focus', syncWhenFocused)
+    }
+  }, [refreshActiveSimulation])
 
   useEffect(() => {
     if (simulationState?.sessionId !== sessionId) return
