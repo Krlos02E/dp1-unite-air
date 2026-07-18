@@ -56,7 +56,21 @@ function extractLastPlanningDuration(logs: SimulationState['logs']): string {
 }
 
 export default function ResultadosModal({ state, isOpen, onClose }: Props) {
+  console.debug('[ResultadosModal] render', {
+    isOpen,
+    hasState: Boolean(state),
+    sessionId: state?.sessionId,
+    status: state?.status,
+    progreso: state?.progreso,
+  })
+
   if (!isOpen || !state) return null
+
+  console.debug('[ResultadosModal] visible', {
+    sessionId: state.sessionId,
+    status: state.status,
+    progreso: state.progreso,
+  })
 
   const envios = state.envios ?? []
   const enviosConRuta = envios.filter((envio) => envio.rutaAeropuertos?.length)

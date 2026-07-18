@@ -404,6 +404,15 @@ export default function Simulacion() {
   }, [])
 
   const showReportSnapshot = useCallback((state: SimulationState, savedAt?: number) => {
+    console.debug('[Simulacion] showReportSnapshot:start', {
+      sessionId: state.sessionId,
+      status: state.status,
+      progreso: state.progreso,
+      savedAt,
+      dismissedSessionId: getDismissedReportSessionId(),
+      lockedSessionId: lockedReportSessionIdRef.current,
+      lastConsumedReportAt: lastConsumedReportAtRef.current,
+    })
     if (getDismissedReportSessionId() === state.sessionId) return
     if (lockedReportSessionIdRef.current === state.sessionId) return
     if (savedAt && savedAt <= lastConsumedReportAtRef.current) return
@@ -414,7 +423,43 @@ export default function Simulacion() {
     hasShownResults.current = true
     setResultSnapshot({ ...state })
     setShowResultados(true)
+    console.debug('[Simulacion] showReportSnapshot:opened', {
+      sessionId: state.sessionId,
+      status: state.status,
+      progreso: state.progreso,
+      savedAt,
+    })
   }, [getDismissedReportSessionId])
+
+  const fetchFinishedState = useCallback(async (targetSessionId: string, attempts = 4): Promise<SimulationState | null> => {
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      try {
+        const fetched = await simulationService.estado(targetSessionId)
+        console.debug('[Simulacion] fetchFinishedState:response', {
+          targetSessionId,
+          attempt: attempt + 1,
+          status: fetched.status,
+          progreso: fetched.progreso,
+          isFinished: isFinishedSimulationState(fetched),
+        })
+        if (isFinishedSimulationState(fetched)) {
+          return fetched
+        }
+      } catch {
+        console.debug('[Simulacion] fetchFinishedState:error', {
+          targetSessionId,
+          attempt: attempt + 1,
+        })
+        // Keep retrying briefly; the backend may still be consolidating the final snapshot.
+      }
+
+      if (attempt < attempts - 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 250))
+      }
+    }
+
+    return null
+  }, [])
 
   const tryConsumeStoredReport = useCallback(async (rawValue: string | null) => {
     if (activeSimulation?.activa || isRunning || sessionId) return false
@@ -428,12 +473,12 @@ export default function Simulacion() {
       if (activeSimulation?.latestFinishedState?.sessionId === parsed.sessionId) {
         state = activeSimulation.latestFinishedState
       } else if (simulationState?.sessionId === parsed.sessionId
-        && (simulationState.status === 'COMPLETADA' || simulationState.progreso >= 100)) {
+        && isFinishedSimulationState(simulationState)) {
         state = simulationState
       } else {
         try {
           const fetched = await simulationService.estado(parsed.sessionId)
-          if (fetched.status === 'COMPLETADA' || fetched.progreso >= 100) {
+          if (isFinishedSimulationState(fetched)) {
             state = fetched
           }
         } catch {
@@ -697,6 +742,9 @@ export default function Simulacion() {
         void refreshActiveSimulation()
       }
       if (msg.type === 'STOPPED') {
+        if (isStoppingSimulation && msg.payload?.sessionId === sessionId) {
+          return
+        }
         clearSimulationViewState()
         void refreshActiveSimulation().finally(() => {
           void tryConsumeStoredReport(localStorage.getItem(SIM_LAST_REPORT_KEY))
@@ -707,7 +755,14 @@ export default function Simulacion() {
     return () => {
       unlisten()
     }
-  }, [clearLastReportStorage, clearSimulationViewState, refreshActiveSimulation, tryConsumeStoredReport])
+  }, [
+    clearLastReportStorage,
+    clearSimulationViewState,
+    isStoppingSimulation,
+    refreshActiveSimulation,
+    sessionId,
+    tryConsumeStoredReport,
+  ])
 
   useEffect(() => {
     const handleStorage = (event: StorageEvent) => {
@@ -838,54 +893,76 @@ export default function Simulacion() {
     }
   }
 
-  useEffect(() => {
-    if (showResultados || resultSnapshot) return
-    if (!activeSimulation?.activa && !isRunning && !sessionId) return
-    setShowResultados(false)
-    setResultSnapshot(null)
-    hasShownResults.current = false
-  }, [activeSimulation?.activa, isRunning, resultSnapshot, sessionId, showResultados])
-
   const handleDetenerConfirmado = async () => {
     if (!sessionId || isStoppingSimulation) return
     const stoppingSessionId = sessionId
+    console.debug('[Simulacion] handleDetenerConfirmado:start', {
+      stoppingSessionId,
+      currentStatus: simulationState?.status,
+      currentProgress: simulationState?.progreso,
+    })
     setIsStoppingSimulation(true)
     setShowStopConfirm(false)
     let stoppedState: SimulationState | null = null
     try {
       stoppedState = await simulationService.detener(stoppingSessionId)
+      console.debug('[Simulacion] handleDetenerConfirmado:detenerResponse', {
+        stoppingSessionId,
+        status: stoppedState?.status,
+        progreso: stoppedState?.progreso,
+        isFinished: isFinishedSimulationState(stoppedState),
+      })
     } catch {
-      try {
-        const recoveredState = await simulationService.estado(stoppingSessionId)
-        if (isFinishedSimulationState(recoveredState)) {
-          stoppedState = recoveredState
-        }
-      } catch {
-        // ignore
-      }
+      console.debug('[Simulacion] handleDetenerConfirmado:detenerError', {
+        stoppingSessionId,
+      })
+      stoppedState = await fetchFinishedState(stoppingSessionId)
     }
     try {
       clearDismissedReportSessionId()
-      clearSimulationViewState()
       broadcastSimMessage('STOPPED', { sessionId: stoppingSessionId })
       await refreshActiveSimulation()
 
       if (!isFinishedSimulationState(stoppedState)) {
-        try {
-          const recoveredState = await simulationService.estado(stoppingSessionId)
-          if (isFinishedSimulationState(recoveredState)) {
-            stoppedState = recoveredState
-          }
-        } catch {
-          // ignore
-        }
+        stoppedState = await fetchFinishedState(stoppingSessionId)
       }
+
+      console.debug('[Simulacion] handleDetenerConfirmado:beforeShow', {
+        stoppingSessionId,
+        hasStoppedState: Boolean(stoppedState),
+        status: stoppedState?.status,
+        progreso: stoppedState?.progreso,
+        isFinished: isFinishedSimulationState(stoppedState),
+      })
 
       if (isFinishedSimulationState(stoppedState)) {
         const reportPayload = saveLastReportToStorage(stoppedState)
+        console.debug('[Simulacion] handleDetenerConfirmado:showDirect', {
+          stoppingSessionId,
+          savedAt: reportPayload.savedAt,
+        })
         showReportSnapshot(stoppedState, reportPayload.savedAt)
+        clearSimulationViewState()
       } else {
-        await tryConsumeStoredReport(localStorage.getItem(SIM_LAST_REPORT_KEY))
+        const storedReportShown = await tryConsumeStoredReport(localStorage.getItem(SIM_LAST_REPORT_KEY))
+        console.debug('[Simulacion] handleDetenerConfirmado:storedFallback', {
+          stoppingSessionId,
+          storedReportShown,
+          latestFinishedSessionId: activeSimulation?.latestFinishedState?.sessionId,
+          latestFinishedStatus: activeSimulation?.latestFinishedState?.status,
+        })
+        if (!storedReportShown) {
+          const latestFinishedState = activeSimulation?.latestFinishedState
+          if (latestFinishedState?.sessionId === stoppingSessionId && isFinishedSimulationState(latestFinishedState)) {
+            const reportPayload = saveLastReportToStorage(latestFinishedState)
+            console.debug('[Simulacion] handleDetenerConfirmado:showFromLatestFinishedState', {
+              stoppingSessionId,
+              savedAt: reportPayload.savedAt,
+            })
+            showReportSnapshot(latestFinishedState, reportPayload.savedAt)
+            clearSimulationViewState()
+          }
+        }
       }
     } finally {
       setIsStoppingSimulation(false)

@@ -29,7 +29,7 @@ function resolveWebSocketBaseUrl(): string {
   if (apiBase.startsWith('http://') || apiBase.startsWith('https://')) {
     const url = new URL(apiBase)
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
-    url.pathname = ''
+    url.pathname = url.pathname.replace(/\/$/, '')
     url.search = ''
     url.hash = ''
     return url.toString().replace(/\/$/, '')
@@ -40,12 +40,23 @@ function resolveWebSocketBaseUrl(): string {
 
 function openSocket<T>(path: string, callbacks: SocketCallbacks<T>): () => void {
   const socket = new WebSocket(`${resolveWebSocketBaseUrl()}${path}`)
+  let disposed = false
+  let closeWhenOpened = false
 
   socket.onopen = () => {
+    if (disposed) {
+      socket.close()
+      return
+    }
+    if (closeWhenOpened) {
+      socket.close()
+      return
+    }
     callbacks.onOpen?.()
   }
 
   socket.onmessage = (event) => {
+    if (disposed) return
     try {
       const parsed = JSON.parse(event.data) as RealtimeEnvelope<T>
       callbacks.onMessage(parsed.payload)
@@ -55,16 +66,23 @@ function openSocket<T>(path: string, callbacks: SocketCallbacks<T>): () => void 
   }
 
   socket.onerror = () => {
+    if (disposed) return
     callbacks.onError?.()
   }
 
   socket.onclose = () => {
+    if (disposed) return
     callbacks.onClose?.()
   }
 
   return () => {
-    if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+    disposed = true
+    if (socket.readyState === WebSocket.OPEN) {
       socket.close()
+      return
+    }
+    if (socket.readyState === WebSocket.CONNECTING) {
+      closeWhenOpened = true
     }
   }
 }
