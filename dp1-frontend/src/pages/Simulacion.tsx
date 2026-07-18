@@ -335,6 +335,8 @@ export default function Simulacion() {
   const isCompleted = simulationState?.status === 'COMPLETADA' || (simulationState && simulationState.progreso >= 100)
   const isColapsada = simulationState?.status === 'COLAPSADA'
   const isError = simulationState?.status === 'ERROR'
+  const visibleReportSessionId = resultSnapshot?.sessionId
+    ?? (showResultados && isFinishedSimulationState(simulationState) ? simulationState.sessionId : null)
 
   const saveConfigToStorage = (cfg: { fechaInicio: string; horaInicio: string }) => {
     sessionStorage.setItem(SIM_CONFIG_KEY, JSON.stringify(cfg))
@@ -950,6 +952,7 @@ export default function Simulacion() {
           stoppingSessionId,
           savedAt: reportPayload.savedAt,
         })
+        setIsStoppingSimulation(false)
         showReportSnapshot(stoppedState, reportPayload.savedAt)
         clearSimulationViewState()
       } else {
@@ -968,6 +971,7 @@ export default function Simulacion() {
               stoppingSessionId,
               savedAt: reportPayload.savedAt,
             })
+            setIsStoppingSimulation(false)
             showReportSnapshot(latestFinishedState, reportPayload.savedAt)
             clearSimulationViewState()
           }
@@ -1401,13 +1405,14 @@ export default function Simulacion() {
         )}
       </div>
 
-  <ResultadosModal
+      <ResultadosModal
         state={resultSnapshot ?? simulationState}
         isOpen={showResultados}
         onClose={() => {
-          if (resultSnapshot?.sessionId) {
-            dismissReportSession(resultSnapshot.sessionId)
+          if (visibleReportSessionId) {
+            dismissReportSession(visibleReportSessionId)
           }
+          setIsStoppingSimulation(false)
           setShowResultados(false)
           setResultSnapshot(null)
           handleNuevaSimulacion()
