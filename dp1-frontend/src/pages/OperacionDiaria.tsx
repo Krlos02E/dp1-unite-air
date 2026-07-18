@@ -91,6 +91,9 @@ export default function OperacionDiaria() {
   const [panelCollapsed, setPanelCollapsed] = useState(true)
   const [panelRendered, setPanelRendered] = useState(false)
   const [panelShown, setPanelShown] = useState(false)
+  const [simInfoCollapsed, setSimInfoCollapsed] = useState(false)
+  const [ocuCollapsed, setOcuCollapsed] = useState(false)
+  const [vuelosCollapsed, setVuelosCollapsed] = useState(false)
   const [todosEnvios, setTodosEnvios] = useState<EnvioEstado[]>([])
   const [todasMaletas, setTodasMaletas] = useState<MaletaEstado[]>([])
   const [filteredFlightIds, setFilteredFlightIds] = useState<Set<string> | null>(null)
@@ -428,36 +431,17 @@ export default function OperacionDiaria() {
     return () => window.clearTimeout(timeoutId)
   }, [panelCollapsed])
 
-  const { fecha } = getPeruDateParts()
+  const { fecha, hora } = getPeruDateParts()
+  const selectedOperationEntityCount = panelMode === 'envios'
+    ? todosEnvios.length
+    : panelMode === 'maletas'
+      ? todasMaletas.length
+      : panelMode === 'almacenes'
+        ? aeropuertosEstaticos.length
+        : vuelos.length
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)]">
-      {/* Barra superior: hora actual y fecha — centrada, sin recuadros */}
-      <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 px-4 py-1">
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] uppercase tracking-wider text-gray-500 font-semibold">Hora Perú</span>
-          <span className="text-sm font-mono font-bold text-white">{horaPeru}</span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] uppercase tracking-wider text-gray-500 font-semibold">Fecha</span>
-          <span className="text-sm font-mono font-bold text-white">{fecha.split('-').reverse().join('/')}</span>
-        </div>
-
-        <div className="flex items-center gap-2 ml-auto">
-          {loading && (
-            <span className="text-xs text-gray-400 flex items-center gap-1.5">
-              <span className="w-3 h-3 border-2 border-sky-400 border-t-transparent rounded-full animate-spin inline-block" />
-              Cargando datos...
-            </span>
-          )}
-          {error && (
-            <span className="text-xs text-red-400 font-medium">{error}</span>
-          )}
-        </div>
-      </div>
-
-      {/* Mapa + Panel de envíos/almacenes */}
       <div className="flex gap-2 flex-1 min-h-0">
         <div className="relative flex-1 bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
           {loading && (
@@ -483,58 +467,132 @@ export default function OperacionDiaria() {
             filteredFlightIds={(panelMode === 'aviones' || panelMode === 'envios') && !panelCollapsed ? filteredFlightIds : null}
             filteredAirportIds={panelMode === 'almacenes' && !panelCollapsed ? filteredAirportIds : null}
           />
-          <button
-            onClick={() => setPanelCollapsed((current) => !current)}
-            className="absolute top-4 right-4 z-[1001] bg-gray-800/95 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-white hover:bg-gray-700 transition-colors cursor-pointer shadow-lg"
-            title={panelCollapsed ? 'Abrir panel' : 'Contraer panel'}
-          >
-            {panelCollapsed ? '▶ Panel' : '◀ Panel'}
-          </button>
 
-          <div className="absolute bottom-4 left-4 z-[999] flex flex-col gap-2">
-            <div className="bg-gray-900/40 border border-gray-700/40 rounded-xl p-3 backdrop-blur-[2px]">
-              <h4 className="text-sm font-semibold text-gray-300 mb-2 pb-1 border-b border-gray-700/50">Ocupación Global</h4>
-              <div className="flex items-center gap-2">
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between text-xs text-gray-400 mb-0.5">
-                    <span className="truncate">Flota: {occupancy.carga}/{occupancy.capacidad}</span>
-                    <span className="shrink-0 ml-1">{occupancy.capacidad > 0 ? Math.round(occupancy.carga / occupancy.capacidad * 100) : 0}%</span>
+          <div className="absolute left-3 top-3 z-[1001] w-[min(22rem,calc(100%-1.5rem))] rounded-xl border border-gray-600/55 bg-gray-900/70 shadow-lg shadow-black/20 backdrop-blur-[3px]">
+            <button
+              type="button"
+              onClick={() => setSimInfoCollapsed((value) => !value)}
+              className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left cursor-pointer"
+            >
+              <div className="min-w-0">
+                <h4 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-violet-200">Operacion Diaria</h4>
+                <p className="truncate text-[11px] text-gray-300">{fecha.split('-').reverse().join('/')} {hora}</p>
+              </div>
+              <span className={`shrink-0 text-xs text-gray-400 transition-transform ${simInfoCollapsed ? '' : 'rotate-180'}`}>v</span>
+            </button>
+
+            {simInfoCollapsed && (
+              <div className="flex items-center gap-2 px-3 pb-3">
+                <span className="font-mono text-xs font-semibold text-white shrink-0">{horaPeru}</span>
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-800">
+                  <div
+                    className={`h-full rounded-full transition-all ${loading ? 'bg-sky-400' : error ? 'bg-rose-500' : 'bg-emerald-500'}`}
+                    style={{ width: `${loading ? 55 : error ? 100 : 100}%` }}
+                  />
+                </div>
+                <span className="text-right text-[10px] font-semibold uppercase tracking-wide text-gray-300 shrink-0">
+                  {loading ? 'Sync' : error ? 'Error' : 'OK'}
+                </span>
+              </div>
+            )}
+
+            {(!simInfoCollapsed) && (
+              <div className="space-y-2 px-3 pb-3">
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
+                    <span className="block text-[9px] uppercase tracking-wide text-gray-500">Hora Peru</span>
+                    <span className="font-mono font-semibold text-gray-100">{horaPeru}</span>
                   </div>
-                  <div className="w-full h-1.5 rounded-full bg-gray-800 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all ${ocupColor(occupancy.capacidad > 0 ? occupancy.carga / occupancy.capacidad : 0)}`}
-                      style={{ width: `${Math.min(occupancy.capacidad > 0 ? occupancy.carga / occupancy.capacidad * 100 : 0, 100)}%` }}
-                    />
+                  <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
+                    <span className="block text-[9px] uppercase tracking-wide text-gray-500">Fecha</span>
+                    <span className="font-mono font-semibold text-gray-100">{fecha.split('-').reverse().join('/')}</span>
+                  </div>
+                  <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
+                    <span className="block text-[9px] uppercase tracking-wide text-gray-500">Vuelos Activos</span>
+                    <span className="font-mono font-semibold text-gray-100">{flightStats.enVuelo}</span>
+                  </div>
+                  <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
+                    <span className="block text-[9px] uppercase tracking-wide text-gray-500">Panel Actual</span>
+                    <span className="font-mono font-semibold text-gray-100">{selectedOperationEntityCount}</span>
                   </div>
                 </div>
-                <span className={`w-2 h-2 rounded-full shrink-0 ${ocupColor(occupancy.capacidad > 0 ? occupancy.carga / occupancy.capacidad : 0)}`} />
+                {error && <p className="text-xs font-medium text-red-400">{error}</p>}
+                {loading ? (
+                  <div className="rounded-lg border border-sky-800/70 bg-sky-950/35 px-3 py-2 text-[11px] text-sky-200">
+                    Actualizando vuelos, envios y almacenes del contexto operativo...
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-emerald-800/70 bg-emerald-950/30 px-3 py-2 text-[11px] text-emerald-200">
+                    Vista sincronizada con la operacion actual y refresco automatico cada {SHARED_OPERATION_POLL_MS / 1000}s.
+                  </div>
+                )}
               </div>
+            )}
+          </div>
+
+          <div className="absolute bottom-3 left-3 z-[999] flex flex-col gap-1.5">
+            <div className="min-w-[238px] bg-gray-900/50 border border-gray-600/45 rounded-xl backdrop-blur-[2px] shadow-md shadow-black/15">
+              <button onClick={() => setOcuCollapsed((v) => !v)} className="flex w-full items-center justify-between gap-2 p-2.5 cursor-pointer">
+                <h4 className="text-[13px] font-semibold text-gray-300">Ocupación Global</h4>
+                <span className={`text-gray-500 text-xs transition-transform ${ocuCollapsed ? '' : 'rotate-180'}`}>▼</span>
+              </button>
+              {!ocuCollapsed && (
+                <div className="grid grid-cols-1 gap-1.5 px-2.5 pb-2.5">
+                  <div className="rounded-lg border border-gray-600/55 bg-gray-950/65 px-2.5 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">Flota</span>
+                      <span className="text-base font-bold text-white">{occupancy.capacidad > 0 ? (occupancy.carga / occupancy.capacidad * 100).toFixed(2) : '0.00'}%</span>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between gap-2">
+                      <span className="font-mono text-sm text-gray-100">{occupancy.carga.toLocaleString('fr-FR')}/{occupancy.capacidad.toLocaleString('fr-FR')}</span>
+                      <span className={`h-2 w-2 shrink-0 rounded-full ${ocupColor(occupancy.capacidad > 0 ? occupancy.carga / occupancy.capacidad : 0)}`} />
+                    </div>
+                    <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-800">
+                      <div className={`h-full rounded-full transition-all ${ocupColor(occupancy.capacidad > 0 ? occupancy.carga / occupancy.capacidad : 0)}`} style={{ width: `${Math.min(occupancy.capacidad > 0 ? occupancy.carga / occupancy.capacidad * 100 : 0, 100)}%` }} />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-            <div className="bg-gray-900/40 border border-gray-700/40 rounded-xl p-3 backdrop-blur-[2px]">
-              <h4 className="text-sm font-semibold text-gray-300 mb-2 pb-1 border-b border-gray-700/50">Estado de Vuelos</h4>
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center gap-1.5 bg-violet-900/35 border border-violet-700/55 rounded-lg px-2 py-1">
-                  <span className="text-xs text-violet-400 font-medium">En Vuelo</span>
-                  <span className="text-xs font-bold text-violet-300 bg-violet-800/55 px-1.5 py-0.5 rounded">{flightStats.enVuelo}</span>
+            <div className="min-w-[210px] bg-gray-900/38 border border-gray-700/38 rounded-xl backdrop-blur-[2px]">
+              <button onClick={() => setVuelosCollapsed((v) => !v)} className="flex w-full items-center justify-between gap-2 p-2.5 cursor-pointer">
+                <h4 className="text-[13px] font-semibold text-gray-300">Estado de Vuelos</h4>
+                <span className={`text-gray-500 text-xs transition-transform ${vuelosCollapsed ? '' : 'rotate-180'}`}>▼</span>
+              </button>
+              {!vuelosCollapsed && (
+                <div className="grid grid-cols-1 gap-1.5 px-2.5 pb-2.5">
+                  <div className="rounded-lg border border-gray-700/50 bg-gray-900/55 px-2 py-1.5">
+                    <span className="text-xs font-medium uppercase tracking-wide text-violet-300">En vuelo</span>
+                    <div className="mt-0.5 text-sm font-bold text-gray-100">{flightStats.enVuelo}</div>
+                  </div>
+                  <div className="rounded-lg border border-gray-700/50 bg-gray-900/55 px-2 py-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-medium uppercase tracking-wide text-violet-300">Vacíos en vuelo</span>
+                      <span className="text-xs font-bold text-gray-100">{vuelosVaciosEnVueloPct}%</span>
+                    </div>
+                    <div className="mt-0.5 text-xs font-mono text-gray-200">{flightStats.vaciosEnVuelo}/{flightStats.enVuelo}</div>
+                  </div>
+                  <div className="rounded-lg border border-gray-700/50 bg-gray-900/55 px-2 py-1.5">
+                    <span className="text-xs font-medium uppercase tracking-wide text-violet-300">Culminados</span>
+                    <div className="mt-0.5 text-sm font-bold text-gray-100">{flightStats.culminados}</div>
+                  </div>
+                  <div className="rounded-lg border border-gray-700/50 bg-gray-900/55 px-2 py-1.5">
+                    <span className="text-xs font-medium uppercase tracking-wide text-violet-300">Cancelados</span>
+                    <div className="mt-0.5 text-sm font-bold text-gray-100">{flightStats.cancelados}</div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5 bg-sky-950/55 border border-sky-800/70 rounded-lg px-2 py-1">
-                  <span className="text-xs text-sky-300 font-medium">Vacíos en vuelo</span>
-                  <span className="text-xs font-bold text-sky-200 bg-sky-900/70 px-1.5 py-0.5 rounded">
-                    {flightStats.vaciosEnVuelo}/{flightStats.enVuelo}
-                  </span>
-                  <span className="text-xs text-sky-400 font-medium">({vuelosVaciosEnVueloPct}%)</span>
-                </div>
-                <div className="flex items-center gap-1.5 bg-violet-900/20 border border-violet-700/40 rounded-lg px-2 py-1">
-                  <span className="text-xs text-violet-300 font-medium">Culminados</span>
-                  <span className="text-xs font-bold text-violet-200 bg-violet-700/40 px-1.5 py-0.5 rounded">{flightStats.culminados}</span>
-                </div>
-                <div className="flex items-center gap-1.5 bg-violet-950/55 border border-violet-800/70 rounded-lg px-2 py-1">
-                  <span className="text-xs text-violet-500 font-medium">Cancelados</span>
-                  <span className="text-xs font-bold text-violet-400 bg-violet-950/80 px-1.5 py-0.5 rounded">{flightStats.cancelados}</span>
-                </div>
-              </div>
+              )}
             </div>
           </div>
+
+          {panelCollapsed && (
+            <button
+              onClick={() => setPanelCollapsed(false)}
+              className="absolute top-4 right-4 z-[1001] bg-gray-800/95 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-white hover:bg-gray-700 transition-colors cursor-pointer shadow-lg"
+            >
+              ▶ Panel
+            </button>
+          )}
         </div>
         {panelRendered && (
         <div
@@ -542,13 +600,13 @@ export default function OperacionDiaria() {
             panelShown ? 'translate-x-0 opacity-100' : 'translate-x-4 opacity-0 pointer-events-none'
           }`}
         >
-          <div className="flex bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+          <div className="flex bg-gray-900/95 border border-gray-700/80 rounded-lg overflow-hidden">
             <button
               onClick={() => setPanelMode('envios')}
               className={`flex-1 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
                 panelMode === 'envios'
                   ? 'bg-sky-600 text-white'
-                  : 'text-gray-400 hover:text-gray-200 bg-gray-800'
+                  : 'text-violet-300 hover:text-violet-100 bg-gray-800'
               }`}
             >
               📦 Envíos
@@ -558,7 +616,7 @@ export default function OperacionDiaria() {
               className={`flex-1 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
                 panelMode === 'maletas'
                   ? 'bg-sky-600 text-white'
-                  : 'text-gray-400 hover:text-gray-200 bg-gray-800'
+                  : 'text-violet-300 hover:text-violet-100 bg-gray-800'
               }`}
             >
               🧳 Maletas
@@ -568,7 +626,7 @@ export default function OperacionDiaria() {
               className={`flex-1 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
                 panelMode === 'almacenes'
                   ? 'bg-sky-600 text-white'
-                  : 'text-gray-400 hover:text-gray-200 bg-gray-800'
+                  : 'text-violet-300 hover:text-violet-100 bg-gray-800'
               }`}
             >
               🏢 Almacenes
@@ -578,10 +636,17 @@ export default function OperacionDiaria() {
               className={`flex-1 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
                 panelMode === 'aviones'
                   ? 'bg-sky-600 text-white'
-                  : 'text-gray-400 hover:text-gray-200 bg-gray-800'
+                  : 'text-violet-300 hover:text-violet-100 bg-gray-800'
               }`}
             >
               ✈️ Aviones
+            </button>
+            <button
+              onClick={() => setPanelCollapsed(true)}
+              className="px-2 py-1.5 text-xs text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 transition-colors cursor-pointer"
+              title="Contraer panel"
+            >
+              ◀
             </button>
           </div>
           {panelMode === 'almacenes' ? (
