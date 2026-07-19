@@ -24,6 +24,13 @@ import tasf.model.Paquete;
 @RequestMapping("/envios")
 public class EnviosController {
 
+    private static final Map<String, String> TIMEZONE_TO_AIRPORT = Map.of(
+            "America/Lima", "SPIM",
+            "America/Argentina/Buenos_Aires", "SABE",
+            "Europe/Copenhagen", "EKCH",
+            "Asia/Kolkata", "VIDP"
+    );
+
     @Autowired
     private CargaArchivosService cargaArchivosService;
 
@@ -32,13 +39,14 @@ public class EnviosController {
         try {
             List<EnvioEntrada> envios = new ArrayList<>();
             for (EnvioItem item : request.envios()) {
+                String origen = inferirOrigenPorTimezone(item.timezone());
                 envios.add(new EnvioEntrada(
-                        item.origen(),
+                        origen,
                         item.destino(),
-                        LocalDate.parse(item.fecha()),
-                        LocalTime.parse(item.hora()),
+                        LocalDate.parse(item.fechaLocal()),
+                        LocalTime.parse(item.horaLocal()),
                         item.cantidad(),
-                        item.remitente()
+                        null
                 ));
             }
 
@@ -136,6 +144,17 @@ public class EnviosController {
         return ResponseEntity.ok(resultado);
     }
 
+    private String inferirOrigenPorTimezone(String timezone) {
+        if (timezone == null || timezone.isBlank()) {
+            throw new IllegalArgumentException("La zona horaria de la PC es obligatoria");
+        }
+        String origen = TIMEZONE_TO_AIRPORT.get(timezone);
+        if (origen == null) {
+            throw new IllegalArgumentException("Zona horaria no valida para operacion dia a dia: " + timezone);
+        }
+        return origen;
+    }
+
     public record EnviosRequest(List<EnvioItem> envios) {}
-    public record EnvioItem(String origen, String destino, String fecha, String hora, int cantidad, String remitente) {}
+    public record EnvioItem(String destino, String fechaLocal, String horaLocal, int cantidad, String timezone) {}
 }

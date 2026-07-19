@@ -191,7 +191,12 @@ public class CargaArchivosService {
         }
     }
 
-    public synchronized CargaResult cargarArchivos(MultipartFile planesVuelo, MultipartFile aeropuertosFile, MultipartFile envios) {
+    public synchronized CargaResult cargarArchivos(
+            MultipartFile planesVuelo,
+            MultipartFile aeropuertosFile,
+            MultipartFile envios,
+            String origenEnviosOaci
+    ) {
         try {
             Path tempDir = Files.createTempDirectory("carga_");
             if (planesVuelo != null && !planesVuelo.isEmpty()) {
@@ -201,7 +206,8 @@ public class CargaArchivosService {
                 saveToTemp(tempDir.resolve("input").resolve("aeropuertos"), aeropuertosFile, "aeropuerto.txt");
             }
             if (envios != null && !envios.isEmpty()) {
-                saveToTemp(tempDir.resolve("input").resolve("envios"), envios, "_envios_SKBO_.txt");
+                String origenNormalizado = normalizarOrigenEnvios(origenEnviosOaci);
+                saveToTemp(tempDir.resolve("input").resolve("envios"), envios, "_envios_" + origenNormalizado + "_.txt");
             }
 
             LocalDate fechaInicio = LocalDate.now();
@@ -971,14 +977,15 @@ public class CargaArchivosService {
         return nuevos;
     }
 
-    public synchronized List<Paquete> cargarEnviosDesdeArchivo(MultipartFile archivo) throws IOException {
+    public synchronized List<Paquete> cargarEnviosDesdeArchivo(MultipartFile archivo, String origenOaci) throws IOException {
         if (lastDataset == null) {
             throw new IllegalStateException("No hay dataset cargado");
         }
 
-        Aeropuerto origen = lastDataset.getAeropuerto("SKBO");
+        String origenNormalizado = normalizarOrigenEnvios(origenOaci);
+        Aeropuerto origen = lastDataset.getAeropuerto(origenNormalizado);
         if (origen == null) {
-            throw new IllegalStateException("Aeropuerto SKBO no encontrado en el dataset");
+            throw new IllegalStateException("Aeropuerto " + origenNormalizado + " no encontrado en el dataset");
         }
 
         List<Paquete> nuevos = new ArrayList<>();
@@ -989,17 +996,17 @@ public class CargaArchivosService {
                 linea = linea.trim();
                 if (linea.isEmpty()) continue;
 
-                Paquete parsed = Paquete.parse(linea, "SKBO");
+                Paquete parsed = Paquete.parse(linea, origenNormalizado);
                 if (!lastDataset.getAeropuertos().containsKey(parsed.getDestinoOACI())) continue;
 
                 LocalDateTime utc = origen.convertirLocalAUTC(parsed.getFecha(), parsed.getHora());
 
                 contadorPaquetesIncrementales++;
-                String id = "INC-" + contadorPaquetesIncrementales + "-SKBO-" + parsed.getDestinoOACI();
+                String id = "INC-" + contadorPaquetesIncrementales + "-" + origenNormalizado + "-" + parsed.getDestinoOACI();
 
                 Paquete paquete = new Paquete(
                         id,
-                        "SKBO",
+                        origenNormalizado,
                         utc.toLocalDate(),
                         utc.toLocalTime(),
                         parsed.getDestinoOACI(),
@@ -1022,12 +1029,36 @@ public class CargaArchivosService {
         return nuevos;
     }
 
+    private String normalizarOrigenEnvios(String origenOaci) {
+        if (origenOaci == null || origenOaci.isBlank()) {
+            throw new IllegalArgumentException("El aeropuerto origen detectado es obligatorio");
+        }
+        String origenNormalizado = origenOaci.trim().toUpperCase();
+        if (!origenNormalizado.matches("[A-Z0-9]{4}")) {
+            throw new IllegalArgumentException("Aeropuerto origen invalido: " + origenOaci);
+        }
+        return origenNormalizado;
+    }
+
     public synchronized List<Paquete> obtenerPaquetesIncrementales() {
         return new ArrayList<>(paquetesIncrementales);
     }
 
     public synchronized boolean usaPaquetesBaseEnOperacion() {
         return usarPaquetesBaseEnOperacion;
+    }
+
+    public synchronized void limpiarOperacionDiaria() {
+        this.paquetesIncrementales = new ArrayList<>();
+        this.contadorPaquetesIncrementales = 0;
+        this.usarPaquetesBaseEnOperacion = false;
+        this.rutasAsignadas = new HashMap<>();
+        this.rutasAnteriores = new HashMap<>();
+        this.asignacionesSplit = new HashMap<>();
+        this.estadoOperacional = null;
+        this.cargaVueloCache = null;
+        this.planificando = false;
+        contextSyncStateService.touch(AlmacenContexto.OPERACION, "operacion-diaria-limpiada");
     }
 
     public synchronized Map<String, Object> buscarEnvio(String id) {

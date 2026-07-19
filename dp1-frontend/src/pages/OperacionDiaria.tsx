@@ -1,14 +1,21 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { cargaArchivosService } from '../services/CargaArchivosService'
+import { simulationSocketService } from '../services/SimulationSocketService'
 import MapaAeropuertos from '../components/MapaAeropuertos'
 import EnvioListPanel from '../components/EnvioListPanel'
 import MaletaListPanel from '../components/MaletaListPanel'
 import AlmacenListPanel from '../components/AlmacenListPanel'
 import VueloListPanel from '../components/VueloListPanel'
-import { AIRPORTS_DATA } from '../data/airportsData'
+import { AIRPORTS_DATA, getAirportCityCountry } from '../data/airportsData'
 import type { VueloDTO, AeropuertoDTO, EnvioEstado, MaletaEstado } from '../types'
 
 const SHARED_OPERATION_POLL_MS = 5000
+const TIMEZONE_TO_STATION: Record<string, { oaci: string; offset: number }> = {
+  'America/Lima': { oaci: 'SPIM', offset: -300 },
+  'America/Argentina/Buenos_Aires': { oaci: 'SABE', offset: -180 },
+  'Europe/Copenhagen': { oaci: 'EKCH', offset: 60 },
+  'Asia/Kolkata': { oaci: 'VIDP', offset: 330 },
+}
 
 const aeropuertosFallback: AeropuertoDTO[] = Object.values(AIRPORTS_DATA).map((a) => ({
   codigoOACI: a.codigoOACI,
@@ -39,27 +46,26 @@ function calcularProgreso(vuelo: VueloDTO, now: Date): number {
   return (transcurrido / totalMs) * 100
 }
 
-function getPeruTimeString(): string {
-  const now = new Date()
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Lima',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  })
-  return formatter.format(now)
+function getDetectedStation() {
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const station = TIMEZONE_TO_STATION[timezone] ?? null
+  return {
+    timezone,
+    stationCode: station?.oaci ?? null,
+    offset: station?.offset ?? 0,
+  }
 }
 
-function getPeruDateParts(): { fecha: string; hora: string } {
+function getLocalDateTimeParts(timezone: string): { fecha: string; hora: string; horaConSegundos: string } {
   const now = new Date()
   const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Lima',
+    timeZone: timezone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
+    second: '2-digit',
     hour12: false,
   })
   const parts = formatter.formatToParts(now)
@@ -67,14 +73,16 @@ function getPeruDateParts(): { fecha: string; hora: string } {
   return {
     fecha: `${get('year')}-${get('month')}-${get('day')}`,
     hora: `${get('hour')}:${get('minute')}`,
+    horaConSegundos: `${get('hour')}:${get('minute')}:${get('second')}`,
   }
 }
 
 export default function OperacionDiaria() {
+  const detectedStation = getDetectedStation()
   const [aeropuertosEstaticos, setAeropuertosEstaticos] = useState<AeropuertoDTO[]>(aeropuertosFallback)
   const [vuelosOriginales, setVuelosOriginales] = useState<VueloDTO[]>([])
   const [vuelos, setVuelos] = useState<VueloDTO[]>([])
-  const [horaPeru, setHoraPeru] = useState(getPeruTimeString())
+  const [clockInfo, setClockInfo] = useState(() => getLocalDateTimeParts(detectedStation.timezone))
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [dataLoaded, setDataLoaded] = useState(false)
@@ -85,7 +93,7 @@ export default function OperacionDiaria() {
   const [selectedMaleta, setSelectedMaleta] = useState<MaletaEstado | null>(null)
   const [selectedEnvioRouteMode, setSelectedEnvioRouteMode] = useState<'actual' | 'anterior'>('actual')
   const [selectedMaletaRouteMode, setSelectedMaletaRouteMode] = useState<'actual' | 'anterior'>('actual')
-  const [mapTz, setMapTz] = useState(0)
+  const [mapTz, setMapTz] = useState(detectedStation.offset)
   const [panelMode, setPanelMode] = useState<'envios' | 'maletas' | 'almacenes' | 'aviones'>('aviones')
   const [maletaEnvioFilterId, setMaletaEnvioFilterId] = useState<string | null>(null)
   const [panelCollapsed, setPanelCollapsed] = useState(true)
@@ -100,6 +108,29 @@ export default function OperacionDiaria() {
   const [filteredAirportIds, setFilteredAirportIds] = useState<Set<string> | null>(null)
   const filteredFlightSignatureRef = useRef('')
   const filteredAirportSignatureRef = useRef('')
+  const latestContextVersionRef = useRef<number | null>(null)
+  const refreshInFlightRef = useRef(false)
+
+  const refreshSharedState = useCallback(async () => {
+    if (refreshInFlightRef.current) return
+    refreshInFlightRef.current = true
+    try {
+      const [aeropuertosData, vuelosData, enviosData, maletasData] = await Promise.all([
+        cargaArchivosService.obtenerAeropuertos('OPERACION'),
+        cargaArchivosService.obtenerVuelos('OPERACION'),
+        cargaArchivosService.listarEnvios(undefined, undefined, undefined),
+        cargaArchivosService.listarMaletas(undefined, undefined, undefined),
+      ])
+      setAeropuertosEstaticos(aeropuertosData.length > 0 ? aeropuertosData : aeropuertosFallback)
+      setVuelosOriginales(vuelosData)
+      setTodosEnvios(enviosData.envios)
+      setTodasMaletas(maletasData.maletas)
+    } catch {
+      // Keep the current snapshot when a sync refresh fails.
+    } finally {
+      refreshInFlightRef.current = false
+    }
+  }, [])
 
   const flightStats = vuelos.reduce((stats, vuelo) => {
     const enVuelo = vuelo.estado !== 'CANCELADO' && vuelo.progresoVuelo > 0 && vuelo.progresoVuelo < 100
@@ -344,13 +375,13 @@ export default function OperacionDiaria() {
     return () => { cancelled = true }
   }, [])
 
-  // Actualizar reloj peruano cada segundo
+  // Actualizar reloj local de la estacion cada segundo
   useEffect(() => {
-    const tick = () => setHoraPeru(getPeruTimeString())
+    const tick = () => setClockInfo(getLocalDateTimeParts(detectedStation.timezone))
     tick()
     const timer = setInterval(tick, 1000)
     return () => clearInterval(timer)
-  }, [])
+  }, [detectedStation.timezone])
 
   // Actualizar progreso de vuelos cada segundo
   useEffect(() => {
@@ -378,13 +409,15 @@ export default function OperacionDiaria() {
 
     const pollSharedState = async () => {
       try {
-        const [aeropuertosData, vuelosData, enviosData, maletasData] = await Promise.all([
+        const [sharedState, aeropuertosData, vuelosData, enviosData, maletasData] = await Promise.all([
+          cargaArchivosService.obtenerEstadoCompartido('OPERACION'),
           cargaArchivosService.obtenerAeropuertos('OPERACION'),
           cargaArchivosService.obtenerVuelos('OPERACION'),
           cargaArchivosService.listarEnvios(undefined, undefined, undefined),
           cargaArchivosService.listarMaletas(undefined, undefined, undefined),
         ])
         if (cancelled) return
+        latestContextVersionRef.current = sharedState.version
         setAeropuertosEstaticos(aeropuertosData.length > 0 ? aeropuertosData : aeropuertosFallback)
         setVuelosOriginales(vuelosData)
         setTodosEnvios(enviosData.envios)
@@ -403,6 +436,21 @@ export default function OperacionDiaria() {
       clearInterval(interval)
     }
   }, [dataLoaded])
+
+  useEffect(() => {
+    if (!dataLoaded) return
+
+    return simulationSocketService.connectContext('OPERACION', {
+      onMessage: (snapshot) => {
+        const incomingVersion = snapshot.version
+        const previousVersion = latestContextVersionRef.current
+        latestContextVersionRef.current = incomingVersion
+        if (previousVersion === null || incomingVersion > previousVersion) {
+          void refreshSharedState()
+        }
+      },
+    })
+  }, [dataLoaded, refreshSharedState])
 
   useEffect(() => {
     if (!selectedAeropuerto) return
@@ -431,7 +479,7 @@ export default function OperacionDiaria() {
     return () => window.clearTimeout(timeoutId)
   }, [panelCollapsed])
 
-  const { fecha, hora } = getPeruDateParts()
+  const { fecha, hora, horaConSegundos } = clockInfo
   const selectedOperationEntityCount = panelMode === 'envios'
     ? todosEnvios.length
     : panelMode === 'maletas'
@@ -483,7 +531,7 @@ export default function OperacionDiaria() {
 
             {simInfoCollapsed && (
               <div className="flex items-center gap-2 px-3 pb-3">
-                <span className="font-mono text-xs font-semibold text-white shrink-0">{horaPeru}</span>
+                <span className="font-mono text-xs font-semibold text-white shrink-0">{horaConSegundos}</span>
                 <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-800">
                   <div
                     className={`h-full rounded-full transition-all ${loading ? 'bg-sky-400' : error ? 'bg-rose-500' : 'bg-emerald-500'}`}
@@ -500,12 +548,22 @@ export default function OperacionDiaria() {
               <div className="space-y-2 px-3 pb-3">
                 <div className="grid grid-cols-2 gap-2 text-[11px]">
                   <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
-                    <span className="block text-[9px] uppercase tracking-wide text-gray-500">Hora Peru</span>
-                    <span className="font-mono font-semibold text-gray-100">{horaPeru}</span>
+                    <span className="block text-[9px] uppercase tracking-wide text-gray-500">Hora Local PC</span>
+                    <span className="font-mono font-semibold text-gray-100">{horaConSegundos}</span>
                   </div>
                   <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
                     <span className="block text-[9px] uppercase tracking-wide text-gray-500">Fecha</span>
                     <span className="font-mono font-semibold text-gray-100">{fecha.split('-').reverse().join('/')}</span>
+                  </div>
+                  <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
+                    <span className="block text-[9px] uppercase tracking-wide text-gray-500">Zona Horaria</span>
+                    <span className="font-mono font-semibold text-gray-100">{detectedStation.timezone}</span>
+                  </div>
+                  <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
+                    <span className="block text-[9px] uppercase tracking-wide text-gray-500">Sede Detectada</span>
+                    <span className="font-mono font-semibold text-gray-100">
+                      {detectedStation.stationCode ? `${detectedStation.stationCode} - ${getAirportCityCountry(detectedStation.stationCode)}` : 'No valida'}
+                    </span>
                   </div>
                   <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
                     <span className="block text-[9px] uppercase tracking-wide text-gray-500">Vuelos Activos</span>

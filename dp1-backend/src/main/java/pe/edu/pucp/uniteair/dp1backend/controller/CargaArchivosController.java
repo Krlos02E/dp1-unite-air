@@ -33,6 +33,12 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/carga")
 public class CargaArchivosController {
+    private static final Map<String, String> TIMEZONE_TO_AIRPORT = Map.of(
+            "America/Lima", "SPIM",
+            "America/Argentina/Buenos_Aires", "SABE",
+            "Europe/Copenhagen", "EKCH",
+            "Asia/Kolkata", "VIDP"
+    );
 
     private final CargaArchivosService cargaArchivosService;
     private final AlmacenService almacenService;
@@ -56,13 +62,15 @@ public class CargaArchivosController {
     public ResponseEntity<Map<String, Object>> uploadFiles(
             @RequestParam(value = "planes_vuelo", required = false) MultipartFile planesVuelo,
             @RequestParam(value = "aeropuertos", required = false) MultipartFile aeropuertos,
+            @RequestParam("timezone") String timezone,
             @RequestParam("envios") MultipartFile envios) {
+        String origenDetectado = inferirOrigenPorTimezone(timezone);
 
         boolean tieneDatasetCompleto = planesVuelo != null && !planesVuelo.isEmpty()
                 && aeropuertos != null && !aeropuertos.isEmpty();
 
         if (tieneDatasetCompleto) {
-            var result = cargaArchivosService.cargarArchivos(planesVuelo, aeropuertos, envios);
+            var result = cargaArchivosService.cargarArchivos(planesVuelo, aeropuertos, envios, origenDetectado);
             return ResponseEntity.ok(Map.of(
                     "success", result.success(),
                     "message", result.message(),
@@ -74,7 +82,7 @@ public class CargaArchivosController {
         }
 
         try {
-            List<Paquete> paquetes = cargaArchivosService.cargarEnviosDesdeArchivo(envios);
+            List<Paquete> paquetes = cargaArchivosService.cargarEnviosDesdeArchivo(envios, origenDetectado);
             return ResponseEntity.ok(Map.of(
                     "success", true,
                     "message", "Envios cargados exitosamente desde archivo",
@@ -83,9 +91,20 @@ public class CargaArchivosController {
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of(
                     "success", false,
-                    "message", e.getMessage()
+                "message", e.getMessage()
             ));
         }
+    }
+
+    private String inferirOrigenPorTimezone(String timezone) {
+        if (timezone == null || timezone.isBlank()) {
+            throw new IllegalArgumentException("La zona horaria de la PC es obligatoria");
+        }
+        String origen = TIMEZONE_TO_AIRPORT.get(timezone);
+        if (origen == null) {
+            throw new IllegalArgumentException("Zona horaria no valida para operacion dia a dia: " + timezone);
+        }
+        return origen;
     }
 
     @GetMapping("/aeropuertos")

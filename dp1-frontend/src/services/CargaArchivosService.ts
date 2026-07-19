@@ -20,12 +20,14 @@ import type {
 class CargaArchivosService extends HttpClient {
   upload(
     files: { planes_vuelo?: File; aeropuertos?: File; envios?: File },
+    timezone: string,
     onProgress?: (pct: number) => void
   ): Promise<CargaResult> {
     const formData = new FormData()
     if (files.planes_vuelo) formData.append('planes_vuelo', files.planes_vuelo)
     if (files.aeropuertos) formData.append('aeropuertos', files.aeropuertos)
     if (files.envios) formData.append('envios', files.envios)
+    formData.append('timezone', timezone)
 
     return this.instance.post('/carga/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },

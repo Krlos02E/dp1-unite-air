@@ -140,12 +140,11 @@ export interface DashboardData {
 }
 
 export interface EnvioEntrada {
-  origen: string;
   destino: string;
-  fecha: string;
-  hora: string;
+  fechaLocal: string;
+  horaLocal: string;
   cantidad: number;
-  remitente: string;
+  timezone: string;
 }
 
 export interface CancelarVueloResult {
