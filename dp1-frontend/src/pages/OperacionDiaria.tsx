@@ -143,10 +143,16 @@ export default function OperacionDiaria() {
     return stats
   }, { enVuelo: 0, vaciosEnVuelo: 0, culminados: 0, cancelados: 0 })
 
-  const occupancy = vuelos.reduce((acc, v) => ({
-    carga: acc.carga + v.cargaActual,
-    capacidad: acc.capacidad + v.capacidad,
-  }), { carga: 0, capacidad: 0 })
+  const occupancy = {
+    flota: vuelos.reduce((acc, v) => ({
+      carga: acc.carga + v.cargaActual,
+      capacidad: acc.capacidad + v.capacidad,
+    }), { carga: 0, capacidad: 0 }),
+    aeropuertos: aeropuertosEstaticos.reduce((acc, a) => ({
+      ocupacion: acc.ocupacion + a.ocupacionActual,
+      capacidad: acc.capacidad + a.capacidadMaxima,
+    }), { ocupacion: 0, capacidad: 0 }),
+  }
 
   const vuelosVaciosEnVueloPct = flightStats.enVuelo > 0
     ? Math.round((flightStats.vaciosEnVuelo / flightStats.enVuelo) * 100)
@@ -599,14 +605,27 @@ export default function OperacionDiaria() {
                   <div className="rounded-lg border border-gray-600/55 bg-gray-950/65 px-2.5 py-2">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">Flota</span>
-                      <span className="text-base font-bold text-white">{occupancy.capacidad > 0 ? (occupancy.carga / occupancy.capacidad * 100).toFixed(2) : '0.00'}%</span>
+                      <span className="text-base font-bold text-white">{occupancy.flota.capacidad > 0 ? (occupancy.flota.carga / occupancy.flota.capacidad * 100).toFixed(2) : '0.00'}%</span>
                     </div>
                     <div className="mt-1 flex items-center justify-between gap-2">
-                      <span className="font-mono text-sm text-gray-100">{occupancy.carga.toLocaleString('fr-FR')}/{occupancy.capacidad.toLocaleString('fr-FR')}</span>
-                      <span className={`h-2 w-2 shrink-0 rounded-full ${ocupColor(occupancy.capacidad > 0 ? occupancy.carga / occupancy.capacidad : 0)}`} />
+                      <span className="font-mono text-sm text-gray-100">{occupancy.flota.carga.toLocaleString('fr-FR')}/{occupancy.flota.capacidad.toLocaleString('fr-FR')}</span>
+                      <span className={`h-2 w-2 shrink-0 rounded-full ${ocupColor(occupancy.flota.capacidad > 0 ? occupancy.flota.carga / occupancy.flota.capacidad : 0)}`} />
                     </div>
                     <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-800">
-                      <div className={`h-full rounded-full transition-all ${ocupColor(occupancy.capacidad > 0 ? occupancy.carga / occupancy.capacidad : 0)}`} style={{ width: `${Math.min(occupancy.capacidad > 0 ? occupancy.carga / occupancy.capacidad * 100 : 0, 100)}%` }} />
+                      <div className={`h-full rounded-full transition-all ${ocupColor(occupancy.flota.capacidad > 0 ? occupancy.flota.carga / occupancy.flota.capacidad : 0)}`} style={{ width: `${Math.min(occupancy.flota.capacidad > 0 ? occupancy.flota.carga / occupancy.flota.capacidad * 100 : 0, 100)}%` }} />
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-gray-600/55 bg-gray-950/65 px-2.5 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">Aeropuertos</span>
+                      <span className="text-base font-bold text-white">{occupancy.aeropuertos.capacidad > 0 ? (occupancy.aeropuertos.ocupacion / occupancy.aeropuertos.capacidad * 100).toFixed(2) : '0.00'}%</span>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between gap-2">
+                      <span className="font-mono text-sm text-gray-100">{occupancy.aeropuertos.ocupacion.toLocaleString('fr-FR')}/{occupancy.aeropuertos.capacidad.toLocaleString('fr-FR')}</span>
+                      <span className={`h-2 w-2 shrink-0 rounded-full ${ocupColor(occupancy.aeropuertos.capacidad > 0 ? occupancy.aeropuertos.ocupacion / occupancy.aeropuertos.capacidad : 0)}`} />
+                    </div>
+                    <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-800">
+                      <div className={`h-full rounded-full transition-all ${ocupColor(occupancy.aeropuertos.capacidad > 0 ? occupancy.aeropuertos.ocupacion / occupancy.aeropuertos.capacidad : 0)}`} style={{ width: `${Math.min(occupancy.aeropuertos.capacidad > 0 ? occupancy.aeropuertos.ocupacion / occupancy.aeropuertos.capacidad * 100 : 0, 100)}%` }} />
                     </div>
                   </div>
                 </div>
