@@ -471,14 +471,11 @@ function VueloListPanel({
     setCancellingFlightId(flight.id)
     setFlightMessage(null)
     try {
-      const horaSalidaLocal = flight.salidaUtc.slice(11, 16)
-      const result = await cargaArchivosService.cancelarVuelo(
-        flight.origen,
-        flight.destino,
-        horaSalidaLocal,
+      const result = await cargaArchivosService.cancelarVuelo({
+        vueloId: flight.id,
         contexto,
-        simulationSessionId || undefined,
-      )
+        sessionId: simulationSessionId || undefined,
+      })
       if (result.success && result.vueloId) {
         setFlightMessage({ tipo: 'success', texto: `Vuelo ${result.vueloId} cancelado correctamente` })
         onFlightStatusChanged?.(result.vueloId, 'CANCELADO')

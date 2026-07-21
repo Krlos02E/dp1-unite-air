@@ -3,6 +3,7 @@ import type {
   CargaResult,
   AeropuertoDTO,
   VueloDTO,
+  CancelarVueloRequest,
   CancelarVueloResult,
   DescancelarVueloResult,
   EnvioEntrada,
@@ -51,8 +52,8 @@ class CargaArchivosService extends HttpClient {
     return this.get<ContextSharedState>('/carga/estado-compartido', { contexto })
   }
 
-  cancelarVuelo(origen: string, destino: string, horaSalidaLocal: string, contexto: AlmacenContexto = 'OPERACION', sessionId?: string): Promise<CancelarVueloResult> {
-    return this.instance.post('/vuelos/cancelar', { origen, destino, horaSalidaLocal, contexto, sessionId })
+  cancelarVuelo(request: CancelarVueloRequest): Promise<CancelarVueloResult> {
+    return this.instance.post('/vuelos/cancelar', request)
       .then((r) => r.data as CancelarVueloResult)
   }
 

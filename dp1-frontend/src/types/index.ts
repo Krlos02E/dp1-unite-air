@@ -154,6 +154,12 @@ export interface CancelarVueloResult {
   vueloId?: string;
 }
 
+export interface CancelarVueloRequest {
+  vueloId: string;
+  contexto?: AlmacenContexto;
+  sessionId?: string;
+}
+
 export interface DescancelarVueloResult {
   success: boolean;
   message: string;

@@ -44,9 +44,7 @@ public class VueloController {
             }
 
             String vueloId = cargaArchivosService.cancelarVuelo(
-                    request.origen(),
-                    request.destino(),
-                    request.horaSalidaLocal(),
+                    request.vueloId(),
                     request.contexto() != null ? request.contexto() : AlmacenContexto.OPERACION,
                     referenciaUtc
             );
@@ -167,9 +165,7 @@ public class VueloController {
     }
 
     public record CancelacionRequest(
-            String origen,
-            String destino,
-            String horaSalidaLocal,
+            String vueloId,
             AlmacenContexto contexto,
             String sessionId
     ) {}

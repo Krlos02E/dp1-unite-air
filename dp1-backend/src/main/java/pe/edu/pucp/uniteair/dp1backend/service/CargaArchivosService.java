@@ -793,67 +793,49 @@ public class CargaArchivosService {
     }
 
     @Transactional
-    public synchronized String cancelarVuelo(String origen, String destino, String horaSalidaLocal) {
-        return cancelarVuelo(origen, destino, horaSalidaLocal, AlmacenContexto.OPERACION, LocalDateTime.now(ZoneOffset.UTC));
-    }
-
-    @Transactional
     public synchronized String cancelarVuelo(
-            String origen,
-            String destino,
-            String horaSalidaLocal,
+            String vueloId,
             AlmacenContexto contexto,
             LocalDateTime referenciaUtc
     ) {
         if (lastDataset == null) {
             throw new IllegalStateException("No hay dataset cargado");
         }
+        if (vueloId == null || vueloId.isBlank()) {
+            throw new IllegalArgumentException("Se requiere vueloId para cancelar un vuelo");
+        }
 
         LocalDateTime ahoraUtc = referenciaUtc != null ? referenciaUtc : LocalDateTime.now(ZoneOffset.UTC);
-        LocalTime horaSalida = LocalTime.parse(horaSalidaLocal);
-        LocalDate hoy = ahoraUtc.toLocalDate();
-
-        Vuelo vueloHoy = buscarVuelo(origen, destino, hoy, horaSalida, contexto);
-
-        if (vueloHoy == null) {
+        Vuelo vueloACancelar = buscarVueloPorId(vueloId, contexto);
+        if (vueloACancelar == null) {
+            throw new IllegalArgumentException("No se encontro el vuelo seleccionado: " + vueloId);
+        }
+        if (!vueloACancelar.getSalidaUtc().isAfter(ahoraUtc)) {
             throw new IllegalArgumentException(
-                    "No se encontro vuelo " + origen + "-" + destino + " a las " + horaSalidaLocal + " para hoy " + hoy
+                    "El vuelo seleccionado ya no puede cancelarse porque su salida UTC es "
+                            + vueloACancelar.getSalidaUtc()
             );
         }
 
-        long minutosParaSalida = java.time.Duration.between(ahoraUtc, vueloHoy.getSalidaUtc()).toMinutes();
-
-        Vuelo vueloACancelar;
-        // La cancelacion aplica al vuelo del mismo dia si se registra con al menos
-        // 60 minutos de anticipacion; con menos tiempo pasa al siguiente dia.
-        if (minutosParaSalida >= 60) {
-            vueloACancelar = vueloHoy;
-        } else {
-            LocalDate manana = hoy.plusDays(1);
-            vueloACancelar = buscarVuelo(origen, destino, manana, horaSalida, contexto);
-            if (vueloACancelar == null) {
-                throw new IllegalArgumentException(
-                        "No se encontro vuelo " + origen + "-" + destino + " a las " + horaSalidaLocal + " para manana " + manana
-                );
-            }
-        }
-
-        String vueloId = vueloACancelar.getId();
-        if (vueloCanceladoRepository.findByContextoAndVueloId(contexto, vueloId).isEmpty()) {
+        String vueloIdNormalizado = vueloACancelar.getId();
+        LocalTime horaSalidaLocal = vueloACancelar.getSalidaUtc()
+                .plusMinutes(vueloACancelar.getOrigen().getGmtOffsetMinutos())
+                .toLocalTime();
+        if (vueloCanceladoRepository.findByContextoAndVueloId(contexto, vueloIdNormalizado).isEmpty()) {
             vueloCanceladoRepository.save(VueloCancelado.builder()
                     .contexto(contexto)
-                    .vueloId(vueloId)
+                    .vueloId(vueloIdNormalizado)
                     .origenOACI(vueloACancelar.getOrigen().getCodigoOACI())
                     .destinoOACI(vueloACancelar.getDestino().getCodigoOACI())
                     .salidaUtc(vueloACancelar.getSalidaUtc())
-                    .horaSalidaLocal(horaSalida)
+                    .horaSalidaLocal(horaSalidaLocal)
                     .createdAt(LocalDateTime.now(ZoneOffset.UTC))
                     .build());
         }
         System.out.println("[CargaArchivosService] Vuelo cancelado: " + vueloACancelar.getId()
-                + " (minutos para salida: " + minutosParaSalida + ")");
+                + " (salida UTC: " + vueloACancelar.getSalidaUtc() + ")");
         contextSyncStateService.touch(contexto, "vuelo-cancelado");
-        return vueloId;
+        return vueloIdNormalizado;
     }
 
     @Transactional
@@ -865,13 +847,13 @@ public class CargaArchivosService {
         return vueloId;
     }
 
-    private Vuelo buscarVuelo(String origen, String destino, LocalDate fecha, LocalTime horaSalidaLocal, AlmacenContexto contexto) {
+    private Vuelo buscarVueloPorId(String vueloId, AlmacenContexto contexto) {
         Dataset datasetEfectivo = datasetContextService.construirDatasetEfectivo(contexto, lastDataset);
+        if (datasetEfectivo == null) {
+            return null;
+        }
         for (Vuelo v : datasetEfectivo.getVuelos()) {
-            if (v.getOrigen().getCodigoOACI().equals(origen)
-                    && v.getDestino().getCodigoOACI().equals(destino)
-                    && v.getSalidaUtc().toLocalDate().equals(fecha)
-                    && v.getSalidaUtc().toLocalTime().equals(horaSalidaLocal)) {
+            if (v.getId().equals(vueloId)) {
                 return v;
             }
         }
