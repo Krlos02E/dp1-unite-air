@@ -1009,7 +1009,9 @@ public class CargaArchivosService {
             }
         }
 
-        this.paquetesIncrementales = new ArrayList<>(nuevos);
+        List<Paquete> listaActualizada = new ArrayList<>(paquetesIncrementales);
+        listaActualizada.addAll(nuevos);
+        this.paquetesIncrementales = listaActualizada;
         this.usarPaquetesBaseEnOperacion = false;
 
         System.out.println("[CargaArchivosService] Envios cargados desde archivo: " + nuevos.size()
