@@ -13,6 +13,7 @@ import {
   formatTimeInTimezone,
   parseUtcOffsetLabel,
 } from '../utils/timezoneFormat'
+import { getOffsetMinutesForTimezone } from '../utils/stationTimezone'
 import VueloProgramacionModal from './VueloProgramacionModal'
 import VueloDetailCard from './VueloDetailCard'
 import type { VueloDTO, EnvioEstado, AeropuertoDTO, AlmacenContexto, ProgramacionVueloDTO } from '../types'
@@ -35,7 +36,7 @@ interface Props {
   onDataChanged?: () => void | Promise<void>
   onFlightStatusChanged?: (flightId: string, estado: 'CANCELADO' | 'PROGRAMADO') => void
   simulationSessionId?: string | null
-  tzOffset?: number
+  tzOffset?: number | string
   onSelectedVueloClear?: () => void
 }
 
@@ -154,6 +155,10 @@ function VueloListPanel({
   tzOffset = 0,
   onSelectedVueloClear,
 }: Props) {
+  const displayOffsetMinutes = typeof tzOffset === 'string'
+    ? getOffsetMinutesForTimezone(tzOffset)
+    : tzOffset
+
   const [searchOrigin, setSearchOrigin] = useState('')
   const [searchDestination, setSearchDestination] = useState('')
   const [searchCode, setSearchCode] = useState('')
@@ -583,9 +588,9 @@ function VueloListPanel({
                           {programacion.origenOACI} → {programacion.destinoOACI}
                         </div>
                         <div className="text-[10px] text-gray-400">
-                          {formatProgramacionTime(programacion.horaSalidaLocal, programacion.origenOACI, tzOffset)}
+                          {formatProgramacionTime(programacion.horaSalidaLocal, programacion.origenOACI, displayOffsetMinutes)}
                           {' - '}
-                          {formatProgramacionTime(programacion.horaLlegadaLocal, programacion.destinoOACI, tzOffset)}
+                          {formatProgramacionTime(programacion.horaLlegadaLocal, programacion.destinoOACI, displayOffsetMinutes)}
                           {' · cap. '}
                           {programacion.capacidad}
                         </div>

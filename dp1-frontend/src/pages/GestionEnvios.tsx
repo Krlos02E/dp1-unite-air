@@ -1,16 +1,16 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { cargaArchivosService } from '../services/CargaArchivosService'
 import AgregarEnvios from '../components/AgregarEnvios'
-import { getAirportCityCountry } from '../data/airportsData'
+import StationSelectorCard from '../components/StationSelectorCard'
 import type { CargaResult } from '../types'
+import {
+  getStationById,
+  resolveStationState,
+  saveManualStationSelection,
+  type StationId,
+} from '../utils/stationTimezone'
 
 type Tab = 'carga' | 'envios'
-const TIMEZONE_TO_AIRPORT: Record<string, string> = {
-  'America/Lima': 'SPIM',
-  'America/Argentina/Buenos_Aires': 'SABE',
-  'Europe/Copenhagen': 'EKCH',
-  'Asia/Kolkata': 'VIDP',
-}
 
 export default function GestionEnvios() {
   const [tab, setTab] = useState<Tab>('carga')
@@ -59,8 +59,28 @@ function CargaArchivosTab() {
   const [progress, setProgress] = useState(0)
   const [result, setResult] = useState<CargaResult | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
-  const origenDetectado = TIMEZONE_TO_AIRPORT[timezone] ?? null
+  const [stationState, setStationState] = useState(() => resolveStationState())
+  const selectedStation = stationState.station
+  const timezone = selectedStation?.canonicalTimezone ?? 'UTC'
+  const origenDetectado = selectedStation?.airportCode ?? null
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setStationState(resolveStationState())
+    }, 1000)
+    return () => window.clearInterval(intervalId)
+  }, [])
+
+  const handleManualStationSelection = useCallback((stationId: StationId) => {
+    saveManualStationSelection(stationId)
+    const station = getStationById(stationId)
+    setStationState((current) => ({
+      browserTimezone: current.browserTimezone,
+      station,
+      source: 'manual',
+      requiresManualSelection: true,
+    }))
+  }, [])
 
   const handleUpload = async () => {
     setError(null)
@@ -89,20 +109,13 @@ function CargaArchivosTab() {
 
   return (
     <div className="space-y-4">
-      <div className={`rounded-lg border px-4 py-3 text-sm ${origenDetectado ? 'border-sky-700 bg-sky-950/30' : 'border-red-700 bg-red-950/30'}`}>
-        <p className="text-gray-300">
-          <span className="font-semibold text-gray-100">Zona horaria detectada:</span>{' '}
-          <span className={origenDetectado ? 'text-sky-300' : 'text-red-300'}>{timezone}</span>
-        </p>
-        <p className="mt-1 text-gray-300">
-          <span className="font-semibold text-gray-100">Origen detectado para la carga:</span>{' '}
-          {origenDetectado ? (
-            <span className="text-emerald-300">{origenDetectado} - {getAirportCityCountry(origenDetectado)}</span>
-          ) : (
-            <span className="text-red-300">No corresponde a SPIM, SABE, EKCH o VIDP</span>
-          )}
-        </p>
-      </div>
+      <StationSelectorCard
+        browserTimezone={stationState.browserTimezone}
+        selectedStation={selectedStation}
+        requiresManualSelection={stationState.requiresManualSelection}
+        onSelectStation={handleManualStationSelection}
+        airportLabel="Origen usado para la carga"
+      />
 
       <FileInput label="Archivo de vuelos (planes_vuelo.txt — opcional)" onChange={setPlanesVuelo} />
       <FileInput label="Archivo de aeropuertos (aeropuertos.txt — opcional)" onChange={setAeropuertos} />

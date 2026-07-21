@@ -12,7 +12,7 @@ interface Props {
   aeropuerto: AeropuertoDTO
   vuelos?: VueloDTO[]
   envios?: EnvioEstado[]
-  tzOffset: number
+  tzOffset: number | string
   aeropuertos?: AeropuertoDTO[]
   onVueloSelect?: (vuelo: VueloDTO) => void
   onEnvioSelect?: (envio: EnvioEstado) => void

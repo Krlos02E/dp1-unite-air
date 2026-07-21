@@ -18,19 +18,13 @@ import org.springframework.web.bind.annotation.RestController;
 
 import pe.edu.pucp.uniteair.dp1backend.service.CargaArchivosService;
 import pe.edu.pucp.uniteair.dp1backend.service.CargaArchivosService.EnvioEntrada;
+import pe.edu.pucp.uniteair.dp1backend.util.TimezoneSedeResolver;
 import tasf.model.Paquete;
 
 @RestController
 @RequestMapping("/envios")
 public class EnviosController {
     private static final String CLIENTE_PRUEBA_OPERACION_DIARIA = CargaArchivosService.CLIENTE_PRUEBA_OPERACION_DIARIA;
-
-    private static final Map<String, String> TIMEZONE_TO_AIRPORT = Map.of(
-            "America/Lima", "SPIM",
-            "America/Argentina/Buenos_Aires", "SABE",
-            "Europe/Copenhagen", "EKCH",
-            "Asia/Kolkata", "VIDP"
-    );
 
     @Autowired
     private CargaArchivosService cargaArchivosService;
@@ -156,14 +150,7 @@ public class EnviosController {
     }
 
     private String inferirOrigenPorTimezone(String timezone) {
-        if (timezone == null || timezone.isBlank()) {
-            throw new IllegalArgumentException("La zona horaria de la PC es obligatoria");
-        }
-        String origen = TIMEZONE_TO_AIRPORT.get(timezone);
-        if (origen == null) {
-            throw new IllegalArgumentException("Zona horaria no valida para operacion dia a dia: " + timezone);
-        }
-        return origen;
+        return TimezoneSedeResolver.inferirAeropuertoPorTimezone(timezone);
     }
 
     public record EnviosRequest(List<EnvioItem> envios) {}

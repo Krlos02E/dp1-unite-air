@@ -19,7 +19,7 @@ interface Props {
   contexto: AlmacenContexto
   onDataChanged?: (aeropuertos: AeropuertoDTO[]) => void | Promise<void>
   onVisibleAirportsChange?: (airportCodes: string[] | null) => void
-  tzOffset?: number
+  tzOffset?: number | string
   onSelectedAlmacenClear?: () => void
 }
 

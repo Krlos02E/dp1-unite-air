@@ -11,6 +11,20 @@ export const TIMEZONE_OPTIONS = [
   { label: 'UTC+5:30 (India)', offset: 330 },
 ]
 
+function formatWithIanaTimezone(
+  isoString: string,
+  timeZone: string,
+  options: Intl.DateTimeFormatOptions,
+): string {
+  const d = parseAsUtc(isoString)
+  if (!d) return '--'
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    hour12: false,
+    ...options,
+  }).format(d)
+}
+
 function parseAsUtc(isoString: string): Date | null {
   if (!isoString) return null
   try {
@@ -22,22 +36,37 @@ function parseAsUtc(isoString: string): Date | null {
   }
 }
 
-export function formatTimeInTimezone(isoString: string, offsetMinutes: number): string {
+export function formatTimeInTimezone(isoString: string, timeZoneOrOffset: string | number): string {
+  if (typeof timeZoneOrOffset === 'string') {
+    return formatWithIanaTimezone(isoString, timeZoneOrOffset, {
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
+
   const d = parseAsUtc(isoString)
   if (!d) return '--'
   const utcMs = d.getTime()
-  const targetMs = utcMs + offsetMinutes * 60000
+  const targetMs = utcMs + timeZoneOrOffset * 60000
   const target = new Date(targetMs)
   const hours = String(target.getUTCHours()).padStart(2, '0')
   const minutes = String(target.getUTCMinutes()).padStart(2, '0')
   return `${hours}:${minutes}`
 }
 
-export function formatDateInTimezone(isoString: string, offsetMinutes: number): string {
+export function formatDateInTimezone(isoString: string, timeZoneOrOffset: string | number): string {
+  if (typeof timeZoneOrOffset === 'string') {
+    return formatWithIanaTimezone(isoString, timeZoneOrOffset, {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    })
+  }
+
   const d = parseAsUtc(isoString)
   if (!d) return '--'
   const utcMs = d.getTime()
-  const targetMs = utcMs + offsetMinutes * 60000
+  const targetMs = utcMs + timeZoneOrOffset * 60000
   const target = new Date(targetMs)
   const day = String(target.getUTCDate()).padStart(2, '0')
   const month = String(target.getUTCMonth() + 1).padStart(2, '0')

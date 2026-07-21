@@ -1,43 +1,18 @@
 import { useState, useEffect, useCallback } from 'react'
 import { cargaArchivosService } from '../services/CargaArchivosService'
-import { getAirportCity, getAirportCityCountry } from '../data/airportsData'
+import StationSelectorCard from './StationSelectorCard'
+import { getAirportCity } from '../data/airportsData'
 import type { AeropuertoDTO, EnvioIncremental } from '../types'
+import {
+  formatLocalDateTimeParts,
+  getStationById,
+  resolveStationState,
+  saveManualStationSelection,
+  type StationId,
+} from '../utils/stationTimezone'
 
 const SHARED_ENVIOS_POLL_MS = 5000
 const CLIENTE_PRUEBA_OPERACION_DIARIA = '0007729'
-const TIMEZONE_TO_AIRPORT: Record<string, string> = {
-  'America/Lima': 'SPIM',
-  'America/Argentina/Buenos_Aires': 'SABE',
-  'Europe/Copenhagen': 'EKCH',
-  'Asia/Kolkata': 'VIDP',
-}
-
-function getDetectedStation() {
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
-  const origenDetectado = TIMEZONE_TO_AIRPORT[timezone] ?? null
-  return { timezone, origenDetectado }
-}
-
-function getClientLocalDateTime(timezone: string) {
-  const now = new Date()
-  const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
-  const parts = formatter.formatToParts(now)
-  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? '00'
-
-  return {
-    fechaLocal: `${get('year')}-${get('month')}-${get('day')}`,
-    horaLocal: `${get('hour')}:${get('minute')}`,
-  }
-}
-
 export default function AgregarEnvios() {
   const [aeropuertos, setAeropuertos] = useState<AeropuertoDTO[]>([])
   const [enviosExistentes, setEnviosExistentes] = useState<EnvioIncremental[]>([])
@@ -47,14 +22,28 @@ export default function AgregarEnvios() {
 
   const [destino, setDestino] = useState('')
   const [cantidad, setCantidad] = useState('')
-  const [{ timezone, origenDetectado }, setStation] = useState(getDetectedStation)
+  const [stationState, setStationState] = useState(() => resolveStationState())
+  const selectedStation = stationState.station
+  const timezone = selectedStation?.canonicalTimezone ?? 'UTC'
+  const origenDetectado = selectedStation?.airportCode ?? null
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
-      setStation(getDetectedStation())
+      setStationState(resolveStationState())
     }, 1000)
 
     return () => window.clearInterval(intervalId)
+  }, [])
+
+  const handleManualStationSelection = useCallback((stationId: StationId) => {
+    saveManualStationSelection(stationId)
+    const station = getStationById(stationId)
+    setStationState((current) => ({
+      browserTimezone: current.browserTimezone,
+      station,
+      source: 'manual',
+      requiresManualSelection: true,
+    }))
   }, [])
 
   const cargarDatos = useCallback(async () => {
@@ -131,7 +120,7 @@ export default function AgregarEnvios() {
 
     setSubmitting(true)
     try {
-      const { fechaLocal, horaLocal } = getClientLocalDateTime(timezone)
+      const { fecha: fechaLocal, hora: horaLocal } = formatLocalDateTimeParts(timezone)
       const result = await cargaArchivosService.agregarEnvios([{
         destino,
         fechaLocal,
@@ -156,7 +145,7 @@ export default function AgregarEnvios() {
     }
   }
 
-  const currentLocalTime = getClientLocalDateTime(timezone)
+  const currentLocalTime = formatLocalDateTimeParts(timezone)
 
   if (loading) {
     return (
@@ -178,23 +167,14 @@ export default function AgregarEnvios() {
             </div>
           )}
 
-          <div className={`rounded-lg border px-4 py-3 text-sm ${origenDetectado ? 'border-sky-700 bg-sky-950/30' : 'border-red-700 bg-red-950/30'}`}>
-            <p className="text-gray-300">
-              <span className="font-semibold text-gray-100">Zona horaria detectada:</span>{' '}
-              <span className={origenDetectado ? 'text-sky-300' : 'text-red-300'}>{timezone}</span>
-            </p>
-            <p className="mt-1 text-gray-300">
-              <span className="font-semibold text-gray-100">Origen detectado:</span>{' '}
-              {origenDetectado ? (
-                <span className="text-emerald-300">{origenDetectado} - {getAirportCityCountry(origenDetectado)}</span>
-              ) : (
-                <span className="text-red-300">No corresponde a SPIM, SABE, EKCH o VIDP</span>
-              )}
-            </p>
-            <p className="mt-1 text-gray-400">
-              Fecha/hora local actual de esta PC: {currentLocalTime.fechaLocal} {currentLocalTime.horaLocal}
-            </p>
-          </div>
+          <StationSelectorCard
+            browserTimezone={stationState.browserTimezone}
+            selectedStation={selectedStation}
+            requiresManualSelection={stationState.requiresManualSelection}
+            onSelectStation={handleManualStationSelection}
+            localDateTimeText={`${currentLocalTime.fecha} ${currentLocalTime.horaConSegundos}`}
+            airportLabel="Origen usado para el envío"
+          />
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>

@@ -14,6 +14,7 @@ import pe.edu.pucp.uniteair.dp1backend.service.AlmacenService;
 import pe.edu.pucp.uniteair.dp1backend.service.ContextSyncStateService;
 import pe.edu.pucp.uniteair.dp1backend.service.DatasetContextService;
 import pe.edu.pucp.uniteair.dp1backend.entity.Almacen;
+import pe.edu.pucp.uniteair.dp1backend.util.TimezoneSedeResolver;
 import tasf.core.Dataset;
 import tasf.model.Paquete;
 import tasf.model.Vuelo;
@@ -33,13 +34,6 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/carga")
 public class CargaArchivosController {
-    private static final Map<String, String> TIMEZONE_TO_AIRPORT = Map.of(
-            "America/Lima", "SPIM",
-            "America/Argentina/Buenos_Aires", "SABE",
-            "Europe/Copenhagen", "EKCH",
-            "Asia/Kolkata", "VIDP"
-    );
-
     private final CargaArchivosService cargaArchivosService;
     private final AlmacenService almacenService;
     private final ContextSyncStateService contextSyncStateService;
@@ -97,14 +91,7 @@ public class CargaArchivosController {
     }
 
     private String inferirOrigenPorTimezone(String timezone) {
-        if (timezone == null || timezone.isBlank()) {
-            throw new IllegalArgumentException("La zona horaria de la PC es obligatoria");
-        }
-        String origen = TIMEZONE_TO_AIRPORT.get(timezone);
-        if (origen == null) {
-            throw new IllegalArgumentException("Zona horaria no valida para operacion dia a dia: " + timezone);
-        }
-        return origen;
+        return TimezoneSedeResolver.inferirAeropuertoPorTimezone(timezone);
     }
 
     @GetMapping("/aeropuertos")

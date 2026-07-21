@@ -5,7 +5,7 @@ import { formatTimeInTimezone, formatDateInTimezone } from '../utils/timezoneFor
 
 interface Props {
   vuelo: VueloDTO
-  tzOffset: number
+  tzOffset: number | string
   aeropuertos?: AeropuertoDTO[]
   envios?: EnvioEstado[]
   onEnvioSelect?: (envio: EnvioEstado) => void

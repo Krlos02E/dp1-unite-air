@@ -6,16 +6,19 @@ import EnvioListPanel from '../components/EnvioListPanel'
 import MaletaListPanel from '../components/MaletaListPanel'
 import AlmacenListPanel from '../components/AlmacenListPanel'
 import VueloListPanel from '../components/VueloListPanel'
+import StationSelectorCard from '../components/StationSelectorCard'
 import { AIRPORTS_DATA, getAirportCityCountry } from '../data/airportsData'
 import type { VueloDTO, AeropuertoDTO, EnvioEstado, MaletaEstado } from '../types'
+import {
+  formatLocalDateTimeParts,
+  getOffsetMinutesForTimezone,
+  getStationById,
+  resolveStationState,
+  saveManualStationSelection,
+  type StationId,
+} from '../utils/stationTimezone'
 
 const SHARED_OPERATION_POLL_MS = 5000
-const TIMEZONE_TO_STATION: Record<string, { oaci: string; offset: number }> = {
-  'America/Lima': { oaci: 'SPIM', offset: -300 },
-  'America/Argentina/Buenos_Aires': { oaci: 'SABE', offset: -180 },
-  'Europe/Copenhagen': { oaci: 'EKCH', offset: 60 },
-  'Asia/Kolkata': { oaci: 'VIDP', offset: 330 },
-}
 
 const aeropuertosFallback: AeropuertoDTO[] = Object.values(AIRPORTS_DATA).map((a) => ({
   codigoOACI: a.codigoOACI,
@@ -46,48 +49,14 @@ function calcularProgreso(vuelo: VueloDTO, now: Date): number {
   return (transcurrido / totalMs) * 100
 }
 
-function getDetectedStation() {
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
-  const station = TIMEZONE_TO_STATION[timezone] ?? null
-  if (station) {
-    return { timezone, stationCode: station.oaci, offset: station.offset }
-  }
-  const browserOffset = -new Date().getTimezoneOffset()
-  const entry = Object.entries(TIMEZONE_TO_STATION).find(([, v]) => v.offset === browserOffset)
-  return {
-    timezone,
-    stationCode: entry?.[1].oaci ?? null,
-    offset: entry?.[1].offset ?? browserOffset,
-  }
-}
-
-function getLocalDateTimeParts(timezone: string): { fecha: string; hora: string; horaConSegundos: string } {
-  const now = new Date()
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  })
-  const parts = formatter.formatToParts(now)
-  const get = (type: string) => parts.find((p) => p.type === type)?.value || '00'
-  return {
-    fecha: `${get('year')}-${get('month')}-${get('day')}`,
-    hora: `${get('hour')}:${get('minute')}`,
-    horaConSegundos: `${get('hour')}:${get('minute')}:${get('second')}`,
-  }
-}
-
 export default function OperacionDiaria() {
-  const detectedStation = getDetectedStation()
+  const [stationState, setStationState] = useState(() => resolveStationState())
+  const selectedStation = stationState.station
+  const displayTimezone = selectedStation?.canonicalTimezone ?? 'UTC'
   const [aeropuertosEstaticos, setAeropuertosEstaticos] = useState<AeropuertoDTO[]>(aeropuertosFallback)
   const [vuelosOriginales, setVuelosOriginales] = useState<VueloDTO[]>([])
   const [vuelos, setVuelos] = useState<VueloDTO[]>([])
-  const [clockInfo, setClockInfo] = useState(() => getLocalDateTimeParts(detectedStation.timezone))
+  const [clockInfo, setClockInfo] = useState(() => formatLocalDateTimeParts(displayTimezone))
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [dataLoaded, setDataLoaded] = useState(false)
@@ -98,7 +67,7 @@ export default function OperacionDiaria() {
   const [selectedMaleta, setSelectedMaleta] = useState<MaletaEstado | null>(null)
   const [selectedEnvioRouteMode, setSelectedEnvioRouteMode] = useState<'actual' | 'anterior'>('actual')
   const [selectedMaletaRouteMode, setSelectedMaletaRouteMode] = useState<'actual' | 'anterior'>('actual')
-  const [mapTz, setMapTz] = useState(detectedStation.offset)
+  const [mapTz, setMapTz] = useState(() => getOffsetMinutesForTimezone(displayTimezone))
   const [panelMode, setPanelMode] = useState<'envios' | 'maletas' | 'almacenes' | 'aviones'>('aviones')
   const [maletaEnvioFilterId, setMaletaEnvioFilterId] = useState<string | null>(null)
   const [panelCollapsed, setPanelCollapsed] = useState(true)
@@ -115,6 +84,28 @@ export default function OperacionDiaria() {
   const filteredAirportSignatureRef = useRef('')
   const latestContextVersionRef = useRef<number | null>(null)
   const refreshInFlightRef = useRef(false)
+
+  const handleManualStationSelection = useCallback((stationId: StationId) => {
+    saveManualStationSelection(stationId)
+    const station = getStationById(stationId)
+    setStationState((current) => ({
+      browserTimezone: current.browserTimezone,
+      station,
+      source: 'manual',
+      requiresManualSelection: true,
+    }))
+  }, [])
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setStationState(resolveStationState())
+    }, 1000)
+    return () => window.clearInterval(intervalId)
+  }, [])
+
+  useEffect(() => {
+    setMapTz(getOffsetMinutesForTimezone(displayTimezone))
+  }, [displayTimezone])
 
   const refreshSharedState = useCallback(async () => {
     if (refreshInFlightRef.current) return
@@ -388,11 +379,11 @@ export default function OperacionDiaria() {
 
   // Actualizar reloj local de la estacion cada segundo
   useEffect(() => {
-    const tick = () => setClockInfo(getLocalDateTimeParts(detectedStation.timezone))
+    const tick = () => setClockInfo(formatLocalDateTimeParts(displayTimezone))
     tick()
     const timer = setInterval(tick, 1000)
     return () => clearInterval(timer)
-  }, [detectedStation.timezone])
+  }, [displayTimezone])
 
   // Actualizar progreso de vuelos cada segundo
   useEffect(() => {
@@ -559,7 +550,7 @@ export default function OperacionDiaria() {
               <div className="space-y-2 px-3 pb-3">
                 <div className="grid grid-cols-2 gap-2 text-[11px]">
                   <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
-                    <span className="block text-[9px] uppercase tracking-wide text-gray-500">Hora Local PC</span>
+                    <span className="block text-[9px] uppercase tracking-wide text-gray-500">Hora Local Sede</span>
                     <span className="font-mono font-semibold text-gray-100">{horaConSegundos}</span>
                   </div>
                   <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
@@ -568,12 +559,12 @@ export default function OperacionDiaria() {
                   </div>
                   <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
                     <span className="block text-[9px] uppercase tracking-wide text-gray-500">Zona Horaria</span>
-                    <span className="font-mono font-semibold text-gray-100">{detectedStation.timezone}</span>
+                    <span className="font-mono font-semibold text-gray-100">{displayTimezone}</span>
                   </div>
                   <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
                     <span className="block text-[9px] uppercase tracking-wide text-gray-500">Sede Detectada</span>
                     <span className="font-mono font-semibold text-gray-100">
-                      {detectedStation.stationCode ? `${detectedStation.stationCode} - ${getAirportCityCountry(detectedStation.stationCode)}` : 'No valida'}
+                      {selectedStation ? `${selectedStation.airportCode} - ${getAirportCityCountry(selectedStation.airportCode)}` : 'No valida'}
                     </span>
                   </div>
                   <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
@@ -586,6 +577,14 @@ export default function OperacionDiaria() {
                   </div>
                 </div>
                 {error && <p className="text-xs font-medium text-red-400">{error}</p>}
+                <StationSelectorCard
+                  browserTimezone={stationState.browserTimezone}
+                  selectedStation={selectedStation}
+                  requiresManualSelection={stationState.requiresManualSelection}
+                  onSelectStation={handleManualStationSelection}
+                  localDateTimeText={`${fecha} ${horaConSegundos}`}
+                  airportLabel="Sede operativa"
+                />
                 {loading ? (
                   <div className="rounded-lg border border-sky-800/70 bg-sky-950/35 px-3 py-2 text-[11px] text-sky-200">
                     Actualizando vuelos, envios y almacenes del contexto operativo...
@@ -745,7 +744,7 @@ export default function OperacionDiaria() {
               contexto="OPERACION"
               onDataChanged={handleAeropuertosContextoChanged}
               onVisibleAirportsChange={handleVisibleAirportsChange}
-              tzOffset={mapTz}
+              tzOffset={displayTimezone}
               onSelectedAlmacenClear={() => setSelectedAeropuerto(null)}
             />
           ) : panelMode === 'aviones' ? (
@@ -764,7 +763,7 @@ export default function OperacionDiaria() {
               onVisibleFlightsChange={handleVisibleFlightsChange}
               onDataChanged={refreshOperacionSharedData}
               onFlightStatusChanged={handleFlightStatusChanged}
-              tzOffset={mapTz}
+              tzOffset={displayTimezone}
               onSelectedVueloClear={() => setSelectedVuelo(null)}
             />
           ) : panelMode === 'maletas' ? (
