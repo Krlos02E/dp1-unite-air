@@ -145,6 +145,7 @@ export interface EnvioEntrada {
   horaLocal: string;
   cantidad: number;
   timezone: string;
+  clienteId?: string;
 }
 
 export interface CancelarVueloResult {
@@ -163,7 +164,7 @@ export interface AgregarEnviosResult {
   success: boolean;
   message: string;
   enviosAgregados: number;
-  detalles?: { id: string; origen: string; destino: string; cantidad: number }[];
+  detalles?: { id: string; origen: string; destino: string; cantidad: number; clienteId: string }[];
 }
 
 export interface EnvioIncremental {
@@ -173,6 +174,7 @@ export interface EnvioIncremental {
   fecha: string;
   hora: string;
   cantidad: number;
+  clienteId: string;
 }
 
 export interface EnviosIncrementalesResponse {
@@ -191,6 +193,7 @@ export interface EnvioEstado {
   id: string;
   origen: string;
   destino: string;
+  clienteId?: string;
   estado: 'EN_ESPERA' | 'EMBARCADO' | 'EN_VUELO' | 'ENTREGADO';
   aeropuertoActual: string;
   vueloEsperado: string | null;

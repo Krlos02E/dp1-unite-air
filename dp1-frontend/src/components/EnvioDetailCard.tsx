@@ -94,6 +94,12 @@ export default function EnvioDetailCard({
           <span className="text-gray-400">Cantidad</span>
           <span className="font-medium text-amber-300">{envio.cantidad}</span>
         </div>
+        {envio.clienteId && (
+          <div className="flex justify-between gap-2">
+            <span className="text-gray-400">Cliente</span>
+            <span className="font-medium text-sky-300">{envio.clienteId}</span>
+          </div>
+        )}
 
         {(envio.rutaAeropuertos?.length || tieneRutaAnterior) && (
           <div className="space-y-1.5 border-t border-gray-700 pt-1">

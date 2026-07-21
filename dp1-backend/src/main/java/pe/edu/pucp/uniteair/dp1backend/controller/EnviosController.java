@@ -23,6 +23,7 @@ import tasf.model.Paquete;
 @RestController
 @RequestMapping("/envios")
 public class EnviosController {
+    private static final String CLIENTE_PRUEBA_OPERACION_DIARIA = CargaArchivosService.CLIENTE_PRUEBA_OPERACION_DIARIA;
 
     private static final Map<String, String> TIMEZONE_TO_AIRPORT = Map.of(
             "America/Lima", "SPIM",
@@ -40,13 +41,21 @@ public class EnviosController {
             List<EnvioEntrada> envios = new ArrayList<>();
             for (EnvioItem item : request.envios()) {
                 String origen = inferirOrigenPorTimezone(item.timezone());
+                if (item.clienteId() != null
+                        && !item.clienteId().isBlank()
+                        && !CLIENTE_PRUEBA_OPERACION_DIARIA.equals(item.clienteId())) {
+                    throw new IllegalArgumentException(
+                            "El cliente para operación diaria debe ser " + CLIENTE_PRUEBA_OPERACION_DIARIA
+                    );
+                }
                 envios.add(new EnvioEntrada(
                         origen,
                         item.destino(),
                         LocalDate.parse(item.fechaLocal()),
                         LocalTime.parse(item.horaLocal()),
                         item.cantidad(),
-                        null
+                        null,
+                        CLIENTE_PRUEBA_OPERACION_DIARIA
                 ));
             }
 
@@ -58,7 +67,8 @@ public class EnviosController {
                         "id", p.getId(),
                         "origen", p.getOrigenOACI(),
                         "destino", p.getDestinoOACI(),
-                        "cantidad", p.getCantidad()
+                        "cantidad", p.getCantidad(),
+                        "clienteId", p.getClienteId()
                 ));
             }
 
@@ -81,15 +91,16 @@ public class EnviosController {
         List<Paquete> paquetes = cargaArchivosService.obtenerPaquetesIncrementales();
         List<Map<String, Object>> detalles = new ArrayList<>();
         for (Paquete p : paquetes) {
-            detalles.add(Map.of(
-                    "id", p.getId(),
-                    "origen", p.getOrigenOACI(),
-                    "destino", p.getDestinoOACI(),
-                    "fecha", p.getFecha().toString(),
-                    "hora", p.getHora().toString(),
-                    "cantidad", p.getCantidad()
-            ));
-        }
+                detalles.add(Map.of(
+                        "id", p.getId(),
+                        "origen", p.getOrigenOACI(),
+                        "destino", p.getDestinoOACI(),
+                        "fecha", p.getFecha().toString(),
+                        "hora", p.getHora().toString(),
+                        "cantidad", p.getCantidad(),
+                        "clienteId", p.getClienteId()
+                ));
+            }
         return ResponseEntity.ok(Map.of(
                 "total", paquetes.size(),
                 "envios", detalles
@@ -156,5 +167,12 @@ public class EnviosController {
     }
 
     public record EnviosRequest(List<EnvioItem> envios) {}
-    public record EnvioItem(String destino, String fechaLocal, String horaLocal, int cantidad, String timezone) {}
+    public record EnvioItem(
+            String destino,
+            String fechaLocal,
+            String horaLocal,
+            int cantidad,
+            String timezone,
+            String clienteId
+    ) {}
 }

@@ -45,6 +45,7 @@ import java.util.stream.IntStream;
 
 @Service
 public class CargaArchivosService {
+    public static final String CLIENTE_PRUEBA_OPERACION_DIARIA = "0007729";
 
     private Dataset lastDataset;
     private volatile EstadoOperacional estadoOperacional;
@@ -507,6 +508,7 @@ public class CargaArchivosService {
         maleta.put("rutaAnteriorAeropuertos", rutaAnterior != null ? construirRutaAeropuertos(paquete, rutaAnterior) : null);
         maleta.put("rutaAnteriorVuelos", rutaAnterior != null ? construirRutaVuelos(rutaAnterior) : null);
         maleta.put("cantidad", 1);
+        maleta.put("clienteId", paquete.getClienteId());
         return maleta;
     }
 
@@ -955,6 +957,10 @@ public class CargaArchivosService {
             contadorPaquetesIncrementales++;
             String id = "INC-" + contadorPaquetesIncrementales + "-" + e.origen() + "-" + e.destino();
 
+            String clienteId = (e.clienteId() == null || e.clienteId().isBlank())
+                    ? CLIENTE_PRUEBA_OPERACION_DIARIA
+                    : e.clienteId().trim();
+
             Paquete paquete = new Paquete(
                     id,
                     e.origen(),
@@ -962,7 +968,9 @@ public class CargaArchivosService {
                     utc.toLocalTime(),
                     e.destino(),
                     e.cantidad(),
-                    "incremental"
+                    "",
+                    clienteId,
+                    true
             );
             nuevos.add(paquete);
         }
@@ -1011,7 +1019,9 @@ public class CargaArchivosService {
                         utc.toLocalTime(),
                         parsed.getDestinoOACI(),
                         parsed.getCantidad(),
-                        "incremental"
+                        parsed.getReferencia(),
+                        parsed.getClienteId(),
+                        true
                 );
                 nuevos.add(paquete);
             }
@@ -1093,6 +1103,7 @@ public class CargaArchivosService {
         result.put("rutaAnteriorAeropuertos", rutaAnterior != null ? construirRutaAeropuertos(paquete, rutaAnterior) : null);
         result.put("rutaAnteriorVuelos", rutaAnterior != null ? construirRutaVuelos(rutaAnterior) : null);
         result.put("cantidad", paquete.getCantidad());
+        result.put("clienteId", paquete.getClienteId());
         return result;
     }
 
@@ -1191,11 +1202,20 @@ public class CargaArchivosService {
             envio.put("rutaAnteriorAeropuertos", rutaAnterior != null ? construirRutaAeropuertos(p, rutaAnterior) : null);
             envio.put("rutaAnteriorVuelos", rutaAnterior != null ? construirRutaVuelos(rutaAnterior) : null);
             envio.put("cantidad", p.getCantidad());
+            envio.put("clienteId", p.getClienteId());
             resultados.add(envio);
         }
 
         return resultados;
     }
 
-    public record EnvioEntrada(String origen, String destino, LocalDate fecha, LocalTime hora, int cantidad, String remitente) {}
+    public record EnvioEntrada(
+            String origen,
+            String destino,
+            LocalDate fecha,
+            LocalTime hora,
+            int cantidad,
+            String remitente,
+            String clienteId
+    ) {}
 }

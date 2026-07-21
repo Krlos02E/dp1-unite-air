@@ -4,6 +4,7 @@ import { getAirportCity, getAirportCityCountry } from '../data/airportsData'
 import type { AeropuertoDTO, EnvioIncremental } from '../types'
 
 const SHARED_ENVIOS_POLL_MS = 5000
+const CLIENTE_PRUEBA_OPERACION_DIARIA = '0007729'
 const TIMEZONE_TO_AIRPORT: Record<string, string> = {
   'America/Lima': 'SPIM',
   'America/Argentina/Buenos_Aires': 'SABE',
@@ -137,6 +138,7 @@ export default function AgregarEnvios() {
         horaLocal,
         cantidad: cantNum,
         timezone,
+        clienteId: CLIENTE_PRUEBA_OPERACION_DIARIA,
       }])
 
       if (result.success) {
@@ -194,7 +196,17 @@ export default function AgregarEnvios() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Cliente</label>
+              <input
+                type="text"
+                value={CLIENTE_PRUEBA_OPERACION_DIARIA}
+                readOnly
+                className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300 cursor-not-allowed"
+              />
+            </div>
+
             <div>
               <label className="block text-xs text-gray-400 mb-1">Aeropuerto destino</label>
               <select
@@ -251,6 +263,7 @@ export default function AgregarEnvios() {
               <div key={envio.id} className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2">
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
                   <span className="font-medium text-gray-200">{envio.id}</span>
+                  <span className="text-sky-300">Cliente {envio.clienteId}</span>
                   <span className="text-gray-400">
                     <span className="text-emerald-400">{getAirportCity(envio.origen) || envio.origen}</span>
                     {' → '}
