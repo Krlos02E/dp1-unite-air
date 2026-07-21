@@ -53,7 +53,6 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 
 function CargaArchivosTab() {
   const [planesVuelo, setPlanesVuelo] = useState<File | null>(null)
-  const [aeropuertos, setAeropuertos] = useState<File | null>(null)
   const [envios, setEnvios] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
@@ -92,7 +91,6 @@ function CargaArchivosTab() {
       const res = await cargaArchivosService.upload(
         {
           planes_vuelo: planesVuelo ?? undefined,
-          aeropuertos: aeropuertos ?? undefined,
           envios: envios ?? undefined,
         },
         timezone,
@@ -118,7 +116,6 @@ function CargaArchivosTab() {
       />
 
       <FileInput label="Archivo de vuelos (planes_vuelo.txt — opcional)" onChange={setPlanesVuelo} />
-      <FileInput label="Archivo de aeropuertos (aeropuertos.txt — opcional)" onChange={setAeropuertos} />
       <FileInput label="Archivo de envíos (.txt — obligatorio, se carga usando el aeropuerto detectado de esta PC)" onChange={setEnvios} />
 
       <button
