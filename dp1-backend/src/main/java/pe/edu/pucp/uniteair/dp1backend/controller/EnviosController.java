@@ -62,7 +62,7 @@ public class EnviosController {
                         "origen", p.getOrigenOACI(),
                         "destino", p.getDestinoOACI(),
                         "cantidad", p.getCantidad(),
-                        "clienteId", p.getClienteId()
+                        "clienteId", CargaArchivosService.obtenerClienteIdCompat(p)
                 ));
             }
 
@@ -92,7 +92,7 @@ public class EnviosController {
                         "fecha", p.getFecha().toString(),
                         "hora", p.getHora().toString(),
                         "cantidad", p.getCantidad(),
-                        "clienteId", p.getClienteId()
+                        "clienteId", CargaArchivosService.obtenerClienteIdCompat(p)
                 ));
             }
         return ResponseEntity.ok(Map.of(

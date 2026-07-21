@@ -30,6 +30,8 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -270,6 +272,83 @@ public class CargaArchivosService {
         return estado != null ? estado.getOcupacionHora(codigoOACI, horaUtc) : 0;
     }
 
+    public static String obtenerClienteIdCompat(Paquete paquete) {
+        if (paquete == null) {
+            return CLIENTE_PRUEBA_OPERACION_DIARIA;
+        }
+        try {
+            Method getter = paquete.getClass().getMethod("getClienteId");
+            Object value = getter.invoke(paquete);
+            if (value instanceof String clienteId && !clienteId.isBlank()) {
+                return clienteId;
+            }
+        } catch (ReflectiveOperationException ignored) {
+        }
+        return CLIENTE_PRUEBA_OPERACION_DIARIA;
+    }
+
+    private static Paquete crearPaqueteCompat(
+            String id,
+            String origenOACI,
+            LocalDate fecha,
+            LocalTime hora,
+            String destinoOACI,
+            int cantidad,
+            String referencia,
+            String clienteId,
+            boolean incremental
+    ) {
+        try {
+            Constructor<Paquete> constructorNuevo = Paquete.class.getConstructor(
+                    String.class,
+                    String.class,
+                    LocalDate.class,
+                    LocalTime.class,
+                    String.class,
+                    int.class,
+                    String.class,
+                    String.class,
+                    boolean.class
+            );
+            return constructorNuevo.newInstance(
+                    id,
+                    origenOACI,
+                    fecha,
+                    hora,
+                    destinoOACI,
+                    cantidad,
+                    referencia,
+                    clienteId,
+                    incremental
+            );
+        } catch (NoSuchMethodException ignored) {
+            try {
+                Constructor<Paquete> constructorCompat = Paquete.class.getConstructor(
+                        String.class,
+                        String.class,
+                        LocalDate.class,
+                        LocalTime.class,
+                        String.class,
+                        int.class,
+                        String.class
+                );
+                return constructorCompat.newInstance(
+                        id,
+                        origenOACI,
+                        fecha,
+                        hora,
+                        destinoOACI,
+                        cantidad,
+                        referencia
+                );
+            } catch (ReflectiveOperationException e) {
+                throw new IllegalStateException("No se pudo construir Paquete con la firma compatible", e);
+            }
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("No se pudo construir Paquete con la firma nueva", e);
+        }
+    }
+
     private void planificarDataset(Dataset dataset) {
         List<Paquete> paquetes = combinarPaquetes(obtenerPaquetesBaseOperacion(), paquetesIncrementales);
         if (dataset == null || paquetes.isEmpty()) {
@@ -508,7 +587,7 @@ public class CargaArchivosService {
         maleta.put("rutaAnteriorAeropuertos", rutaAnterior != null ? construirRutaAeropuertos(paquete, rutaAnterior) : null);
         maleta.put("rutaAnteriorVuelos", rutaAnterior != null ? construirRutaVuelos(rutaAnterior) : null);
         maleta.put("cantidad", 1);
-        maleta.put("clienteId", paquete.getClienteId());
+        maleta.put("clienteId", obtenerClienteIdCompat(paquete));
         return maleta;
     }
 
@@ -943,7 +1022,7 @@ public class CargaArchivosService {
                     ? CLIENTE_PRUEBA_OPERACION_DIARIA
                     : e.clienteId().trim();
 
-            Paquete paquete = new Paquete(
+            Paquete paquete = crearPaqueteCompat(
                     id,
                     e.origen(),
                     utc.toLocalDate(),
@@ -994,7 +1073,7 @@ public class CargaArchivosService {
                 contadorPaquetesIncrementales++;
                 String id = "INC-" + contadorPaquetesIncrementales + "-" + origenNormalizado + "-" + parsed.getDestinoOACI();
 
-                Paquete paquete = new Paquete(
+                Paquete paquete = crearPaqueteCompat(
                         id,
                         origenNormalizado,
                         utc.toLocalDate(),
@@ -1002,7 +1081,7 @@ public class CargaArchivosService {
                         parsed.getDestinoOACI(),
                         parsed.getCantidad(),
                         parsed.getReferencia(),
-                        parsed.getClienteId(),
+                        obtenerClienteIdCompat(parsed),
                         true
                 );
                 nuevos.add(paquete);
@@ -1087,7 +1166,7 @@ public class CargaArchivosService {
         result.put("rutaAnteriorAeropuertos", rutaAnterior != null ? construirRutaAeropuertos(paquete, rutaAnterior) : null);
         result.put("rutaAnteriorVuelos", rutaAnterior != null ? construirRutaVuelos(rutaAnterior) : null);
         result.put("cantidad", paquete.getCantidad());
-        result.put("clienteId", paquete.getClienteId());
+        result.put("clienteId", obtenerClienteIdCompat(paquete));
         return result;
     }
 
@@ -1186,7 +1265,7 @@ public class CargaArchivosService {
             envio.put("rutaAnteriorAeropuertos", rutaAnterior != null ? construirRutaAeropuertos(p, rutaAnterior) : null);
             envio.put("rutaAnteriorVuelos", rutaAnterior != null ? construirRutaVuelos(rutaAnterior) : null);
             envio.put("cantidad", p.getCantidad());
-            envio.put("clienteId", p.getClienteId());
+            envio.put("clienteId", obtenerClienteIdCompat(p));
             resultados.add(envio);
         }
 
