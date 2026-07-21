@@ -49,10 +49,15 @@ function calcularProgreso(vuelo: VueloDTO, now: Date): number {
 function getDetectedStation() {
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
   const station = TIMEZONE_TO_STATION[timezone] ?? null
+  if (station) {
+    return { timezone, stationCode: station.oaci, offset: station.offset }
+  }
+  const browserOffset = -new Date().getTimezoneOffset()
+  const entry = Object.entries(TIMEZONE_TO_STATION).find(([, v]) => v.offset === browserOffset)
   return {
     timezone,
-    stationCode: station?.oaci ?? null,
-    offset: station?.offset ?? 0,
+    stationCode: entry?.[1].oaci ?? null,
+    offset: entry?.[1].offset ?? browserOffset,
   }
 }
 
