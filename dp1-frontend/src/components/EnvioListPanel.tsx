@@ -202,18 +202,6 @@ export default function EnvioListPanel({
 
   useEffect(() => { setShowAll(false) }, [tab])
 
-  useEffect(() => {
-    if (countsByTab[tab] > 0) return
-
-    if (countsByTab.pendientes > 0) {
-      setTab('pendientes')
-    } else if (countsByTab.envuelo > 0) {
-      setTab('envuelo')
-    } else if (countsByTab.entregados > 0) {
-      setTab('entregados')
-    }
-  }, [countsByTab.pendientes, countsByTab.envuelo, countsByTab.entregados, tab])
-
   const enviosVisibles = enviosConFiltrosPersistentes.filter((e) => {
     if (tab === 'pendientes') return isStorageState(e.estado)
     if (e.estado !== config.estados) return false

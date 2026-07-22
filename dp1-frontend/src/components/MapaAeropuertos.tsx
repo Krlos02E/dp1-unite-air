@@ -1025,13 +1025,16 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
     const displayIds = new Set(displayFlights.map((v) => v.id))
     visibleFlightIdsRef.current = displayIds
 
-      flightMarkersRef.current.forEach((mk, id) => {
-        if (!displayIds.has(id)) {
-          mk.setOpacity(0)
-          const route = routeLinesRef.current.get(id)
-          route?.pending.setStyle({ opacity: 0 })
-        }
-      })
+    flightMarkersRef.current.forEach((mk, id) => {
+      if (!displayIds.has(id)) {
+        mk.setOpacity(0)
+        mk.closeTooltip()
+        const element = mk.getElement()
+        if (element) element.style.pointerEvents = 'none'
+        const route = routeLinesRef.current.get(id)
+        route?.pending.setStyle({ opacity: 0 })
+      }
+    })
 
     displayFlights.forEach((v) => {
       const from: [number, number] = [v.latOrigen, v.lonOrigen]

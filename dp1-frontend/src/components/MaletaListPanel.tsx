@@ -118,26 +118,6 @@ export default function MaletaListPanel({
 
   useEffect(() => { setShowAll(false) }, [tab])
 
-  useEffect(() => {
-    const counts: Record<Tab, number> = {
-      pendientes: maletasFiltrables.filter((m) => isStorageState(m.estado)).length,
-      envuelo: maletasFiltrables.filter((m) => m.estado === 'EN_VUELO').length,
-      entregados: maletasFiltrables.filter((m) =>
-        m.estado === 'ENTREGADO' && estaDentroDeHoras(m, 4, currentTime)
-      ).length,
-    }
-
-    if (counts[tab] > 0) return
-
-    if (counts.pendientes > 0) {
-      setTab('pendientes')
-    } else if (counts.envuelo > 0) {
-      setTab('envuelo')
-    } else if (counts.entregados > 0) {
-      setTab('entregados')
-    }
-  }, [maletasFiltrables, currentTime, tab])
-
   const maletasVisibles = maletasFiltrables.filter((m) => {
         if (tab === 'pendientes') return isStorageState(m.estado)
         if (m.estado !== config.estados) return false
