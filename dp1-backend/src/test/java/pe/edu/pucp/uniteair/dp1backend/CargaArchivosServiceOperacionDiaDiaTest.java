@@ -116,6 +116,34 @@ class CargaArchivosServiceOperacionDiaDiaTest {
                 "El unico paquete cargado debe ser el envio del usuario para la sede activa");
     }
 
+    @Test
+    void mantenerVuelosOperativosTrasAgregarEnviosIncrementales() throws Exception {
+        Dataset dataset = datasetOperacionDiaDia();
+        CargaArchivosService service = crearService(dataset);
+        setField(service, "usarPaquetesBaseEnOperacion", true);
+
+        service.agregarEnvios(List.of(
+                new CargaArchivosService.EnvioEntrada(
+                        "SPIM",
+                        "SKBO",
+                        LocalDate.of(2026, 7, 23),
+                        LocalTime.of(7, 0),
+                        1,
+                        null,
+                        ""
+                )
+        ));
+        assertTrue(service.usaPaquetesBaseEnOperacion(),
+                "Los envios manuales no deben desactivar el conjunto de vuelos operativos cargado");
+
+        service.cargarEnviosDesdeArchivo(
+                multipart("archivo-envios.txt", "FILE-20260723-08:00-SABE-1-0007729\n"),
+                "SPIM"
+        );
+        assertTrue(service.usaPaquetesBaseEnOperacion(),
+                "Los envios por archivo no deben ocultar los vuelos operativos provenientes del planes_vuelo cargado");
+    }
+
     private boolean contienePaquete(List<Paquete> paquetes, String id) {
         return paquetes.stream().anyMatch(paquete -> id.equals(paquete.getId()));
     }

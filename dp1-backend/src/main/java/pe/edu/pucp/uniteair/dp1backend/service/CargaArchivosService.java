@@ -1045,9 +1045,11 @@ public class CargaArchivosService {
             nuevos.add(paquete);
         }
 
+        boolean conservarPaquetesBase = this.usarPaquetesBaseEnOperacion;
         List<Paquete> listaActualizada = new ArrayList<>(paquetesIncrementales);
         listaActualizada.addAll(nuevos);
         this.paquetesIncrementales = listaActualizada;
+        this.usarPaquetesBaseEnOperacion = conservarPaquetesBase;
 
         System.out.println("[CargaArchivosService] Envios incrementales agregados: " + nuevos.size()
                 + ". Total acumulados: " + paquetesIncrementales.size());
@@ -1097,10 +1099,11 @@ public class CargaArchivosService {
             }
         }
 
+        boolean conservarPaquetesBase = this.usarPaquetesBaseEnOperacion;
         List<Paquete> listaActualizada = new ArrayList<>(paquetesIncrementales);
         listaActualizada.addAll(nuevos);
         this.paquetesIncrementales = listaActualizada;
-        this.usarPaquetesBaseEnOperacion = false;
+        this.usarPaquetesBaseEnOperacion = conservarPaquetesBase;
 
         System.out.println("[CargaArchivosService] Envios cargados desde archivo: " + nuevos.size()
                 + ". Total acumulados: " + paquetesIncrementales.size());
