@@ -1,0 +1,239 @@
+{
+  "fecha_prueba": "2026-07-22",
+  "hora_inicio_lima": "08:00",
+  "zonas_locales": {
+    "SPIM": {
+      "timezone": "America/Lima",
+      "inicio_local": "2026-07-22 08:00"
+    },
+    "SABE": {
+      "timezone": "America/Argentina/Buenos_Aires",
+      "inicio_local": "2026-07-22 10:00"
+    },
+    "EKCH": {
+      "timezone": "Europe/Copenhagen",
+      "inicio_local": "2026-07-22 15:00"
+    },
+    "VIDP": {
+      "timezone": "Asia/Kolkata",
+      "inicio_local": "2026-07-22 18:30"
+    }
+  },
+  "archivos_validados": {
+    "aeropuertos_preparacion": "/home/rvs/PUCP/DP1/dp1-unite-air/operacion-dia-a-dia/salida_2026-07-22_0800/aeropuertos_preparacion_operacion_dia_a_dia.txt",
+    "planes_vuelo": "/home/rvs/PUCP/DP1/dp1-unite-air/operacion-dia-a-dia/salida_2026-07-22_0800/planes_vuelo_operacion_dia_a_dia.txt"
+  },
+  "rutas_envios_archivo": [
+    {
+      "shipmentId": "11000001",
+      "origin": "SPIM",
+      "destination": "SKBO",
+      "route": [
+        "SPIM-SKBO-2026-07-22-10"
+      ]
+    },
+    {
+      "shipmentId": "11000002",
+      "origin": "SPIM",
+      "destination": "SGAS",
+      "route": [
+        "SPIM-SGAS-2026-07-22-7"
+      ]
+    },
+    {
+      "shipmentId": "11000003",
+      "origin": "SPIM",
+      "destination": "SUAA",
+      "route": [
+        "SPIM-SUAA-2026-07-22-10"
+      ]
+    },
+    {
+      "shipmentId": "11000004",
+      "origin": "SPIM",
+      "destination": "LBSF",
+      "route": [
+        "SPIM-LBSF-2026-07-22-13"
+      ]
+    },
+    {
+      "shipmentId": "11000005",
+      "origin": "SPIM",
+      "destination": "OAKB",
+      "route": [
+        "SPIM-OAKB-2026-07-22-13"
+      ]
+    },
+    {
+      "shipmentId": "11000006",
+      "origin": "SPIM",
+      "destination": "EHAM",
+      "route": [
+        "SPIM-EHAM-2026-07-22-13"
+      ]
+    },
+    {
+      "shipmentId": "12000001",
+      "origin": "SABE",
+      "destination": "SKBO",
+      "route": [
+        "SABE-SKBO-2026-07-22-13"
+      ]
+    },
+    {
+      "shipmentId": "12000002",
+      "origin": "SABE",
+      "destination": "SGAS",
+      "route": [
+        "SABE-SGAS-2026-07-22-13"
+      ]
+    },
+    {
+      "shipmentId": "12000003",
+      "origin": "SABE",
+      "destination": "SUAA",
+      "route": [
+        "SABE-SUAA-2026-07-22-4"
+      ]
+    },
+    {
+      "shipmentId": "12000004",
+      "origin": "SABE",
+      "destination": "LBSF",
+      "route": [
+        "SABE-LBSF-2026-07-22-10"
+      ]
+    },
+    {
+      "shipmentId": "12000005",
+      "origin": "SABE",
+      "destination": "OAKB",
+      "route": [
+        "SABE-OAKB-2026-07-22-13"
+      ]
+    },
+    {
+      "shipmentId": "12000006",
+      "origin": "SABE",
+      "destination": "EHAM",
+      "route": [
+        "SABE-EHAM-2026-07-22-4"
+      ]
+    },
+    {
+      "shipmentId": "13000001",
+      "origin": "EKCH",
+      "destination": "SKBO",
+      "route": [
+        "EKCH-SKBO-2026-07-22-13"
+      ]
+    },
+    {
+      "shipmentId": "13000002",
+      "origin": "EKCH",
+      "destination": "SGAS",
+      "route": [
+        "EKCH-SGAS-2026-07-22-13"
+      ]
+    },
+    {
+      "shipmentId": "13000003",
+      "origin": "EKCH",
+      "destination": "SUAA",
+      "route": [
+        "EKCH-SUAA-2026-07-22-13"
+      ]
+    },
+    {
+      "shipmentId": "13000004",
+      "origin": "EKCH",
+      "destination": "LBSF",
+      "route": [
+        "EKCH-LBSF-2026-07-22-13"
+      ]
+    },
+    {
+      "shipmentId": "13000005",
+      "origin": "EKCH",
+      "destination": "OAKB",
+      "route": [
+        "EKCH-OAKB-2026-07-22-13"
+      ]
+    },
+    {
+      "shipmentId": "13000006",
+      "origin": "EKCH",
+      "destination": "EHAM",
+      "route": [
+        "EKCH-EHAM-2026-07-22-13"
+      ]
+    },
+    {
+      "shipmentId": "14000001",
+      "origin": "VIDP",
+      "destination": "SKBO",
+      "route": [
+        "VIDP-SKBO-2026-07-22-10"
+      ]
+    },
+    {
+      "shipmentId": "14000002",
+      "origin": "VIDP",
+      "destination": "SGAS",
+      "route": [
+        "VIDP-SGAS-2026-07-22-4"
+      ]
+    },
+    {
+      "shipmentId": "14000003",
+      "origin": "VIDP",
+      "destination": "SUAA",
+      "route": [
+        "VIDP-SUAA-2026-07-22-13"
+      ]
+    },
+    {
+      "shipmentId": "14000004",
+      "origin": "VIDP",
+      "destination": "LBSF",
+      "route": [
+        "VIDP-LBSF-2026-07-22-10"
+      ]
+    },
+    {
+      "shipmentId": "14000005",
+      "origin": "VIDP",
+      "destination": "OAKB",
+      "route": [
+        "VIDP-OAKB-2026-07-22-10"
+      ]
+    },
+    {
+      "shipmentId": "14000006",
+      "origin": "VIDP",
+      "destination": "EHAM",
+      "route": [
+        "VIDP-EHAM-2026-07-22-13"
+      ]
+    }
+  ],
+  "cancelacion": {
+    "envio_candidato": "11000001",
+    "origen": "SPIM",
+    "destino": "SKBO",
+    "vuelo_candidato": "SPIM-SKBO-2026-07-22-10",
+    "ruta_inicial": [
+      "SPIM-SKBO-2026-07-22-10"
+    ],
+    "ruta_alternativa": [
+      "SPIM-SKBO-2026-07-22-7"
+    ]
+  },
+  "diferencias_formato": [
+    "El uploader actual reemplaza el dataset de vuelos; por eso planes_vuelo_operacion_dia_a_dia.txt incluye vuelos base y adicionales.",
+    "El parser real de envíos requiere archivos separados por sede y el origen se infiere por el nombre del archivo o por timezone del request, no por una columna dentro de la línea.",
+    "El parser de aeropuertos consume el archivo maestro completo en UTF-16; no acepta un patch parcial de capacidades.",
+    "El backend actual requiere enviar un archivo de envíos incluso cuando se sube un dataset completo; por eso se genera envios_bootstrap_SPIM.txt con solo espacio en blanco.",
+    "El modelo de vuelos usa offsets GMT fijos del archivo de aeropuertos; Europe/Copenhagen no es verdaderamente dinámico si se elige una fecha de invierno."
+  ]
+}

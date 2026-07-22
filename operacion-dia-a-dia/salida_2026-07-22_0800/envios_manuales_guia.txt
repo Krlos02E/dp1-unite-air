@@ -1,0 +1,35 @@
+Estudiante 1 - SPIM - Lima
+Ingresar solo estos valores en la pantalla manual:
+01. destino=SCEL cantidad=180 cliente=0007729 (hora local referencial: 2026-07-22 08:05)
+02. destino=SVMI cantidad=180 cliente=0007729 (hora local referencial: 2026-07-22 08:10)
+03. destino=SBBR cantidad=10 cliente=0007729 (hora local referencial: 2026-07-22 08:15)
+04. destino=EBCI cantidad=180 cliente=0007729 (hora local referencial: 2026-07-22 08:20)
+05. destino=EHAM cantidad=15 cliente=0007729 (hora local referencial: 2026-07-22 08:25)
+06. destino=OMDB cantidad=15 cliente=0007729 (hora local referencial: 2026-07-22 08:30)
+
+Estudiante 2 - SABE - Buenos Aires
+Ingresar solo estos valores en la pantalla manual:
+01. destino=SCEL cantidad=180 cliente=0007729 (hora local referencial: 2026-07-22 10:05)
+02. destino=SVMI cantidad=180 cliente=0007729 (hora local referencial: 2026-07-22 10:10)
+03. destino=SBBR cantidad=10 cliente=0007729 (hora local referencial: 2026-07-22 10:15)
+04. destino=EBCI cantidad=180 cliente=0007729 (hora local referencial: 2026-07-22 10:20)
+05. destino=EHAM cantidad=15 cliente=0007729 (hora local referencial: 2026-07-22 10:25)
+06. destino=OMDB cantidad=15 cliente=0007729 (hora local referencial: 2026-07-22 10:30)
+
+Estudiante 3 - EKCH - Copenhague
+Ingresar solo estos valores en la pantalla manual:
+01. destino=SCEL cantidad=180 cliente=0007729 (hora local referencial: 2026-07-22 15:05)
+02. destino=SVMI cantidad=180 cliente=0007729 (hora local referencial: 2026-07-22 15:10)
+03. destino=SBBR cantidad=10 cliente=0007729 (hora local referencial: 2026-07-22 15:15)
+04. destino=EBCI cantidad=180 cliente=0007729 (hora local referencial: 2026-07-22 15:20)
+05. destino=EHAM cantidad=15 cliente=0007729 (hora local referencial: 2026-07-22 15:25)
+06. destino=OMDB cantidad=15 cliente=0007729 (hora local referencial: 2026-07-22 15:30)
+
+Estudiante 4 - VIDP - Delhi
+Ingresar solo estos valores en la pantalla manual:
+01. destino=SCEL cantidad=180 cliente=0007729 (hora local referencial: 2026-07-22 18:35)
+02. destino=SVMI cantidad=180 cliente=0007729 (hora local referencial: 2026-07-22 18:40)
+03. destino=SBBR cantidad=10 cliente=0007729 (hora local referencial: 2026-07-22 18:45)
+04. destino=EBCI cantidad=180 cliente=0007729 (hora local referencial: 2026-07-22 18:50)
+05. destino=EHAM cantidad=15 cliente=0007729 (hora local referencial: 2026-07-22 18:55)
+06. destino=OMDB cantidad=15 cliente=0007729 (hora local referencial: 2026-07-22 19:00)
