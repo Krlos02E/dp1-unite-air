@@ -24,6 +24,7 @@ import tasf.strategy.TwoPhaseOrchestrator;
 import tasf.strategy.alns.ALNS_RutasPlanner;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.time.ZoneOffset;
 import java.io.BufferedReader;
 import java.io.File;
@@ -58,6 +59,8 @@ public class CargaArchivosService {
     private volatile boolean planificando = false;
     private volatile List<Paquete> paquetesIncrementales = new ArrayList<>();
     private volatile boolean usarPaquetesBaseEnOperacion = false;
+    private volatile LocalDateTime operacionReferenciaUtc;
+    private volatile Instant operacionReferenciaInstant = Instant.now();
     private int contadorPaquetesIncrementales = 0;
     private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "planificador-bg");
@@ -98,6 +101,7 @@ public class CargaArchivosService {
             this.asignacionesSplit = new HashMap<>();
             this.planificando = false;
             this.usarPaquetesBaseEnOperacion = false;
+            fijarReferenciaOperativa(dataset);
             deleteTempDir(tempDir);
             System.out.println("[CargaArchivosService] Dataset por defecto cargado. Paquetes: " + dataset.getPaquetes().size());
             lanzarPlanificacionEnBackground(dataset);
@@ -127,6 +131,7 @@ public class CargaArchivosService {
             this.asignacionesSplit = new HashMap<>();
             this.planificando = false;
             this.usarPaquetesBaseEnOperacion = false;
+            fijarReferenciaOperativa(dataset);
             deleteTempDir(tempDir);
             if (lanzarPlanificacionOperacion) {
                 lanzarPlanificacionEnBackground(dataset);
@@ -241,6 +246,7 @@ public class CargaArchivosService {
             this.paquetesIncrementales = new ArrayList<>();
             this.contadorPaquetesIncrementales = 0;
             this.usarPaquetesBaseEnOperacion = true;
+            fijarReferenciaOperativa(dataset);
 
             lanzarPlanificacionEnBackground(dataset);
 
@@ -1133,10 +1139,20 @@ public class CargaArchivosService {
         return usarPaquetesBaseEnOperacion;
     }
 
+    public synchronized LocalDateTime obtenerTiempoOperativoActualUtc() {
+        if (operacionReferenciaUtc == null) {
+            return LocalDateTime.now(ZoneOffset.UTC);
+        }
+        Duration transcurrido = Duration.between(operacionReferenciaInstant, Instant.now());
+        return operacionReferenciaUtc.plus(transcurrido);
+    }
+
     public synchronized void limpiarOperacionDiaria() {
         this.paquetesIncrementales = new ArrayList<>();
         this.contadorPaquetesIncrementales = 0;
         this.usarPaquetesBaseEnOperacion = false;
+        this.operacionReferenciaUtc = null;
+        this.operacionReferenciaInstant = Instant.now();
         this.rutasAsignadas = new HashMap<>();
         this.rutasAnteriores = new HashMap<>();
         this.asignacionesSplit = new HashMap<>();
@@ -1144,6 +1160,20 @@ public class CargaArchivosService {
         this.cargaVueloCache = null;
         this.planificando = false;
         contextSyncStateService.touch(AlmacenContexto.OPERACION, "operacion-diaria-limpiada");
+    }
+
+    private void fijarReferenciaOperativa(Dataset dataset) {
+        LocalDateTime referencia = null;
+        if (dataset != null) {
+            referencia = dataset.getVuelos().stream()
+                    .map(Vuelo::getSalidaUtc)
+                    .filter(Objects::nonNull)
+                    .min(LocalDateTime::compareTo)
+                    .map(salida -> salida.minusMinutes(1))
+                    .orElse(null);
+        }
+        this.operacionReferenciaUtc = referencia != null ? referencia : LocalDateTime.now(ZoneOffset.UTC);
+        this.operacionReferenciaInstant = Instant.now();
     }
 
     public synchronized Map<String, Object> buscarEnvio(String id) {

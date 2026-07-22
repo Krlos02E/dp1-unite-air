@@ -385,22 +385,10 @@ export default function OperacionDiaria() {
     return () => clearInterval(timer)
   }, [displayTimezone])
 
-  // Actualizar progreso de vuelos cada segundo
+  // Reflejar el snapshot operativo recibido del backend
   useEffect(() => {
-    if (!dataLoaded || vuelosOriginales.length === 0) return
-
-    const updateFlights = () => {
-      const now = new Date()
-      const actualizados = vuelosOriginales.map((v) => ({
-        ...v,
-        progresoVuelo: calcularProgreso(v, now),
-      }))
-      setVuelos(actualizados)
-    }
-
-    updateFlights()
-    const interval = setInterval(updateFlights, 1000)
-    return () => clearInterval(interval)
+    if (!dataLoaded) return
+    setVuelos(vuelosOriginales)
   }, [dataLoaded, vuelosOriginales])
 
   // Polling de vuelos cada 15 segundos para reflejar cancelaciones y nuevos envíos

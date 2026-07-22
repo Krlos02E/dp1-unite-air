@@ -247,8 +247,11 @@ public class CargaArchivosController {
             }
         }
 
+        LocalDateTime referenciaOperacion = contexto == AlmacenContexto.OPERACION
+                ? cargaArchivosService.obtenerTiempoOperativoActualUtc()
+                : LocalDateTime.now(ZoneOffset.UTC);
         return ResponseEntity.ok(
-                construirVuelosDTO(contexto, esSimulacion, LocalDateTime.now(ZoneOffset.UTC))
+                construirVuelosDTO(contexto, esSimulacion, referenciaOperacion)
         );
     }
 
@@ -278,13 +281,14 @@ public class CargaArchivosController {
             double latDestino = resolverLatitud(almDestino, dest);
             double lonDestino = resolverLongitud(almDestino, dest);
             int carga = esSimulacion ? 0 : cargaArchivosService.getCargaVuelo(v.getId());
+            double progreso = calcularProgreso(v, ahora);
 
             String estado;
             if (vuelosCancelados.contains(v.getId())) {
                 estado = "CANCELADO";
-            } else if (v.getLlegadaUtc() != null && ahora.isAfter(v.getLlegadaUtc())) {
+            } else if (progreso >= 100.0) {
                 estado = "CULMINADO";
-            } else if (v.getSalidaUtc() != null && ahora.isAfter(v.getSalidaUtc())) {
+            } else if (progreso > 0.0) {
                 estado = "ACTIVO";
             } else {
                 estado = "PROGRAMADO";
@@ -307,7 +311,7 @@ public class CargaArchivosController {
                     .llegadaUtc(v.getLlegadaUtc())
                     .capacidad(v.getCapacidadCarga())
                     .cargaActual(carga)
-                    .progresoVuelo(0)
+                    .progresoVuelo(progreso)
                     .estado(estado)
                     .programacionId(extraerProgramacionId(v.getId()))
                     .editable(editable)
@@ -372,6 +376,24 @@ public class CargaArchivosController {
             return almacen.getLongitud();
         }
         return coordenadasFallback != null && coordenadasFallback.length > 1 ? coordenadasFallback[1] : 0.0;
+    }
+
+    private double calcularProgreso(Vuelo vuelo, LocalDateTime referenciaUtc) {
+        if (vuelo == null || referenciaUtc == null || vuelo.getSalidaUtc() == null || vuelo.getLlegadaUtc() == null) {
+            return 0.0;
+        }
+        long totalSegundos = java.time.Duration.between(vuelo.getSalidaUtc(), vuelo.getLlegadaUtc()).getSeconds();
+        if (totalSegundos <= 0) {
+            return 0.0;
+        }
+        long transcurrido = java.time.Duration.between(vuelo.getSalidaUtc(), referenciaUtc).getSeconds();
+        if (transcurrido <= 0) {
+            return 0.0;
+        }
+        if (transcurrido >= totalSegundos) {
+            return 100.0;
+        }
+        return (double) transcurrido / totalSegundos * 100.0;
     }
 
     private Long extraerProgramacionId(String vueloId) {

@@ -16,7 +16,7 @@ function tooltipForFlight(
   const destino = getAirportCityResolved(v.destino, airportLookup) || v.destino
   const progreso = simulationMode
     ? (referenceTime ? calcularProgresoEnSimulacion(v, referenceTime) : v.progresoVuelo)
-    : (referenceTime ? calcularProgresoLocal(v, referenceTime) : calcularProgresoLocal(v, new Date()))
+    : v.progresoVuelo
   return `<b>${v.id}</b><br>${origen} → ${destino}<br>Progreso: ${Math.round(progreso)}%<br>Maletas: ${v.cargaActual}/${v.capacidad}`
 }
 
@@ -147,7 +147,7 @@ function getFlightProgress(vuelo: VueloDTO, simulationMode: boolean, referenceTi
   if (simulationMode) {
     return referenceTime ? calcularProgresoEnSimulacion(vuelo, referenceTime) : vuelo.progresoVuelo
   }
-  return calcularProgresoLocal(vuelo, referenceTime ?? new Date())
+  return vuelo.progresoVuelo
 }
 
 function isFlightInProgress(vuelo: VueloDTO, simulationMode: boolean, referenceTime: Date | null): boolean {
