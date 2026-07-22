@@ -715,7 +715,7 @@ export default function OperacionDiaria() {
               contexto="OPERACION"
               onDataChanged={handleAeropuertosContextoChanged}
               onVisibleAirportsChange={handleVisibleAirportsChange}
-              tzOffset={displayTimezone}
+              tzOffset={mapTz}
               onSelectedAlmacenClear={() => setSelectedAeropuerto(null)}
             />
           ) : panelMode === 'aviones' ? (
@@ -734,7 +734,7 @@ export default function OperacionDiaria() {
               onVisibleFlightsChange={handleVisibleFlightsChange}
               onDataChanged={refreshOperacionSharedData}
               onFlightStatusChanged={handleFlightStatusChanged}
-              tzOffset={displayTimezone}
+              tzOffset={mapTz}
               onSelectedVueloClear={() => setSelectedVuelo(null)}
             />
           ) : panelMode === 'maletas' ? (
