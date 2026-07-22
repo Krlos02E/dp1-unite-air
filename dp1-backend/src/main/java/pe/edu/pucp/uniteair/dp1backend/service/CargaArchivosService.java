@@ -1001,6 +1001,7 @@ public class CargaArchivosService {
         }
 
         List<Paquete> nuevos = new ArrayList<>();
+        Map<String, Integer> cantidadesAcumuladasPorOrigen = new HashMap<>();
         for (EnvioEntrada e : envios) {
             Aeropuerto origenAp = lastDataset.getAeropuerto(e.origen());
             if (origenAp == null) {
@@ -1036,6 +1037,12 @@ public class CargaArchivosService {
                     ? CLIENTE_PRUEBA_OPERACION_DIARIA
                     : e.clienteId().trim();
 
+            validarCapacidadDisponibleOrigen(
+                    e.origen(),
+                    e.cantidad(),
+                    cantidadesAcumuladasPorOrigen.getOrDefault(e.origen(), 0)
+            );
+
             Paquete paquete = crearPaqueteCompat(
                     id,
                     e.origen(),
@@ -1048,6 +1055,7 @@ public class CargaArchivosService {
                     true
             );
             nuevos.add(paquete);
+            cantidadesAcumuladasPorOrigen.merge(e.origen(), e.cantidad(), Integer::sum);
         }
 
         boolean conservarPaquetesBase = this.usarPaquetesBaseEnOperacion;
@@ -1074,6 +1082,7 @@ public class CargaArchivosService {
         }
 
         List<Paquete> nuevos = new ArrayList<>();
+        Map<String, Integer> cantidadesAcumuladasPorOrigen = new HashMap<>();
 
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(archivo.getInputStream(), StandardCharsets.UTF_8))) {
             String linea;
@@ -1089,6 +1098,12 @@ public class CargaArchivosService {
                 contadorPaquetesIncrementales++;
                 String id = "INC-" + contadorPaquetesIncrementales + "-" + origenNormalizado + "-" + parsed.getDestinoOACI();
 
+                validarCapacidadDisponibleOrigen(
+                        origenNormalizado,
+                        parsed.getCantidad(),
+                        cantidadesAcumuladasPorOrigen.getOrDefault(origenNormalizado, 0)
+                );
+
                 Paquete paquete = crearPaqueteCompat(
                         id,
                         origenNormalizado,
@@ -1101,6 +1116,7 @@ public class CargaArchivosService {
                         true
                 );
                 nuevos.add(paquete);
+                cantidadesAcumuladasPorOrigen.merge(origenNormalizado, parsed.getCantidad(), Integer::sum);
             }
         }
 
@@ -1117,6 +1133,31 @@ public class CargaArchivosService {
             lanzarPlanificacionEnBackground(lastDataset);
         }
         return nuevos;
+    }
+
+    private void validarCapacidadDisponibleOrigen(String origenOaci, int cantidadNueva, int cantidadPendienteLote) {
+        Dataset datasetEfectivo = datasetContextService.construirDatasetEfectivo(AlmacenContexto.OPERACION, lastDataset);
+        Aeropuerto aeropuerto = datasetEfectivo != null ? datasetEfectivo.getAeropuerto(origenOaci) : null;
+        if (aeropuerto == null) {
+            throw new IllegalStateException("No se pudo resolver la capacidad del almacén para " + origenOaci);
+        }
+
+        LocalDateTime ahoraUtc = obtenerTiempoOperativoActualUtc();
+        int ocupacionActual = getOcupacionAeropuerto(origenOaci, ahoraUtc);
+        int capacidadMaxima = aeropuerto.getCapacidadMaxima();
+        int ocupacionResultante = ocupacionActual + cantidadPendienteLote + cantidadNueva;
+
+        if (ocupacionResultante > capacidadMaxima) {
+            int disponible = Math.max(0, capacidadMaxima - ocupacionActual - cantidadPendienteLote);
+            throw new IllegalArgumentException(
+                    "La carga excede la capacidad del almacén "
+                            + origenOaci
+                            + " (ocupación actual: " + ocupacionActual
+                            + ", capacidad: " + capacidadMaxima
+                            + ", disponible: " + disponible
+                            + ", intento: " + cantidadNueva + ")"
+            );
+        }
     }
 
     private String normalizarOrigenEnvios(String origenOaci) {

@@ -38,6 +38,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -143,6 +144,21 @@ class CargaArchivosServiceOperacionDiaDiaTest {
         );
         assertTrue(service.usaPaquetesBaseEnOperacion(),
                 "Los envios por archivo no deben ocultar los vuelos operativos provenientes del planes_vuelo cargado");
+    }
+
+    @Test
+    void rechazaEnviosDesdeArchivoSiExcedenCapacidadDelAlmacen() throws Exception {
+        CargaArchivosService service = crearService(datasetOperacionDiaDia());
+
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.cargarEnviosDesdeArchivo(
+                        multipart("archivo-envios.txt", "FILE-20260723-08:00-SKBO-999-0007729\n"),
+                        "SPIM"
+                )
+        );
+
+        assertTrue(error.getMessage().contains("capacidad del almacén SPIM"));
     }
 
     private boolean contienePaquete(List<Paquete> paquetes, String id) {
