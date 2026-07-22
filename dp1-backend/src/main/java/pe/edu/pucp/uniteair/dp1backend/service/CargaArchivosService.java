@@ -173,13 +173,21 @@ public class CargaArchivosService {
     };
 
     private void copiarRecursosACarpeta(Path destino) throws IOException {
+        copiarRecursosACarpeta(destino, true, true);
+    }
+
+    private void copiarRecursosACarpeta(Path destino, boolean incluirVuelosBase, boolean incluirEnviosBase) throws IOException {
         copiarRecurso("default-data/input/aeropuertos/c.1inf54.26.1.v1.Aeropuerto.husos.v1.20250818__estudiantes.txt",
                 destino.resolve("input/aeropuertos/c.Aeropuerto.txt"));
-        copiarRecurso("default-data/input/vuelos/planes_vuelo.txt",
-                destino.resolve("input/vuelos/planes_vuelo.txt"));
-        for (String icao : ICAO_ENVIOS) {
-            copiarRecurso("default-data/input/envios/_envios_" + icao + "_.txt",
-                    destino.resolve("input/envios/_envios_" + icao + "_.txt"));
+        if (incluirVuelosBase) {
+            copiarRecurso("default-data/input/vuelos/planes_vuelo.txt",
+                    destino.resolve("input/vuelos/planes_vuelo.txt"));
+        }
+        if (incluirEnviosBase) {
+            for (String icao : ICAO_ENVIOS) {
+                copiarRecurso("default-data/input/envios/_envios_" + icao + "_.txt",
+                        destino.resolve("input/envios/_envios_" + icao + "_.txt"));
+            }
         }
     }
 
@@ -202,7 +210,7 @@ public class CargaArchivosService {
     ) {
         try {
             Path tempDir = Files.createTempDirectory("carga_");
-            copiarRecursosACarpeta(tempDir);
+            copiarRecursosACarpeta(tempDir, true, false);
             if (planesVuelo != null && !planesVuelo.isEmpty()) {
                 saveToTemp(tempDir.resolve("input").resolve("vuelos"), planesVuelo, "planes_vuelo.txt");
             }

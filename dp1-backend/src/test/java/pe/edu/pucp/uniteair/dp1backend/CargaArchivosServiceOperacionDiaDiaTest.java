@@ -93,6 +93,29 @@ class CargaArchivosServiceOperacionDiaDiaTest {
                 "El envio cargado por archivo debe ocupar el segundo tramo hacia SABE");
     }
 
+    @Test
+    void cargarPlanesDeVueloNoDebeArrastrarEnviosBaseDelDatasetHistorico() throws Exception {
+        CargaArchivosService service = crearService(datasetOperacionDiaDia());
+
+        LocalDate hoy = LocalDate.now();
+        String fecha = hoy.format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE);
+
+        CargaArchivosService.CargaResult result = service.cargarArchivos(
+                multipart("planes_vuelo.txt", "SPIM-SKBO-09:00-12:00-0005\n"),
+                null,
+                multipart("_envios_SPIM_.txt", "MANUAL-%s-08-35-SKBO-001-0007729\n".formatted(fecha)),
+                "SPIM"
+        );
+
+        assertTrue(result.success(), "La carga con planes de vuelo debe completarse correctamente");
+        assertEquals(1, result.paquetesCount(),
+                "En Operacion Dia a Dia solo deben quedar los envios subidos por el usuario");
+        assertEquals(1, service.obtenerUltimoDataset().getPaquetes().size(),
+                "El dataset operativo no debe arrastrar envios base historicos");
+        assertEquals("SPIM-MANUAL", service.obtenerUltimoDataset().getPaquetes().get(0).getId(),
+                "El unico paquete cargado debe ser el envio del usuario para la sede activa");
+    }
+
     private boolean contienePaquete(List<Paquete> paquetes, String id) {
         return paquetes.stream().anyMatch(paquete -> id.equals(paquete.getId()));
     }
@@ -274,7 +297,7 @@ class CargaArchivosServiceOperacionDiaDiaTest {
 
             @Override
             public void transferTo(java.io.File dest) throws IOException, IllegalStateException {
-                throw new UnsupportedOperationException("No requerido en esta prueba");
+                java.nio.file.Files.write(dest.toPath(), bytes);
             }
         };
     }
