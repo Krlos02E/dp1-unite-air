@@ -1149,13 +1149,18 @@ public class CargaArchivosService {
 
         if (ocupacionResultante > capacidadMaxima) {
             int disponible = Math.max(0, capacidadMaxima - ocupacionActual - cantidadPendienteLote);
+            int exceso = ocupacionResultante - capacidadMaxima;
+            int acumuladoLote = cantidadPendienteLote + cantidadNueva;
             throw new IllegalArgumentException(
                     "La carga excede la capacidad del almacén "
                             + origenOaci
                             + " (ocupación actual: " + ocupacionActual
                             + ", capacidad: " + capacidadMaxima
-                            + ", disponible: " + disponible
-                            + ", intento: " + cantidadNueva + ")"
+                            + ", ya agregado en este lote: " + cantidadPendienteLote
+                            + ", intentando agregar ahora: " + cantidadNueva
+                            + ", total del lote: " + acumuladoLote
+                            + ", disponible antes de este registro: " + disponible
+                            + ", exceso: " + exceso + ")"
             );
         }
     }
