@@ -153,6 +153,9 @@ function getFlightProgress(vuelo: VueloDTO, simulationMode: boolean, referenceTi
 function isFlightInProgress(vuelo: VueloDTO, simulationMode: boolean, referenceTime: Date | null): boolean {
   if (vuelo.estado === 'CULMINADO' || vuelo.estado === 'CANCELADO') return false
   const progress = getFlightProgress(vuelo, simulationMode, referenceTime)
+  if (!simulationMode) {
+    return vuelo.estado === 'ACTIVO' && progress > 0 && progress < 100
+  }
   return progress > 0 && progress < 100
 }
 
@@ -329,7 +332,7 @@ function shouldKeepFlightVisibleOnMap(
     }
     return shouldShowProgrammedFlightAtOrigin(vuelo, simulationNow ?? null)
   }
-  return Boolean(vuelo.editable) || shouldDisplayFlight(vuelo.id)
+  return vuelo.estado === 'ACTIVO' || Boolean(vuelo.editable)
 }
 
 function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropuertoId, selectedEnvio = null, selectedEnvioRouteMode = 'actual', velocidad = 1, onAeropuertoClick, onVueloClick, mapTz, onMapTzChange, simulationMode = false, simulationTime = null, filteredFlightIds = null, filteredAirportIds = null }: Props) {
@@ -610,13 +613,13 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       }
     })
 
-    const referenceTime = simulationMode ? getSimulationNow(performance.now()) : new Date()
+    const referenceTime = simulationMode ? getSimulationNow(performance.now()) : null
     vuelos.forEach((v) => {
       const progresoLocal = getFlightProgress(v, simulationMode, referenceTime)
       const shouldShowScheduled = simulationMode && shouldShowProgrammedFlightAtOrigin(v, referenceTime)
       const isActive = simulationMode
         ? (v.estado === 'ACTIVO' || (v.estado === 'PROGRAMADO' && progresoLocal > 0)) && progresoLocal >= 0 && progresoLocal < 100
-        : progresoLocal > 0 && progresoLocal < 100
+        : v.estado === 'ACTIVO' && progresoLocal > 0 && progresoLocal < 100
       const isVisible = shouldKeepFlightVisibleOnMap(v, simulationMode, selectedVueloId, referenceTime)
       if ((!isActive && !shouldShowScheduled) || !isVisible) {
         persistentFlightsRef.current.delete(v.id)
@@ -1001,7 +1004,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
     if (!markerLayerRef.current) return
 
     const frameNow = performance.now()
-    const referenceTime = simulationMode ? getSimulationNow(frameNow) : new Date()
+    const referenceTime = simulationMode ? getSimulationNow(frameNow) : null
     const previousVisibleIds = new Set(visibleFlightIdsRef.current)
     const displayFlights = Array.from(persistentFlightsRef.current.values()).filter((v) => {
       if (simulationMode && simClockRef.current?.rateMsPerRealMs === 0) return false
@@ -1010,7 +1013,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       const shouldShowScheduled = simulationMode && shouldShowProgrammedFlightAtOrigin(v, referenceTime)
       const shouldShowActive = simulationMode
         ? (v.estado === 'ACTIVO' || (v.estado === 'PROGRAMADO' && progreso > 0)) && progreso >= 0 && progreso < 100
-        : progreso > 0 && progreso < 100
+        : v.estado === 'ACTIVO' && progreso > 0 && progreso < 100
       return (
         passesPanelFilter
         && (
@@ -1036,7 +1039,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       const isSelected = v.id === selectedVueloIdRef.current
       const tooltipText = tooltipForFlight(v, airportLookup, simulationMode, referenceTime ?? undefined)
       const pts = bezierPoints(from, to, ROUTE_POINT_COUNT)
-      const serverProgreso = simulationMode ? v.progresoVuelo : getFlightProgress(v, simulationMode, referenceTime)
+      const serverProgreso = getFlightProgress(v, simulationMode, referenceTime)
       const shouldShowScheduled = simulationMode && shouldShowProgrammedFlightAtOrigin(v, referenceTime)
       const wasVisibleBefore = previousVisibleIds.has(v.id)
       const curServerMs = simClockRef.current?.simulationTimeMs ?? 0

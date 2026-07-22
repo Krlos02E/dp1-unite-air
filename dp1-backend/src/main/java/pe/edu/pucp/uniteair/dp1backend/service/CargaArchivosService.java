@@ -24,8 +24,6 @@ import tasf.strategy.TwoPhaseOrchestrator;
 import tasf.strategy.alns.ALNS_RutasPlanner;
 
 import java.time.Duration;
-import java.time.Instant;
-import java.time.ZoneOffset;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -59,8 +57,6 @@ public class CargaArchivosService {
     private volatile boolean planificando = false;
     private volatile List<Paquete> paquetesIncrementales = new ArrayList<>();
     private volatile boolean usarPaquetesBaseEnOperacion = false;
-    private volatile LocalDateTime operacionReferenciaUtc;
-    private volatile Instant operacionReferenciaInstant = Instant.now();
     private int contadorPaquetesIncrementales = 0;
     private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "planificador-bg");
@@ -70,13 +66,16 @@ public class CargaArchivosService {
     private final DatasetContextService datasetContextService;
     private final VueloCanceladoRepository vueloCanceladoRepository;
     private final ContextSyncStateService contextSyncStateService;
+    private final RelojOperativoService relojOperativoService;
 
     public CargaArchivosService(DatasetContextService datasetContextService,
                                 VueloCanceladoRepository vueloCanceladoRepository,
-                                ContextSyncStateService contextSyncStateService) {
+                                ContextSyncStateService contextSyncStateService,
+                                RelojOperativoService relojOperativoService) {
         this.datasetContextService = datasetContextService;
         this.vueloCanceladoRepository = vueloCanceladoRepository;
         this.contextSyncStateService = contextSyncStateService;
+        this.relojOperativoService = relojOperativoService;
     }
 
     public record CargaResult(boolean success, String message, int aeropuertosCount, int vuelosCount,
@@ -610,7 +609,7 @@ public class CargaArchivosService {
     public synchronized void rePlanificarProgramado() {
         if (lastDataset == null || planificando) return;
 
-        LocalDateTime ahoraUtc = LocalDateTime.now(ZoneOffset.UTC);
+        LocalDateTime ahoraUtc = obtenerTiempoOperativoActualUtc();
 
         List<Paquete> paquetesPlanificables = obtenerTodosLosPaquetes();
         if (paquetesPlanificables.isEmpty()) return;
@@ -899,7 +898,7 @@ public class CargaArchivosService {
             throw new IllegalArgumentException("Se requiere vueloId para cancelar un vuelo");
         }
 
-        LocalDateTime ahoraUtc = referenciaUtc != null ? referenciaUtc : LocalDateTime.now(ZoneOffset.UTC);
+        LocalDateTime ahoraUtc = referenciaUtc != null ? referenciaUtc : obtenerTiempoOperativoActualUtc();
         Vuelo vueloACancelar = buscarVueloPorId(vueloId, contexto);
         if (vueloACancelar == null) {
             throw new IllegalArgumentException("No se encontro el vuelo seleccionado: " + vueloId);
@@ -923,7 +922,7 @@ public class CargaArchivosService {
                     .destinoOACI(vueloACancelar.getDestino().getCodigoOACI())
                     .salidaUtc(vueloACancelar.getSalidaUtc())
                     .horaSalidaLocal(horaSalidaLocal)
-                    .createdAt(LocalDateTime.now(ZoneOffset.UTC))
+                    .createdAt(obtenerTiempoOperativoActualUtc())
                     .build());
         }
         System.out.println("[CargaArchivosService] Vuelo cancelado: " + vueloACancelar.getId()
@@ -1140,19 +1139,13 @@ public class CargaArchivosService {
     }
 
     public synchronized LocalDateTime obtenerTiempoOperativoActualUtc() {
-        if (operacionReferenciaUtc == null) {
-            return LocalDateTime.now(ZoneOffset.UTC);
-        }
-        Duration transcurrido = Duration.between(operacionReferenciaInstant, Instant.now());
-        return operacionReferenciaUtc.plus(transcurrido);
+        return relojOperativoService.obtenerTiempoActualUtc();
     }
 
     public synchronized void limpiarOperacionDiaria() {
         this.paquetesIncrementales = new ArrayList<>();
         this.contadorPaquetesIncrementales = 0;
         this.usarPaquetesBaseEnOperacion = false;
-        this.operacionReferenciaUtc = null;
-        this.operacionReferenciaInstant = Instant.now();
         this.rutasAsignadas = new HashMap<>();
         this.rutasAnteriores = new HashMap<>();
         this.asignacionesSplit = new HashMap<>();
@@ -1163,17 +1156,7 @@ public class CargaArchivosService {
     }
 
     private void fijarReferenciaOperativa(Dataset dataset) {
-        LocalDateTime referencia = null;
-        if (dataset != null) {
-            referencia = dataset.getVuelos().stream()
-                    .map(Vuelo::getSalidaUtc)
-                    .filter(Objects::nonNull)
-                    .min(LocalDateTime::compareTo)
-                    .map(salida -> salida.minusMinutes(1))
-                    .orElse(null);
-        }
-        this.operacionReferenciaUtc = referencia != null ? referencia : LocalDateTime.now(ZoneOffset.UTC);
-        this.operacionReferenciaInstant = Instant.now();
+        // Operacion Dia a Dia usa siempre la hora real UTC actual.
     }
 
     public synchronized Map<String, Object> buscarEnvio(String id) {
@@ -1190,7 +1173,7 @@ public class CargaArchivosService {
         }
         if (paquete == null) return null;
 
-        LocalDateTime ahoraUtc = LocalDateTime.now(ZoneOffset.UTC);
+        LocalDateTime ahoraUtc = obtenerTiempoOperativoActualUtc();
         Ruta ruta = rutasAsignadas.get(paquete.getId());
         Ruta rutaAnterior = rutasAnteriores.get(paquete.getId());
         EstadoEnvio e = computarEstado(paquete, ruta, ahoraUtc);
@@ -1245,7 +1228,7 @@ public class CargaArchivosService {
                 ? Set.of("EN_ESPERA", "EMBARCADO", "EN_VUELO", "ENTREGADO")
                 : Set.of(estados.split(","));
 
-        LocalDateTime ahoraUtc = LocalDateTime.now(ZoneOffset.UTC);
+        LocalDateTime ahoraUtc = obtenerTiempoOperativoActualUtc();
         for (Paquete p : obtenerTodosLosPaquetes()) {
             if (origen != null && !origen.isEmpty() && !p.getOrigenOACI().equals(origen)) continue;
             for (Map<String, Object> maleta : construirMaletasPaquete(p, ahoraUtc)) {
@@ -1277,7 +1260,7 @@ public class CargaArchivosService {
                 ? Set.of("EN_ESPERA", "EMBARCADO", "EN_VUELO", "ENTREGADO")
                 : Set.of(estados.split(","));
 
-        LocalDateTime ahoraUtc = LocalDateTime.now(ZoneOffset.UTC);
+        LocalDateTime ahoraUtc = obtenerTiempoOperativoActualUtc();
         List<Paquete> todos = obtenerTodosLosPaquetes();
 
         for (Paquete p : todos) {

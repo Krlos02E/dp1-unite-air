@@ -13,6 +13,7 @@ import pe.edu.pucp.uniteair.dp1backend.service.CargaArchivosService;
 import pe.edu.pucp.uniteair.dp1backend.service.AlmacenService;
 import pe.edu.pucp.uniteair.dp1backend.service.ContextSyncStateService;
 import pe.edu.pucp.uniteair.dp1backend.service.DatasetContextService;
+import pe.edu.pucp.uniteair.dp1backend.service.RelojOperativoService;
 import pe.edu.pucp.uniteair.dp1backend.entity.Almacen;
 import pe.edu.pucp.uniteair.dp1backend.util.TimezoneSedeResolver;
 import tasf.core.Dataset;
@@ -39,17 +40,20 @@ public class CargaArchivosController {
     private final ContextSyncStateService contextSyncStateService;
     private final DatasetContextService datasetContextService;
     private final SimulationCache simulationCache;
+    private final RelojOperativoService relojOperativoService;
 
     public CargaArchivosController(CargaArchivosService cargaArchivosService,
                                    AlmacenService almacenService,
                                    ContextSyncStateService contextSyncStateService,
                                    DatasetContextService datasetContextService,
-                                   SimulationCache simulationCache) {
+                                   SimulationCache simulationCache,
+                                   RelojOperativoService relojOperativoService) {
         this.cargaArchivosService = cargaArchivosService;
         this.almacenService = almacenService;
         this.contextSyncStateService = contextSyncStateService;
         this.datasetContextService = datasetContextService;
         this.simulationCache = simulationCache;
+        this.relojOperativoService = relojOperativoService;
     }
 
     @PostMapping("/upload")
@@ -112,7 +116,9 @@ public class CargaArchivosController {
         if (dataset == null) {
             return ResponseEntity.ok(List.of());
         }
-        LocalDateTime ahora = LocalDateTime.now(ZoneOffset.UTC);
+        LocalDateTime ahora = contexto == AlmacenContexto.OPERACION
+                ? relojOperativoService.obtenerTiempoActualUtc()
+                : LocalDateTime.now(ZoneOffset.UTC);
         Set<String> vuelosCancelados = cargaArchivosService.obtenerVuelosCancelados(contexto);
 
         Map<String, List<String>> entrantesMap = new HashMap<>();
@@ -239,7 +245,7 @@ public class CargaArchivosController {
                         true,
                         estadoSimulacion.getSimulationTime() != null
                                 ? estadoSimulacion.getSimulationTime()
-                                : LocalDateTime.now(ZoneOffset.UTC)
+                                : relojOperativoService.obtenerTiempoActualUtc()
                 );
                 return ResponseEntity.ok(
                         combinarVuelosConContexto(estadoSimulacion.getVuelos(), vuelosContexto)
@@ -249,7 +255,7 @@ public class CargaArchivosController {
 
         LocalDateTime referenciaOperacion = contexto == AlmacenContexto.OPERACION
                 ? cargaArchivosService.obtenerTiempoOperativoActualUtc()
-                : LocalDateTime.now(ZoneOffset.UTC);
+                : relojOperativoService.obtenerTiempoActualUtc();
         return ResponseEntity.ok(
                 construirVuelosDTO(contexto, esSimulacion, referenciaOperacion)
         );
@@ -267,7 +273,7 @@ public class CargaArchivosController {
 
         Set<String> vuelosCancelados = cargaArchivosService.obtenerVuelosCancelados(contexto);
         boolean operacionSoloManual = contexto == AlmacenContexto.OPERACION && !cargaArchivosService.usaPaquetesBaseEnOperacion();
-        LocalDateTime ahora = referenciaUtc != null ? referenciaUtc : LocalDateTime.now(ZoneOffset.UTC);
+        LocalDateTime ahora = referenciaUtc != null ? referenciaUtc : relojOperativoService.obtenerTiempoActualUtc();
         Map<String, Almacen> almacenMap = almacenService.getMapaAlmacenes(contexto);
         List<VueloDTO> vuelos = new ArrayList<>();
 

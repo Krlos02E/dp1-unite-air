@@ -8,6 +8,7 @@ import pe.edu.pucp.uniteair.dp1backend.dto.SimulationState;
 import pe.edu.pucp.uniteair.dp1backend.entity.AlmacenContexto;
 import pe.edu.pucp.uniteair.dp1backend.service.CargaArchivosService;
 import pe.edu.pucp.uniteair.dp1backend.service.ProgramacionVueloService;
+import pe.edu.pucp.uniteair.dp1backend.service.RelojOperativoService;
 import pe.edu.pucp.uniteair.dp1backend.service.SimulationService;
 
 import java.time.LocalDateTime;
@@ -28,10 +29,13 @@ public class VueloController {
     @Autowired
     private SimulationService simulationService;
 
+    @Autowired
+    private RelojOperativoService relojOperativoService;
+
     @PostMapping("/cancelar")
     public ResponseEntity<Map<String, Object>> cancelarVuelo(@RequestBody CancelacionRequest request) {
         try {
-            LocalDateTime referenciaUtc = LocalDateTime.now(java.time.ZoneOffset.UTC);
+            LocalDateTime referenciaUtc = relojOperativoService.obtenerTiempoActualUtc();
             if (request.contexto() == AlmacenContexto.SIMULACION) {
                 if (request.sessionId() == null || request.sessionId().isBlank()) {
                     throw new IllegalArgumentException("Se requiere sessionId para cancelar vuelos en simulacion");

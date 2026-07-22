@@ -31,15 +31,18 @@ public class AlmacenService {
     private final AlmacenConfiguracionRepository almacenConfiguracionRepository;
     private final CargaArchivosService cargaArchivosService;
     private final ContextSyncStateService contextSyncStateService;
+    private final RelojOperativoService relojOperativoService;
 
     public AlmacenService(AlmacenRepository almacenRepository,
                           AlmacenConfiguracionRepository almacenConfiguracionRepository,
                           @Lazy CargaArchivosService cargaArchivosService,
-                          ContextSyncStateService contextSyncStateService) {
+                          ContextSyncStateService contextSyncStateService,
+                          RelojOperativoService relojOperativoService) {
         this.almacenRepository = almacenRepository;
         this.almacenConfiguracionRepository = almacenConfiguracionRepository;
         this.cargaArchivosService = cargaArchivosService;
         this.contextSyncStateService = contextSyncStateService;
+        this.relojOperativoService = relojOperativoService;
     }
 
     @PostConstruct
@@ -304,7 +307,7 @@ public class AlmacenService {
             throw new IllegalArgumentException("La capacidad máxima debe ser mayor que 0");
         }
         if (actualizacion && contexto == AlmacenContexto.OPERACION && codigo != null && !codigo.isBlank()) {
-            int ocupacionActual = cargaArchivosService.getOcupacionAeropuerto(codigo, java.time.LocalDateTime.now(java.time.ZoneOffset.UTC));
+            int ocupacionActual = cargaArchivosService.getOcupacionAeropuerto(codigo, relojOperativoService.obtenerTiempoActualUtc());
             if (almacen.getCapacidadMaxima() < ocupacionActual) {
                 throw new IllegalArgumentException(
                         "La capacidad no puede ser menor que la ocupación actual del almacén (" + ocupacionActual + " maletas)"

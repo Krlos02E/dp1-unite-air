@@ -8,6 +8,7 @@ import pe.edu.pucp.uniteair.dp1backend.repository.VueloCanceladoRepository;
 import pe.edu.pucp.uniteair.dp1backend.service.CargaArchivosService;
 import pe.edu.pucp.uniteair.dp1backend.service.ContextSyncStateService;
 import pe.edu.pucp.uniteair.dp1backend.service.DatasetContextService;
+import pe.edu.pucp.uniteair.dp1backend.service.RelojOperativoService;
 import pe.edu.pucp.uniteair.dp1backend.service.SimulationRealtimeService;
 import tasf.core.Dataset;
 import tasf.model.Aeropuerto;
@@ -170,7 +171,8 @@ class CargaArchivosServiceOperacionDiaDiaTest {
         CargaArchivosService service = new CargaArchivosService(
                 datasetContextService,
                 vueloCanceladoRepository,
-                contextSyncStateService
+                contextSyncStateService,
+                new RelojOperativoService()
         );
 
         setField(service, "lastDataset", dataset);
