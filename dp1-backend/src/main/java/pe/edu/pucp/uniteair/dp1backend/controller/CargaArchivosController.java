@@ -60,8 +60,8 @@ public class CargaArchivosController {
             @RequestParam("envios") MultipartFile envios) {
         String origenDetectado = inferirOrigenPorTimezone(timezone);
 
-        boolean tieneDatasetCompleto = planesVuelo != null && !planesVuelo.isEmpty()
-                && aeropuertos != null && !aeropuertos.isEmpty();
+        boolean tieneDatasetCompleto = (planesVuelo != null && !planesVuelo.isEmpty())
+                || (aeropuertos != null && !aeropuertos.isEmpty());
 
         if (tieneDatasetCompleto) {
             var result = cargaArchivosService.cargarArchivos(planesVuelo, aeropuertos, envios, origenDetectado);

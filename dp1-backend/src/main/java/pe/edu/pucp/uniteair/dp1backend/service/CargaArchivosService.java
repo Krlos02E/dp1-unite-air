@@ -202,6 +202,7 @@ public class CargaArchivosService {
     ) {
         try {
             Path tempDir = Files.createTempDirectory("carga_");
+            copiarRecursosACarpeta(tempDir);
             if (planesVuelo != null && !planesVuelo.isEmpty()) {
                 saveToTemp(tempDir.resolve("input").resolve("vuelos"), planesVuelo, "planes_vuelo.txt");
             }
