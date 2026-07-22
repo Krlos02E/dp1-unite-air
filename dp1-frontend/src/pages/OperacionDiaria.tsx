@@ -32,23 +32,6 @@ const aeropuertosFallback: AeropuertoDTO[] = Object.values(AIRPORTS_DATA).map((a
   vuelosCanceladosSalientes: [],
 }))
 
-function parseUtc(iso: string): Date {
-  if (!iso) return new Date(0)
-  if (iso.endsWith('Z')) return new Date(iso)
-  return new Date(iso + 'Z')
-}
-
-function calcularProgreso(vuelo: VueloDTO, now: Date): number {
-  const salida = parseUtc(vuelo.salidaUtc)
-  const llegada = parseUtc(vuelo.llegadaUtc)
-  const totalMs = llegada.getTime() - salida.getTime()
-  if (totalMs <= 0) return 0
-  const transcurrido = now.getTime() - salida.getTime()
-  if (transcurrido < 0) return 0
-  if (transcurrido > totalMs) return 100
-  return (transcurrido / totalMs) * 100
-}
-
 export default function OperacionDiaria() {
   const [stationState, setStationState] = useState(() => resolveStationState())
   const selectedStation = stationState.station
