@@ -1159,7 +1159,6 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         ? frameNow - lastAnimationFrameRef.current
         : targetFrameInterval
       lastAnimationFrameRef.current = frameNow
-      const realNow = simulationMode ? null : new Date()
       flightAnimsRef.current.forEach((anim, id) => {
         if (!visibleFlightIdsRef.current.has(id)) return
         const mk = flightMarkersRef.current.get(id)
@@ -1188,7 +1187,14 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
             currentProgress = anim.targetProgress
           }
         } else {
-          currentProgress = calcularProgresoLocal(anim.vuelo, realNow!)
+          const elapsed = frameNow - anim.transitionStartedAt
+          if (elapsed < anim.transitionDurationMs && anim.transitionDurationMs > 1) {
+            const t = Math.min(1, elapsed / anim.transitionDurationMs)
+            const easeT = 1 - (1 - t) * (1 - t)
+            currentProgress = anim.startProgress + (anim.targetProgress - anim.startProgress) * easeT
+          } else {
+            currentProgress = anim.targetProgress
+          }
         }
         anim.displayedProgress = currentProgress
         if (id === selectedVueloIdRef.current) {
