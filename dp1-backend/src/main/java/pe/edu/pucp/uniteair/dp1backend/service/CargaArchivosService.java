@@ -259,6 +259,19 @@ public class CargaArchivosService {
             LocalDate fechaInicio = LocalDate.now(zonaOperacion);
             Set<LocalDate> fechasFiltro = generarFechasSimulacion(fechaInicio, 3);
             Dataset datasetCargado = DatasetTextoLoader.cargarDataset(tempDir, fechaInicio, 3, 50000, fechasFiltro);
+            if (envios != null && !envios.isEmpty()) {
+                String origenNormalizado = normalizarOrigenEnvios(origenEnviosOaci);
+                List<Paquete> paquetesArchivo = parsearPaquetesCargaCompleta(
+                        envios,
+                        origenNormalizado,
+                        datasetCargado.getAeropuertos()
+                );
+                datasetCargado = new Dataset(
+                        datasetCargado.getAeropuertos(),
+                        datasetCargado.getVuelos(),
+                        paquetesArchivo
+                );
+            }
             Dataset dataset = fusionarDatasetOperativo(datasetCargado);
 
             int aeropuertosCount = contarRegistrosArchivo(aeropuertosPath);
@@ -334,6 +347,48 @@ public class CargaArchivosService {
                 new ArrayList<>(vuelosFusionados.values()),
                 paquetesFusionados
         );
+    }
+
+    private List<Paquete> parsearPaquetesCargaCompleta(
+            MultipartFile archivo,
+            String origenOaci,
+            Map<String, Aeropuerto> aeropuertos
+    ) throws IOException {
+        Aeropuerto origen = aeropuertos != null ? aeropuertos.get(origenOaci) : null;
+        if (origen == null) {
+            throw new IllegalStateException("Aeropuerto " + origenOaci + " no encontrado en el dataset para cargar envios");
+        }
+
+        List<Paquete> paquetes = new ArrayList<>();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(archivo.getInputStream(), StandardCharsets.UTF_8))) {
+            String linea;
+            while ((linea = reader.readLine()) != null) {
+                linea = linea.trim();
+                if (linea.isEmpty()) {
+                    continue;
+                }
+
+                Paquete parsed = Paquete.parse(linea, origenOaci);
+                if (!aeropuertos.containsKey(parsed.getDestinoOACI())) {
+                    continue;
+                }
+
+                LocalDateTime utc = origen.convertirLocalAUTC(parsed.getFecha(), parsed.getHora());
+                String idUnico = origenOaci + "-" + parsed.getId();
+                paquetes.add(crearPaqueteCompat(
+                        idUnico,
+                        parsed.getOrigenOACI(),
+                        utc.toLocalDate(),
+                        utc.toLocalTime(),
+                        parsed.getDestinoOACI(),
+                        parsed.getCantidad(),
+                        parsed.getReferencia(),
+                        obtenerClienteIdCompat(parsed),
+                        false
+                ));
+            }
+        }
+        return paquetes;
     }
 
     private int contarRegistrosArchivo(Path archivo) throws IOException {

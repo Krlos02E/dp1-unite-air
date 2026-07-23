@@ -158,6 +158,26 @@ class CargaArchivosServiceOperacionDiaDiaTest {
     }
 
     @Test
+    void cargarArchivosDebeConservarEnviosAunqueLaFechaQuedeFueraDeLaVentanaDelLoader() throws Exception {
+        CargaArchivosService service = crearService(datasetOperacionDiaDia());
+
+        CargaArchivosService.CargaResult result = service.cargarArchivos(
+                multipart("planes_vuelo.txt", "SPIM-SKBO-09:00-12:00-0005\n"),
+                null,
+                multipart("_envios_SPIM_.txt", "MANUAL-20260730-08-35-SKBO-001-0007729\n"),
+                "SPIM",
+                "America/Lima"
+        );
+
+        assertTrue(result.success(), "La carga completa debe aceptar vuelos y envios en una misma subida");
+        assertEquals(1, result.paquetesCount(),
+                "La respuesta debe contar el envio subido junto con los vuelos");
+        assertEquals(1, service.obtenerUltimoDataset().getPaquetes().size(),
+                "El envio no debe perderse aunque su fecha quede fuera de la ventana temporal del loader");
+        assertEquals("SPIM-MANUAL", service.obtenerUltimoDataset().getPaquetes().get(0).getId());
+    }
+
+    @Test
     void cargarArchivosDebePreservarEnviosPreviosYAgregarNuevos() throws Exception {
         Dataset dataset = datasetOperacionDiaDia();
         CargaArchivosService service = crearService(dataset);
