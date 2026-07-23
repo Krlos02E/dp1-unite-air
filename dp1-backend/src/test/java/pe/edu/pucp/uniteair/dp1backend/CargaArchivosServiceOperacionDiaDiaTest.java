@@ -120,6 +120,42 @@ class CargaArchivosServiceOperacionDiaDiaTest {
     }
 
     @Test
+    void cargarArchivosDebePreservarEnviosPreviosYAgregarNuevos() throws Exception {
+        Dataset dataset = datasetOperacionDiaDia();
+        CargaArchivosService service = crearService(dataset);
+
+        List<Paquete> manuales = service.agregarEnvios(List.of(
+                new CargaArchivosService.EnvioEntrada(
+                        "SPIM",
+                        "SKBO",
+                        LocalDate.of(2026, 7, 23),
+                        LocalTime.of(7, 0),
+                        1,
+                        null,
+                        ""
+                )
+        ));
+
+        CargaArchivosService.CargaResult result = service.cargarArchivos(
+                multipart("planes_vuelo.txt", "SPIM-SKBO-09:00-12:00-0005\n"),
+                null,
+                multipart("_envios_SPIM_.txt", "MANUAL-20260723-08-35-SABE-001-0007729\n"),
+                "SPIM",
+                "America/Lima"
+        );
+
+        assertTrue(result.success(), "La segunda carga debe completar el merge operativo");
+        assertEquals(2, service.obtenerUltimoDataset().getPaquetes().size(),
+                "La carga completa no debe borrar envios previos al agregar nuevos archivos");
+        assertTrue(service.obtenerPaquetesIncrementales().isEmpty(),
+                "Los envios previos deben consolidarse en el dataset operativo tras una carga completa");
+        assertTrue(contienePaquete(service.obtenerUltimoDataset().getPaquetes(), manuales.get(0).getId()),
+                "El envio manual previo debe conservarse tras cargar nuevos vuelos y envios");
+        assertTrue(contienePaquete(service.obtenerUltimoDataset().getPaquetes(), "SPIM-MANUAL"),
+                "El nuevo envio del archivo debe agregarse sin borrar el anterior");
+    }
+
+    @Test
     void mantenerVuelosOperativosTrasAgregarEnviosIncrementales() throws Exception {
         Dataset dataset = datasetOperacionDiaDia();
         CargaArchivosService service = crearService(dataset);

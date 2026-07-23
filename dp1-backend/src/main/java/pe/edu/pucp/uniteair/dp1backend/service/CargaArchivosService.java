@@ -234,7 +234,8 @@ public class CargaArchivosService {
             ZoneId zonaOperacion = resolverZonaOperacion(timezoneCanonica);
             LocalDate fechaInicio = LocalDate.now(zonaOperacion);
             Set<LocalDate> fechasFiltro = generarFechasSimulacion(fechaInicio, 3);
-            Dataset dataset = DatasetTextoLoader.cargarDataset(tempDir, fechaInicio, 3, 50000, fechasFiltro);
+            Dataset datasetCargado = DatasetTextoLoader.cargarDataset(tempDir, fechaInicio, 3, 50000, fechasFiltro);
+            Dataset dataset = fusionarDatasetOperativo(datasetCargado);
 
             int aeropuertosCount = contarRegistrosArchivo(aeropuertosPath);
             int vuelosCount = contarRegistrosArchivo(planesVueloPath);
@@ -249,7 +250,6 @@ public class CargaArchivosService {
             this.asignacionesSplit = new HashMap<>();
             this.planificando = false;
             this.paquetesIncrementales = new ArrayList<>();
-            this.contadorPaquetesIncrementales = 0;
             this.usarPaquetesBaseEnOperacion = true;
             fijarReferenciaOperativa(dataset);
 
@@ -268,6 +268,47 @@ public class CargaArchivosService {
             return ZoneId.of("UTC");
         }
         return ZoneId.of(timezoneCanonica);
+    }
+
+    private Dataset fusionarDatasetOperativo(Dataset datasetCargado) {
+        if (datasetCargado == null) {
+            return lastDataset;
+        }
+
+        Map<String, Aeropuerto> aeropuertosFusionados = new LinkedHashMap<>();
+        if (lastDataset != null && lastDataset.getAeropuertos() != null) {
+            aeropuertosFusionados.putAll(lastDataset.getAeropuertos());
+        }
+        if (datasetCargado.getAeropuertos() != null) {
+            aeropuertosFusionados.putAll(datasetCargado.getAeropuertos());
+        }
+
+        Map<String, Vuelo> vuelosFusionados = new LinkedHashMap<>();
+        if (lastDataset != null && lastDataset.getVuelos() != null) {
+            for (Vuelo vuelo : lastDataset.getVuelos()) {
+                vuelosFusionados.put(vuelo.getId(), vuelo);
+            }
+        }
+        if (datasetCargado.getVuelos() != null) {
+            for (Vuelo vuelo : datasetCargado.getVuelos()) {
+                vuelosFusionados.put(vuelo.getId(), vuelo);
+            }
+        }
+
+        List<Paquete> paquetesExistentes = combinarPaquetes(
+                obtenerPaquetesBaseOperacion(),
+                paquetesIncrementales
+        );
+        List<Paquete> paquetesFusionados = combinarPaquetes(
+                paquetesExistentes,
+                datasetCargado.getPaquetes() != null ? datasetCargado.getPaquetes() : List.of()
+        );
+
+        return new Dataset(
+                aeropuertosFusionados,
+                new ArrayList<>(vuelosFusionados.values()),
+                paquetesFusionados
+        );
     }
 
     private int contarRegistrosArchivo(Path archivo) throws IOException {
