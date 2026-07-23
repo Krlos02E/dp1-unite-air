@@ -7,7 +7,7 @@ import MaletaListPanel from '../components/MaletaListPanel'
 import AlmacenListPanel from '../components/AlmacenListPanel'
 import VueloListPanel from '../components/VueloListPanel'
 import StationSelectorCard from '../components/StationSelectorCard'
-import { AIRPORTS_DATA, getAirportCityCountry } from '../data/airportsData'
+import { AIRPORTS_DATA } from '../data/airportsData'
 import type { VueloDTO, AeropuertoDTO, EnvioEstado, MaletaEstado } from '../types'
 import {
   formatLocalDateTimeParts,
@@ -522,29 +522,35 @@ export default function OperacionDiaria() {
                 <div className="grid grid-cols-2 gap-2 text-[11px]">
                   <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
                     <span className="block text-[9px] uppercase tracking-wide text-gray-500">Hora Local Sede</span>
-                    <span className="font-mono font-semibold text-gray-100">{horaConSegundos}</span>
+                    <span className="block font-mono text-base font-semibold text-gray-100">{horaConSegundos}</span>
                   </div>
                   <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
-                    <span className="block text-[9px] uppercase tracking-wide text-gray-500">Fecha</span>
-                    <span className="font-mono font-semibold text-gray-100">{fecha.split('-').reverse().join('/')}</span>
-                  </div>
-                  <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
-                    <span className="block text-[9px] uppercase tracking-wide text-gray-500">Zona Horaria</span>
-                    <span className="font-mono font-semibold text-gray-100">{displayTimezone}</span>
-                  </div>
-                  <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
-                    <span className="block text-[9px] uppercase tracking-wide text-gray-500">Sede Detectada</span>
-                    <span className="font-mono font-semibold text-gray-100">
-                      {selectedStation ? `${selectedStation.airportCode} - ${getAirportCityCountry(selectedStation.airportCode)}` : 'No valida'}
+                    <span className="block text-[9px] uppercase tracking-wide text-gray-500">Estado</span>
+                    <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                      loading
+                        ? 'bg-sky-500/15 text-sky-200'
+                        : error
+                          ? 'bg-rose-500/15 text-rose-200'
+                          : 'bg-emerald-500/15 text-emerald-200'
+                    }`}>
+                      {loading ? 'Sincronizando' : error ? 'Con incidencias' : 'Sincronizado'}
                     </span>
                   </div>
                   <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
                     <span className="block text-[9px] uppercase tracking-wide text-gray-500">Vuelos Activos</span>
-                    <span className="font-mono font-semibold text-gray-100">{flightStats.enVuelo}</span>
+                    <span className="block font-mono text-base font-semibold text-gray-100">{flightStats.enVuelo}</span>
                   </div>
                   <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
-                    <span className="block text-[9px] uppercase tracking-wide text-gray-500">Panel Actual</span>
-                    <span className="font-mono font-semibold text-gray-100">{selectedOperationEntityCount}</span>
+                    <span className="block text-[9px] uppercase tracking-wide text-gray-500">Vista</span>
+                    <span className="block font-medium text-gray-100">
+                      {panelMode === 'envios'
+                        ? `Envíos (${selectedOperationEntityCount})`
+                        : panelMode === 'maletas'
+                          ? `Maletas (${selectedOperationEntityCount})`
+                          : panelMode === 'almacenes'
+                            ? `Almacenes (${selectedOperationEntityCount})`
+                            : `Aviones (${selectedOperationEntityCount})`}
+                    </span>
                   </div>
                 </div>
                 {error && <p className="text-xs font-medium text-red-400">{error}</p>}
@@ -555,6 +561,7 @@ export default function OperacionDiaria() {
                   onSelectStation={handleManualStationSelection}
                   localDateTimeText={`${fecha} ${horaConSegundos}`}
                   airportLabel="Sede operativa"
+                  compact
                 />
                 {loading ? (
                   <div className="rounded-lg border border-sky-800/70 bg-sky-950/35 px-3 py-2 text-[11px] text-sky-200">
