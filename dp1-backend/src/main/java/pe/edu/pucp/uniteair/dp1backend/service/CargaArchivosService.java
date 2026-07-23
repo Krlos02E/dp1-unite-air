@@ -91,7 +91,7 @@ public class CargaArchivosService {
         if (this.lastDataset != null) return;
         try {
             Path tempDir = Files.createTempDirectory("default_carga_");
-            copiarRecursosACarpeta(tempDir);
+            prepararDatasetOperacionVacio(tempDir);
             Dataset dataset = cargarDatasetEnTemp(tempDir, LocalDate.now(), 3);
             this.lastDataset = dataset;
             this.estadoOperacional = null;
@@ -204,6 +204,17 @@ public class CargaArchivosService {
                 return;
             }
             Files.copy(is, destino, StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
+    private void prepararDatasetOperacionVacio(Path destino) throws IOException {
+        copiarRecursosACarpeta(destino, false, false);
+        Path vuelos = destino.resolve("input/vuelos/planes_vuelo.txt");
+        Path envios = destino.resolve("input/envios");
+        Files.createDirectories(vuelos.getParent());
+        Files.createDirectories(envios);
+        if (!Files.exists(vuelos)) {
+            Files.writeString(vuelos, "", StandardCharsets.UTF_8);
         }
     }
 
