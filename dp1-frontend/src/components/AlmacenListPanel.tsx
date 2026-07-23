@@ -123,7 +123,11 @@ function getClosestFlight(
   flightIds: string[],
   flightsMap: Map<string, VueloDTO>,
   type: 'salida' | 'llegada',
+  nowMs?: number,
 ): VueloDTO | null {
+  const currentTime = nowMs ?? Date.now()
+  let upcomingFlight: VueloDTO | null = null
+  let upcomingTimestamp = Number.POSITIVE_INFINITY
   let closestFlight: VueloDTO | null = null
   let closestTimestamp = Number.POSITIVE_INFINITY
 
@@ -131,13 +135,17 @@ function getClosestFlight(
     const flight = flightsMap.get(id)
     if (!flight) return
     const timestamp = parseUtc(type === 'salida' ? flight.salidaUtc : flight.llegadaUtc)
+    if (timestamp >= currentTime && timestamp < upcomingTimestamp) {
+      upcomingTimestamp = timestamp
+      upcomingFlight = flight
+    }
     if (timestamp < closestTimestamp) {
       closestTimestamp = timestamp
       closestFlight = flight
     }
   })
 
-  return closestFlight
+  return upcomingFlight || closestFlight
 }
 
 export default function AlmacenListPanel({
@@ -347,7 +355,8 @@ export default function AlmacenListPanel({
     })
   }, [filtradosPorFiltro, term, searchScope, searchCodeMatcher, vuelos, sortField, sortDirection])
 
-  const filtrados = showAll || term ? filtradosSinLimite : filtradosSinLimite.slice(0, DEFAULT_LIMIT)
+  const shouldBypassLimit = Boolean(term || hasFilters)
+  const filtrados = showAll || shouldBypassLimit ? filtradosSinLimite : filtradosSinLimite.slice(0, DEFAULT_LIMIT)
   const vuelosMap = useMemo(() => new Map(vuelos.map((vuelo) => [vuelo.id, vuelo])), [vuelos])
 
   useEffect(() => {
@@ -685,7 +694,7 @@ export default function AlmacenListPanel({
       {/* Footer */}
       <div className="px-3 py-1.5 border-t border-gray-800 text-[10px] text-gray-600 flex justify-between items-center">
         <span>{filtrados.length} de {filtradosSinLimite.length} · base {aeropuertosCombinados.length}</span>
-        {!showAll && !term && filtradosSinLimite.length > DEFAULT_LIMIT && (
+        {!showAll && !shouldBypassLimit && filtradosSinLimite.length > DEFAULT_LIMIT && (
           <button onClick={() => setShowAll(true)} className="text-sky-400 hover:text-sky-300 font-medium cursor-pointer">
             Mostrar todos
           </button>

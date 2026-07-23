@@ -99,10 +99,9 @@ function createCodePatternMatcher(rawPattern: string): (code: string) => boolean
   return (code) => regex.test(code)
 }
 
-function timeOfDay(iso: string): number {
+function utcTimestamp(iso: string): number {
   if (!iso) return 0
-  const date = new Date(iso.endsWith('Z') ? iso : `${iso}Z`)
-  return date.getUTCHours() * 60 + date.getUTCMinutes()
+  return new Date(iso.endsWith('Z') ? iso : `${iso}Z`).getTime()
 }
 
 function occupationStatus(cargaActual: number, ocupPct: number) {
@@ -314,8 +313,8 @@ function VueloListPanel({
         flight.cargaActual,
         flight.capacidad > 0 ? Math.round((flight.cargaActual / flight.capacidad) * 100) : 0,
       ),
-      salida: timeOfDay(flight.salidaUtc),
-      llegada: timeOfDay(flight.llegadaUtc),
+      salida: utcTimestamp(flight.salidaUtc),
+      llegada: utcTimestamp(flight.llegadaUtc),
       origenOrden: normalizeSearch(getAirportCountryResolved(flight.origen, airportLookup) || getAirportCityResolved(flight.origen, airportLookup) || flight.origen),
       destinoOrden: normalizeSearch(getAirportCountryResolved(flight.destino, airportLookup) || getAirportCityResolved(flight.destino, airportLookup) || flight.destino),
     }
@@ -406,7 +405,10 @@ function VueloListPanel({
   const resultKey = `${searchOriginTerm}|${searchDestinationTerm}|${searchCodeTerm}|${searchOriginMode}|${searchDestinationMode}|${originFilter}|${destinationFilter}|${codeFilter}|${occupationFilter}|${originFilterMode}|${destinationFilterMode}|${filterRouteScope}|${filterEstado}|${sortField}|${sortDirection}`
   const [page, setPage] = useState({ key: '', limit: DEFAULT_LIMIT })
   const visibleLimit = page.key === resultKey ? page.limit : DEFAULT_LIMIT
-  const filtrados = filtradosSinLimite.slice(0, visibleLimit)
+  const shouldBypassLimit = hasPanelSearch || hasPersistentFilters
+  const filtrados = shouldBypassLimit
+    ? filtradosSinLimite
+    : filtradosSinLimite.slice(0, visibleLimit)
 
   const programacionesFiltradas = useMemo(() => {
     return programaciones.filter((programacion) => {
@@ -993,7 +995,7 @@ function VueloListPanel({
       {/* Footer */}
       <div className="px-3 py-1.5 border-t border-gray-800 text-[10px] text-gray-600 flex justify-between items-center">
         <span>{filtrados.length} mostrados · {filtradosSinLimite.length} de {visibleFlights.length}</span>
-        {filtrados.length < filtradosSinLimite.length && (
+        {filtrados.length < filtradosSinLimite.length && !shouldBypassLimit && (
           <button
             onClick={() => setPage({ key: resultKey, limit: visibleLimit + DEFAULT_LIMIT })}
             className="text-sky-400 hover:text-sky-300 font-medium cursor-pointer"
