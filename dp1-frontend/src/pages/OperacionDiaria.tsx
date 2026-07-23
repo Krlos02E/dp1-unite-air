@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { cargaArchivosService } from '../services/CargaArchivosService'
 import { simulationSocketService } from '../services/SimulationSocketService'
 import MapaAeropuertos from '../components/MapaAeropuertos'
@@ -19,6 +19,12 @@ import {
 } from '../utils/stationTimezone'
 
 const SHARED_OPERATION_POLL_MS = 5000
+
+function isEnvioEnAlmacenOperacion(envio: EnvioEstado, codigoOACI: string): boolean {
+  return envio.aeropuertoActual === codigoOACI
+    && envio.estado !== 'EN_VUELO'
+    && envio.estado !== 'ENTREGADO'
+}
 
 const aeropuertosFallback: AeropuertoDTO[] = Object.values(AIRPORTS_DATA).map((a) => ({
   codigoOACI: a.codigoOACI,
@@ -111,6 +117,24 @@ export default function OperacionDiaria() {
     }
   }, [])
 
+  const aeropuertosVisuales = useMemo(() => {
+    if (todosEnvios.length === 0) return aeropuertosEstaticos
+
+    const ocupacionPorAeropuerto = new Map<string, number>()
+    todosEnvios.forEach((envio) => {
+      if (!isEnvioEnAlmacenOperacion(envio, envio.aeropuertoActual)) return
+      ocupacionPorAeropuerto.set(
+        envio.aeropuertoActual,
+        (ocupacionPorAeropuerto.get(envio.aeropuertoActual) || 0) + envio.cantidad,
+      )
+    })
+
+    return aeropuertosEstaticos.map((aeropuerto) => ({
+      ...aeropuerto,
+      ocupacionActual: ocupacionPorAeropuerto.get(aeropuerto.codigoOACI) ?? 0,
+    }))
+  }, [aeropuertosEstaticos, todosEnvios])
+
   const flightStats = vuelos.reduce((stats, vuelo) => {
     const enVuelo = vuelo.estado !== 'CANCELADO' && vuelo.progresoVuelo > 0 && vuelo.progresoVuelo < 100
     if (enVuelo) {
@@ -127,7 +151,7 @@ export default function OperacionDiaria() {
       carga: acc.carga + v.cargaActual,
       capacidad: acc.capacidad + v.capacidad,
     }), { carga: 0, capacidad: 0 }),
-    aeropuertos: aeropuertosEstaticos.reduce((acc, a) => ({
+    aeropuertos: aeropuertosVisuales.reduce((acc, a) => ({
       ocupacion: acc.ocupacion + a.ocupacionActual,
       capacidad: acc.capacidad + a.capacidadMaxima,
     }), { ocupacion: 0, capacidad: 0 }),
@@ -191,13 +215,13 @@ export default function OperacionDiaria() {
         setSelectedVuelo(vuelo)
         setSelectedAeropuerto(null)
       } else {
-        const aeropuerto = aeropuertosEstaticos.find((a) => a.codigoOACI === envio.aeropuertoActual)
+        const aeropuerto = aeropuertosVisuales.find((a) => a.codigoOACI === envio.aeropuertoActual)
         setSelectedVuelo(null)
         setSelectedAeropuerto(aeropuerto || null)
       }
       return envio
     })
-  }, [aeropuertosEstaticos, vuelos])
+  }, [aeropuertosVisuales, vuelos])
 
   const handleMaletaSelect = useCallback((maleta: MaletaEstado) => {
     setSelectedMaleta((prev) => {
@@ -221,13 +245,13 @@ export default function OperacionDiaria() {
         setSelectedVuelo(vuelo)
         setSelectedAeropuerto(null)
       } else {
-        const aeropuerto = aeropuertosEstaticos.find((a) => a.codigoOACI === maleta.aeropuertoActual)
+        const aeropuerto = aeropuertosVisuales.find((a) => a.codigoOACI === maleta.aeropuertoActual)
         setSelectedVuelo(null)
         setSelectedAeropuerto(aeropuerto || null)
       }
       return maleta
     })
-  }, [aeropuertosEstaticos, vuelos])
+  }, [aeropuertosVisuales, vuelos])
 
   const handleViewMaletasForEnvio = useCallback((envioId: string) => {
     setMaletaEnvioFilterId(envioId)
@@ -427,11 +451,11 @@ export default function OperacionDiaria() {
 
   useEffect(() => {
     if (!selectedAeropuerto) return
-    const actualizado = aeropuertosEstaticos.find((a) => a.codigoOACI === selectedAeropuerto.codigoOACI)
+    const actualizado = aeropuertosVisuales.find((a) => a.codigoOACI === selectedAeropuerto.codigoOACI)
     if (actualizado && actualizado !== selectedAeropuerto) {
       setSelectedAeropuerto(actualizado)
     }
-  }, [aeropuertosEstaticos, selectedAeropuerto])
+  }, [aeropuertosVisuales, selectedAeropuerto])
 
   useEffect(() => {
     if (!selectedVuelo) return
@@ -458,7 +482,7 @@ export default function OperacionDiaria() {
     : panelMode === 'maletas'
       ? todasMaletas.length
       : panelMode === 'almacenes'
-        ? aeropuertosEstaticos.length
+        ? aeropuertosVisuales.length
         : vuelos.length
 
   return (
@@ -474,7 +498,7 @@ export default function OperacionDiaria() {
             </div>
           )}
           <MapaAeropuertos
-            aeropuertos={aeropuertosEstaticos}
+            aeropuertos={aeropuertosVisuales}
             vuelos={vuelos}
             selectedVueloId={selectedVuelo?.id || null}
             selectedAeropuertoId={selectedAeropuerto?.codigoOACI || null}
@@ -710,7 +734,7 @@ export default function OperacionDiaria() {
           </div>
           {panelMode === 'almacenes' ? (
             <AlmacenListPanel
-              aeropuertos={aeropuertosEstaticos}
+              aeropuertos={aeropuertosVisuales}
               vuelos={vuelos}
               envios={todosEnvios}
               onEnvioSelect={handleEnvioSelect}
@@ -729,7 +753,7 @@ export default function OperacionDiaria() {
             <VueloListPanel
               vuelos={vuelos}
               contexto="OPERACION"
-              aeropuertosDisponibles={aeropuertosEstaticos}
+              aeropuertosDisponibles={aeropuertosVisuales}
               envios={todosEnvios}
               onEnvioSelect={handleEnvioSelect}
               selectedEnvioId={selectedEnvio?.id}

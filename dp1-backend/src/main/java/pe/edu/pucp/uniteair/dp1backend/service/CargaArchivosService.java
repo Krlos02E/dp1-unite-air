@@ -48,6 +48,7 @@ import java.util.stream.IntStream;
 @Service
 public class CargaArchivosService {
     public static final String CLIENTE_PRUEBA_OPERACION_DIARIA = "0007729";
+    private static final long REPLAN_OPERACION_INTERVAL_MS = 15_000L;
 
     private Dataset lastDataset;
     private volatile EstadoOperacional estadoOperacional;
@@ -738,7 +739,7 @@ public class CargaArchivosService {
         return maleta;
     }
 
-    @Scheduled(fixedRate = 300000)
+    @Scheduled(fixedRate = REPLAN_OPERACION_INTERVAL_MS)
     public synchronized void rePlanificarProgramado() {
         if (lastDataset == null || planificando) return;
 

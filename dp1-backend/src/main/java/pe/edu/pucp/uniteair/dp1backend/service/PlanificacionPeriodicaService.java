@@ -24,6 +24,7 @@ import java.util.Set;
 @Service
 @Slf4j
 public class PlanificacionPeriodicaService {
+    private static final long PLANIFICACION_PERIODICA_INTERVAL_MS = 15_000L;
 
     @Value("${planificacion.periodica.enabled:true}")
     private boolean enabled;
@@ -46,7 +47,7 @@ public class PlanificacionPeriodicaService {
     @Autowired
     private RelojOperativoService relojOperativoService;
 
-    @Scheduled(fixedRate = 300000)
+    @Scheduled(fixedRate = PLANIFICACION_PERIODICA_INTERVAL_MS)
     public void planificacionPeriodica() {
         if (!enabled) {
             return;
