@@ -43,6 +43,16 @@ export default function EnvioDetailCard({
   const destinoInfo = getAirportCityCountry(envio.destino)
   const aeropuertoInfo = getAirportCityCountry(envio.aeropuertoActual)
   const ultimoVuelo = envio.ultimoVuelo || envio.vueloActual || envio.vueloEsperado
+  const ubicacionActualLabel = (() => {
+    if (envio.estado === 'EN_VUELO') {
+      if (envio.vueloActual) return `En vuelo · ${envio.vueloActual}`
+      return 'En vuelo'
+    }
+    if (envio.estado === 'ENTREGADO') {
+      return destinoInfo
+    }
+    return aeropuertoInfo
+  })()
   const tieneRutaAnterior = Boolean(envio.rutaAnteriorAeropuertos?.length)
   const rutaAeropuertos = routeMode === 'anterior'
     ? (envio.rutaAnteriorAeropuertos || [])
@@ -88,7 +98,7 @@ export default function EnvioDetailCard({
         </div>
         <div className="flex justify-between gap-2">
           <span className="text-gray-400">Ubicación actual</span>
-          <span className="text-right font-medium text-gray-200">{aeropuertoInfo}</span>
+          <span className="text-right font-medium text-gray-200">{ubicacionActualLabel}</span>
         </div>
         <div className="flex justify-between gap-2">
           <span className="text-gray-400">Cantidad</span>
