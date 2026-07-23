@@ -901,12 +901,38 @@ public class CargaArchivosService {
             Dataset dataset,
             Config_Simulacion config
     ) {
-        Map<String, Ruta> rutas = solucion.getRutasAsignadas();
-        this.rutasAsignadas = new HashMap<>(rutas);
-        this.estadoOperacional = PlanificacionUtils.construirEstadoConAsignaciones(rutas, dataset, config);
+        Map<String, Ruta> nuevasRutas = solucion.getRutasAsignadas();
+        Set<String> paquetesReplanificados = dataset.getPaquetes().stream()
+                .map(Paquete::getId)
+                .collect(Collectors.toSet());
+
+        Map<String, Ruta> rutasPreservadas = new HashMap<>();
+        for (Map.Entry<String, Ruta> entry : this.rutasAsignadas.entrySet()) {
+            if (!paquetesReplanificados.contains(entry.getKey())) {
+                rutasPreservadas.put(entry.getKey(), entry.getValue());
+            }
+        }
+
+        Map<String, Ruta> todasLasRutas = new HashMap<>(rutasPreservadas);
+        todasLasRutas.putAll(nuevasRutas);
+        registrarRutasAnteriores(todasLasRutas);
+        this.rutasAsignadas = todasLasRutas;
+
+        List<Paquete> paquetesCompletos = obtenerTodosLosPaquetes();
+        Dataset datasetCompletoBase = new Dataset(
+                lastDataset.getAeropuertos(),
+                lastDataset.getVuelos(),
+                paquetesCompletos
+        );
+        Dataset datasetCompleto = construirDatasetPlanificable(
+                AlmacenContexto.OPERACION,
+                datasetCompletoBase
+        );
+        this.estadoOperacional = PlanificacionUtils.construirEstadoConAsignaciones(
+                todasLasRutas, datasetCompleto, config);
 
         Map<String, Integer> nuevoCache = new HashMap<>();
-        for (Vuelo v : dataset.getVuelos()) {
+        for (Vuelo v : datasetCompleto.getVuelos()) {
             int carga = this.estadoOperacional.getCargaVuelo(v.getId());
             if (carga > 0) {
                 nuevoCache.put(v.getId(), carga);
