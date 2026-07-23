@@ -104,6 +104,20 @@ function utcTimestamp(iso: string): number {
   return new Date(iso.endsWith('Z') ? iso : `${iso}Z`).getTime()
 }
 
+function collectEnvioFlightIds(envio: EnvioEstado): string[] {
+  const flightIds = new Set<string>()
+  ;[envio.vueloActual, envio.vueloEsperado, envio.ultimoVuelo].forEach((id) => {
+    if (id) flightIds.add(id)
+  })
+  ;(envio.rutaVuelos || []).forEach((id) => {
+    if (id) flightIds.add(id)
+  })
+  ;(envio.rutaAnteriorVuelos || []).forEach((id) => {
+    if (id) flightIds.add(id)
+  })
+  return Array.from(flightIds)
+}
+
 function occupationStatus(cargaActual: number, ocupPct: number) {
   if (cargaActual <= 0) {
     return { label: 'Vacío', bar: 'bg-sky-500', text: 'text-sky-400', track: 'bg-sky-950/80' }
@@ -274,8 +288,7 @@ function VueloListPanel({
     const index = new Map<string, EnvioEstado[]>()
     if (!envios) return index
     envios.forEach((envio) => {
-      const flightIds = new Set([envio.vueloActual, envio.vueloEsperado, envio.ultimoVuelo].filter((id): id is string => Boolean(id)))
-      flightIds.forEach((flightId) => {
+      collectEnvioFlightIds(envio).forEach((flightId) => {
         const current = index.get(flightId)
         if (current) current.push(envio)
         else index.set(flightId, [envio])

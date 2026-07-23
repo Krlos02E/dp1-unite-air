@@ -27,6 +27,20 @@ const estadoColor: Record<string, string> = {
   ENTREGADO: 'text-gray-400 bg-gray-400/10',
 }
 
+function envioIncluyeVuelo(envio: EnvioEstado, vueloId: string): boolean {
+  const flightIds = new Set<string>()
+  ;[envio.vueloActual, envio.vueloEsperado, envio.ultimoVuelo].forEach((id) => {
+    if (id) flightIds.add(id)
+  })
+  ;(envio.rutaVuelos || []).forEach((id) => {
+    if (id) flightIds.add(id)
+  })
+  ;(envio.rutaAnteriorVuelos || []).forEach((id) => {
+    if (id) flightIds.add(id)
+  })
+  return flightIds.has(vueloId)
+}
+
 export default function VueloDetailCard({
   vuelo,
   tzOffset,
@@ -42,10 +56,7 @@ export default function VueloDetailCard({
   const [enviosExpanded, setEnviosExpanded] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const enviosDelVuelo = useMemo(() => {
-    return envios.filter((envio) => {
-      const flightIds = new Set([envio.vueloActual, envio.vueloEsperado, envio.ultimoVuelo].filter(Boolean))
-      return flightIds.has(vuelo.id)
-    })
+    return envios.filter((envio) => envioIncluyeVuelo(envio, vuelo.id))
   }, [envios, vuelo.id])
   const enviosFiltrados = useMemo(() => {
     if (!searchTerm) return enviosDelVuelo
