@@ -217,15 +217,18 @@ public class CargaArchivosService {
         try {
             Path tempDir = Files.createTempDirectory("carga_");
             copiarRecursosACarpeta(tempDir, true, false);
+            Path planesVueloPath = null;
+            Path aeropuertosPath = null;
+            Path enviosPath = null;
             if (planesVuelo != null && !planesVuelo.isEmpty()) {
-                saveToTemp(tempDir.resolve("input").resolve("vuelos"), planesVuelo, "planes_vuelo.txt");
+                planesVueloPath = saveToTemp(tempDir.resolve("input").resolve("vuelos"), planesVuelo, "planes_vuelo.txt");
             }
             if (aeropuertosFile != null && !aeropuertosFile.isEmpty()) {
-                saveToTemp(tempDir.resolve("input").resolve("aeropuertos"), aeropuertosFile, "aeropuerto.txt");
+                aeropuertosPath = saveToTemp(tempDir.resolve("input").resolve("aeropuertos"), aeropuertosFile, "aeropuerto.txt");
             }
             if (envios != null && !envios.isEmpty()) {
                 String origenNormalizado = normalizarOrigenEnvios(origenEnviosOaci);
-                saveToTemp(tempDir.resolve("input").resolve("envios"), envios, "_envios_" + origenNormalizado + "_.txt");
+                enviosPath = saveToTemp(tempDir.resolve("input").resolve("envios"), envios, "_envios_" + origenNormalizado + "_.txt");
             }
 
             ZoneId zonaOperacion = resolverZonaOperacion(timezoneCanonica);
@@ -233,9 +236,9 @@ public class CargaArchivosService {
             Set<LocalDate> fechasFiltro = generarFechasSimulacion(fechaInicio, 3);
             Dataset dataset = DatasetTextoLoader.cargarDataset(tempDir, fechaInicio, 3, 50000, fechasFiltro);
 
-            int aeropuertosCount = contarRegistrosArchivo(aeropuertosFile);
-            int vuelosCount = contarRegistrosArchivo(planesVuelo);
-            int paquetesCount = contarRegistrosArchivo(envios);
+            int aeropuertosCount = contarRegistrosArchivo(aeropuertosPath);
+            int vuelosCount = contarRegistrosArchivo(planesVueloPath);
+            int paquetesCount = contarRegistrosArchivo(enviosPath);
 
             String datasetId = UUID.randomUUID().toString();
             this.lastDataset = dataset;
@@ -267,12 +270,11 @@ public class CargaArchivosService {
         return ZoneId.of(timezoneCanonica);
     }
 
-    private int contarRegistrosArchivo(MultipartFile archivo) throws IOException {
-        if (archivo == null || archivo.isEmpty()) {
+    private int contarRegistrosArchivo(Path archivo) throws IOException {
+        if (archivo == null || !Files.exists(archivo)) {
             return 0;
         }
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(archivo.getInputStream(), StandardCharsets.UTF_8))) {
+        try (BufferedReader reader = Files.newBufferedReader(archivo, StandardCharsets.UTF_8)) {
             int count = 0;
             String line;
             while ((line = reader.readLine()) != null) {
@@ -732,10 +734,13 @@ public class CargaArchivosService {
         }
     }
 
-    private void saveToTemp(Path dir, MultipartFile file, String filename) throws IOException {
+    private Path saveToTemp(Path dir, MultipartFile file, String filename) throws IOException {
         Files.createDirectories(dir);
-        File dest = new File(dir.toFile(), filename);
-        file.transferTo(dest);
+        Path dest = dir.resolve(filename);
+        try (InputStream inputStream = file.getInputStream()) {
+            Files.copy(inputStream, dest, StandardCopyOption.REPLACE_EXISTING);
+        }
+        return dest;
     }
 
     private void deleteTempDir(Path tempDir) {
