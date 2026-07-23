@@ -26,6 +26,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -184,6 +185,35 @@ class CargaArchivosServiceOperacionDiaDiaTest {
     }
 
     @Test
+    void cargarEnviosNoDebeVaciarVuelosQueYaEstanEnVuelo() throws Exception {
+        Dataset dataset = datasetOperacionDiaDia();
+        CargaArchivosService service = crearService(dataset);
+        setField(service, "usarPaquetesBaseEnOperacion", true);
+        setField(service, "rutasAsignadas", new HashMap<>(Map.of(
+                "BASE-TRIGGER-001",
+                new Ruta(List.of(dataset.getVuelos().get(0)))
+        )));
+        setField(service, "cargaVueloCache", new HashMap<>(Map.of("LIM-BOG-001", 1)));
+        setField(service, "relojOperativoService", relojFijo(LocalDateTime.of(2026, 7, 23, 14, 0)));
+
+        service.cargarEnviosDesdeArchivo(
+                multipart("archivo-envios.txt", "FILE-20260723-08:00-SABE-1-0007729\n"),
+                "SPIM"
+        );
+
+        esperarHasta(() -> service.getCargaVuelo("LIM-BOG-001") == 1, 5000);
+
+        Map<String, Ruta> rutas = service.obtenerRutasAsignadas();
+        assertNotNull(rutas.get("BASE-TRIGGER-001"),
+                "El envio ya activo debe conservar su ruta despues de cargar nuevos envios");
+        assertEquals(List.of("LIM-BOG-001"),
+                rutas.get("BASE-TRIGGER-001").getVuelos().stream().map(Vuelo::getId).toList(),
+                "El vuelo ya en curso no debe perderse al replanificar nuevos envios");
+        assertEquals(1, service.getCargaVuelo("LIM-BOG-001"),
+                "El avion que ya esta en vuelo debe conservar su carga");
+    }
+
+    @Test
     void rechazaEnviosDesdeArchivoSiExcedenCapacidadDelAlmacen() throws Exception {
         CargaArchivosService service = crearService(datasetOperacionDiaDia());
 
@@ -291,6 +321,15 @@ class CargaArchivosServiceOperacionDiaDiaTest {
         Field field = target.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
         field.set(target, value);
+    }
+
+    private RelojOperativoService relojFijo(LocalDateTime tiempoUtc) {
+        return new RelojOperativoService() {
+            @Override
+            public synchronized LocalDateTime obtenerTiempoActualUtc() {
+                return tiempoUtc;
+            }
+        };
     }
 
     private String obtenerClienteId(Paquete paquete) throws Exception {

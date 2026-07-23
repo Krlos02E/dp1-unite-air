@@ -454,30 +454,53 @@ public class CargaArchivosService {
             return;
         }
         try {
-            Config_Simulacion config = new Config_Simulacion();
-            config.setAeropuertoHub("SKBO");
-            config.setMinimaConexion(java.time.Duration.ofMinutes(10));
-            config.setIteracionesALNS(20);
-            config.setMaxRutasPorPaquete(4);
-            config.setMaxEscalas(2);
-            config.setVentanaActualizacionPesos(5);
-            config.setEvaporacionFeromona(0.4);
-
+            Config_Simulacion config = crearConfigPlanificacion();
+            LocalDateTime ahoraUtc = obtenerTiempoOperativoActualUtc();
             Dataset datasetGestion = new Dataset(
-                dataset.getAeropuertos(),
-                dataset.getVuelos(),
-                paquetes
+                    dataset.getAeropuertos(),
+                    dataset.getVuelos(),
+                    paquetes
             );
 
-            PlanificacionUtils.limpiarCacheGlobal();
-            TwoPhaseOrchestrator orchestrator = new TwoPhaseOrchestrator(new ALNS_RutasPlanner());
-            var solucion = orchestrator.ejecutarFlujoCompleto(datasetGestion, config);
-            var rutas = solucion.getRutasAsignadas();
+            Map<String, Ruta> rutasPreservadas = new HashMap<>();
+            List<Paquete> pendientes = new ArrayList<>();
+            for (Paquete paquete : paquetes) {
+                Ruta rutaActual = rutasAsignadas.get(paquete.getId());
+                EstadoEnvio estadoActual = computarEstado(paquete, rutaActual, ahoraUtc);
+                if ("EN_VUELO".equals(estadoActual.estado()) || "ENTREGADO".equals(estadoActual.estado())) {
+                    if (rutaActual != null) {
+                        rutasPreservadas.put(paquete.getId(), rutaActual);
+                    }
+                } else {
+                    pendientes.add(paquete);
+                }
+            }
 
-            registrarRutasAnteriores(rutas);
-            this.rutasAsignadas = new HashMap<>(rutas);
-            this.asignacionesSplit = new HashMap<>();
-            this.estadoOperacional = PlanificacionUtils.construirEstadoConAsignaciones(rutas, datasetGestion, config);
+            Map<String, Ruta> rutasResultado = new HashMap<>(rutasPreservadas);
+            if (!pendientes.isEmpty()) {
+                Dataset datasetPendientes = new Dataset(
+                        dataset.getAeropuertos(),
+                        dataset.getVuelos(),
+                        pendientes
+                );
+                PlanificacionUtils.limpiarCacheGlobal();
+                TwoPhaseOrchestrator orchestrator = new TwoPhaseOrchestrator(new ALNS_RutasPlanner());
+                var solucion = orchestrator.ejecutarFlujoCompleto(datasetPendientes, config);
+                rutasResultado.putAll(solucion.getRutasAsignadas());
+            }
+
+            registrarRutasAnteriores(rutasResultado);
+            this.rutasAsignadas = rutasResultado;
+
+            Map<String, AsignacionPaquete> splitsPreservados = new HashMap<>();
+            for (Map.Entry<String, AsignacionPaquete> entry : this.asignacionesSplit.entrySet()) {
+                if (rutasPreservadas.containsKey(entry.getKey())) {
+                    splitsPreservados.put(entry.getKey(), entry.getValue());
+                }
+            }
+            this.asignacionesSplit = splitsPreservados;
+
+            this.estadoOperacional = PlanificacionUtils.construirEstadoConAsignaciones(rutasResultado, datasetGestion, config);
             Map<String, Integer> nuevoCache = new HashMap<>();
             for (Vuelo v : dataset.getVuelos()) {
                 int carga = this.estadoOperacional.getCargaVuelo(v.getId());
@@ -486,7 +509,9 @@ public class CargaArchivosService {
                 }
             }
             this.cargaVueloCache = nuevoCache;
-            System.out.println("[CargaArchivosService] Planificación completada. Rutas: " + rutas.size()
+            System.out.println("[CargaArchivosService] Planificación completada. Rutas: " + rutasResultado.size()
+                    + ", preservadas: " + rutasPreservadas.size()
+                    + ", pendientes: " + pendientes.size()
                     + ", CargaVuelo entries: " + nuevoCache.size());
         } catch (Exception e) {
             System.err.println("[CargaArchivosService] Error en planificación: " + e.getMessage());
@@ -494,6 +519,18 @@ public class CargaArchivosService {
             this.estadoOperacional = new EstadoOperacional();
             this.cargaVueloCache = new HashMap<>();
         }
+    }
+
+    private Config_Simulacion crearConfigPlanificacion() {
+        Config_Simulacion config = new Config_Simulacion();
+        config.setAeropuertoHub("SKBO");
+        config.setMinimaConexion(java.time.Duration.ofMinutes(10));
+        config.setIteracionesALNS(20);
+        config.setMaxRutasPorPaquete(4);
+        config.setMaxEscalas(2);
+        config.setVentanaActualizacionPesos(5);
+        config.setEvaporacionFeromona(0.4);
+        return config;
     }
 
     private record EstadoEnvio(
