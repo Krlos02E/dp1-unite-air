@@ -56,6 +56,7 @@ public class CargaArchivosService {
     private volatile Map<String, Ruta> rutasAnteriores = new HashMap<>();
     private volatile Map<String, AsignacionPaquete> asignacionesSplit = new HashMap<>();
     private volatile boolean planificando = false;
+    private volatile boolean replanificacionPendiente = false;
     private volatile List<Paquete> paquetesIncrementales = new ArrayList<>();
     private volatile boolean usarPaquetesBaseEnOperacion = false;
     private int contadorPaquetesIncrementales = 0;
@@ -101,6 +102,7 @@ public class CargaArchivosService {
             this.rutasAnteriores = new HashMap<>();
             this.asignacionesSplit = new HashMap<>();
             this.planificando = false;
+            this.replanificacionPendiente = false;
             this.usarPaquetesBaseEnOperacion = false;
             fijarReferenciaOperativa(dataset);
             deleteTempDir(tempDir);
@@ -131,6 +133,7 @@ public class CargaArchivosService {
             this.rutasAnteriores = new HashMap<>();
             this.asignacionesSplit = new HashMap<>();
             this.planificando = false;
+            this.replanificacionPendiente = false;
             this.usarPaquetesBaseEnOperacion = false;
             fijarReferenciaOperativa(dataset);
             deleteTempDir(tempDir);
@@ -147,14 +150,22 @@ public class CargaArchivosService {
 
     private void lanzarPlanificacionEnBackground(Dataset dataset) {
         if (dataset == null || dataset.getPaquetes().isEmpty()) return;
-        if (planificando) return;
+        if (planificando) {
+            replanificacionPendiente = true;
+            return;
+        }
         planificando = true;
+        replanificacionPendiente = false;
         Dataset datasetOperacion = construirDatasetPlanificable(AlmacenContexto.OPERACION, dataset);
         executor.submit(() -> {
             try {
                 planificarDataset(datasetOperacion);
             } finally {
                 planificando = false;
+                if (replanificacionPendiente && lastDataset != null) {
+                    replanificacionPendiente = false;
+                    lanzarPlanificacionEnBackground(lastDataset);
+                }
             }
         });
     }
@@ -261,6 +272,7 @@ public class CargaArchivosService {
             this.rutasAnteriores = new HashMap<>();
             this.asignacionesSplit = new HashMap<>();
             this.planificando = false;
+            this.replanificacionPendiente = false;
             this.paquetesIncrementales = new ArrayList<>();
             this.usarPaquetesBaseEnOperacion = true;
             fijarReferenciaOperativa(dataset);
@@ -1217,6 +1229,10 @@ public class CargaArchivosService {
         System.out.println("[CargaArchivosService] Envios incrementales agregados: " + nuevos.size()
                 + ". Total acumulados: " + paquetesIncrementales.size());
 
+        if (lastDataset != null) {
+            lanzarPlanificacionEnBackground(lastDataset);
+        }
+
         return nuevos;
     }
 
@@ -1348,6 +1364,7 @@ public class CargaArchivosService {
         this.estadoOperacional = null;
         this.cargaVueloCache = null;
         this.planificando = false;
+        this.replanificacionPendiente = false;
         contextSyncStateService.touch(AlmacenContexto.OPERACION, "operacion-diaria-limpiada");
     }
 

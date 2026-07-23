@@ -111,6 +111,29 @@ class CargaArchivosServiceOperacionDiaDiaTest {
     }
 
     @Test
+    void agregarEnviosManualDebeDispararReplanificacionOperativa() throws Exception {
+        Dataset dataset = datasetOperacionDiaDia();
+        CargaArchivosService service = crearService(dataset);
+
+        List<Paquete> manuales = service.agregarEnvios(List.of(
+                new CargaArchivosService.EnvioEntrada(
+                        "SPIM",
+                        "SKBO",
+                        LocalDate.of(2026, 7, 23),
+                        LocalTime.of(7, 0),
+                        1,
+                        null,
+                        ""
+                )
+        ));
+
+        esperarHasta(() -> service.obtenerRutasAsignadas().containsKey(manuales.get(0).getId()), 5000);
+
+        assertEquals(1, service.getCargaVuelo("LIM-BOG-001"),
+                "El envio manual debe reflejarse en la carga operativa del vuelo asignado");
+    }
+
+    @Test
     void cargarPlanesDeVueloNoDebeArrastrarEnviosBaseDelDatasetHistorico() throws Exception {
         CargaArchivosService service = crearService(datasetOperacionDiaDia());
 
