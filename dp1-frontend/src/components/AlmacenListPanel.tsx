@@ -106,6 +106,12 @@ function occupationCategory(ocupacionActual: number, capacidadMaxima: number): O
   return 'normal'
 }
 
+function isEnvioEnAlmacen(codigoOACI: string, estado: string, aeropuertoActual: string): boolean {
+  return aeropuertoActual === codigoOACI
+    && estado !== 'EN_VUELO'
+    && estado !== 'ENTREGADO'
+}
+
 function parseUtc(iso: string): number {
   if (!iso) return Number.POSITIVE_INFINITY
   const date = new Date(iso.endsWith('Z') ? iso : `${iso}Z`)
@@ -558,8 +564,9 @@ export default function AlmacenListPanel({
           const almacenDB = almacenMap.get(a.codigoOACI)
           const ciudad = a.ciudad || getAirportCity(a.codigoOACI) || ''
           const pais = a.pais || getAirportCountry(a.codigoOACI) || ''
-          const ocupPct = a.capacidadMaxima > 0 ? Math.round((a.ocupacionActual / a.capacidadMaxima) * 100) : 0
-          const enviosAqui = envios?.filter((e) => e.aeropuertoActual === a.codigoOACI) || []
+          const enviosAqui = envios?.filter((e) => isEnvioEnAlmacen(a.codigoOACI, e.estado, e.aeropuertoActual)) || []
+          const ocupacionVisual = enviosAqui.reduce((sum, envio) => sum + envio.cantidad, 0)
+          const ocupPct = a.capacidadMaxima > 0 ? Math.round((ocupacionVisual / a.capacidadMaxima) * 100) : 0
           const esEditable = Boolean(almacenDB?.editable)
           const nextDepartureFlight = getClosestFlight(a.vuelosSalientes, vuelosMap, 'salida')
           const nextArrivalFlight = getClosestFlight(a.vuelosEntrantes, vuelosMap, 'llegada')
@@ -643,7 +650,7 @@ export default function AlmacenListPanel({
                     />
                   </div>
                   <span className="text-[10px] text-gray-400 whitespace-nowrap font-mono">
-                    {a.ocupacionActual}/{a.capacidadMaxima}
+                    {ocupacionVisual}/{a.capacidadMaxima}
                   </span>
                   <span className={`text-[10px] font-mono font-medium ${
                     ocupPct > 90 ? 'text-red-400' : ocupPct > 70 ? 'text-amber-400' : 'text-emerald-400'

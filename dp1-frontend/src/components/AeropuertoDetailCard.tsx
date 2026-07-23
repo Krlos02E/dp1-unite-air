@@ -28,6 +28,12 @@ type SectionKey =
   | 'envios-salida'
   | 'maletas-salida'
 
+function isEnvioEnAlmacen(envio: EnvioEstado, airportCode: string): boolean {
+  return envio.aeropuertoActual === airportCode
+    && envio.estado !== 'EN_VUELO'
+    && envio.estado !== 'ENTREGADO'
+}
+
 function getRouteIndex(envio: EnvioEstado, airportCode: string): number {
   return (envio.rutaAeropuertos || []).indexOf(airportCode)
 }
@@ -62,7 +68,7 @@ export default function AeropuertoDetailCard({
   }, [vuelos])
 
   const enviosEnAlmacen = useMemo(
-    () => envios.filter((envio) => envio.aeropuertoActual === aeropuerto.codigoOACI),
+    () => envios.filter((envio) => isEnvioEnAlmacen(envio, aeropuerto.codigoOACI)),
     [envios, aeropuerto.codigoOACI],
   )
 
@@ -78,7 +84,7 @@ export default function AeropuertoDetailCard({
 
   const enviosPlaneadosSalida = useMemo(
     () => envios.filter((envio) => {
-      if (envio.aeropuertoActual !== aeropuerto.codigoOACI) return false
+      if (!isEnvioEnAlmacen(envio, aeropuerto.codigoOACI)) return false
       const currentIndex = getRouteIndex(envio, aeropuerto.codigoOACI)
       const route = envio.rutaAeropuertos || []
       return currentIndex >= 0 && currentIndex < route.length - 1
@@ -101,8 +107,9 @@ export default function AeropuertoDetailCard({
     [enviosPlaneadosSalida],
   )
 
+  const stockActual = maletasEnAlmacen
   const stockPct = aeropuerto.capacidadMaxima > 0
-    ? Math.round((aeropuerto.ocupacionActual / aeropuerto.capacidadMaxima) * 100)
+    ? Math.round((stockActual / aeropuerto.capacidadMaxima) * 100)
     : 0
 
   const matchesSearch = (envio: EnvioEstado) => {
@@ -282,7 +289,7 @@ export default function AeropuertoDetailCard({
         <div className="flex justify-between">
           <span className="text-gray-400">Stock del almacén</span>
           <span className="font-medium text-amber-400">
-            {aeropuerto.ocupacionActual} / {aeropuerto.capacidadMaxima} ({stockPct}%)
+            {stockActual} / {aeropuerto.capacidadMaxima} ({stockPct}%)
           </span>
         </div>
         <div className="flex justify-between">
