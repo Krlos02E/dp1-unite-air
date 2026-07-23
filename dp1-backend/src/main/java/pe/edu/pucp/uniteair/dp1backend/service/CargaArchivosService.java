@@ -233,9 +233,9 @@ public class CargaArchivosService {
             Set<LocalDate> fechasFiltro = generarFechasSimulacion(fechaInicio, 3);
             Dataset dataset = DatasetTextoLoader.cargarDataset(tempDir, fechaInicio, 3, 50000, fechasFiltro);
 
-            int aeropuertosCount = dataset.getAeropuertos().size();
-            int vuelosCount = dataset.getVuelos().size();
-            int paquetesCount = dataset.getPaquetes().size();
+            int aeropuertosCount = contarRegistrosArchivo(aeropuertosFile);
+            int vuelosCount = contarRegistrosArchivo(planesVuelo);
+            int paquetesCount = contarRegistrosArchivo(envios);
 
             String datasetId = UUID.randomUUID().toString();
             this.lastDataset = dataset;
@@ -265,6 +265,25 @@ public class CargaArchivosService {
             return ZoneId.of("UTC");
         }
         return ZoneId.of(timezoneCanonica);
+    }
+
+    private int contarRegistrosArchivo(MultipartFile archivo) throws IOException {
+        if (archivo == null || archivo.isEmpty()) {
+            return 0;
+        }
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(archivo.getInputStream(), StandardCharsets.UTF_8))) {
+            int count = 0;
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String trimmed = line.trim();
+                if (trimmed.isEmpty() || trimmed.startsWith("**")) {
+                    continue;
+                }
+                count++;
+            }
+            return count;
+        }
     }
 
     public synchronized Dataset obtenerUltimoDataset() {

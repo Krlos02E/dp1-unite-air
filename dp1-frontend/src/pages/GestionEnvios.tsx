@@ -54,6 +54,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 function CargaArchivosTab() {
   const [planesVuelo, setPlanesVuelo] = useState<File | null>(null)
   const [envios, setEnvios] = useState<File | null>(null)
+  const [fileInputResetToken, setFileInputResetToken] = useState(0)
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
   const [result, setResult] = useState<CargaResult | null>(null)
@@ -97,6 +98,9 @@ function CargaArchivosTab() {
         (pct) => setProgress(pct)
       )
       setResult(res)
+      setPlanesVuelo(null)
+      setEnvios(null)
+      setFileInputResetToken((current) => current + 1)
     } catch (e: any) {
       const msg = e?.response?.data?.message || e?.message || 'Error al subir los archivos. Verifique el formato.'
       setError(msg)
@@ -115,8 +119,16 @@ function CargaArchivosTab() {
         airportLabel="Origen usado para la carga"
       />
 
-      <FileInput label="Archivo de vuelos (planes_vuelo.txt — opcional)" onChange={setPlanesVuelo} />
-      <FileInput label="Archivo de envíos (.txt — obligatorio, se carga usando el aeropuerto detectado de esta PC)" onChange={setEnvios} />
+      <FileInput
+        label="Archivo de vuelos (planes_vuelo.txt — opcional)"
+        onChange={setPlanesVuelo}
+        resetToken={fileInputResetToken}
+      />
+      <FileInput
+        label="Archivo de envíos (.txt — obligatorio, se carga usando el aeropuerto detectado de esta PC)"
+        onChange={setEnvios}
+        resetToken={fileInputResetToken}
+      />
 
       <button
         onClick={handleUpload}
@@ -141,20 +153,29 @@ function CargaArchivosTab() {
       {result && (
         <div className="bg-emerald-900/50 border border-emerald-700 text-emerald-300 p-4 rounded-lg space-y-1">
           <p className="font-semibold">{result.message}</p>
-          <p>Aeropuertos: {result.aeropuertosCount}</p>
-          <p>Vuelos: {result.vuelosCount}</p>
-          <p>Paquetes: {result.paquetesCount}</p>
+          {result.aeropuertosCount > 0 && <p>Aeropuertos cargados desde archivo: {result.aeropuertosCount}</p>}
+          {result.vuelosCount > 0 && <p>Vuelos cargados desde archivo: {result.vuelosCount}</p>}
+          <p>Envíos cargados desde archivo: {result.paquetesCount}</p>
         </div>
       )}
     </div>
   )
 }
 
-function FileInput({ label, onChange }: { label: string; onChange: (f: File | null) => void }) {
+function FileInput({
+  label,
+  onChange,
+  resetToken,
+}: {
+  label: string
+  onChange: (f: File | null) => void
+  resetToken: number
+}) {
   return (
     <div>
       <label className="block text-sm text-gray-400 mb-1">{label}</label>
       <input
+        key={resetToken}
         type="file"
         accept=".txt"
         onChange={(e) => onChange(e.target.files?.[0] ?? null)}
