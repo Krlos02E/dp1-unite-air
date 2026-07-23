@@ -76,14 +76,19 @@ public class CargaArchivosController {
                     origenDetectado,
                     timezoneCanonica
             );
-            return ResponseEntity.ok(Map.of(
-                    "success", result.success(),
-                    "message", result.message(),
-                    "aeropuertosCount", result.aeropuertosCount(),
-                    "vuelosCount", result.vuelosCount(),
-                    "paquetesCount", result.paquetesCount(),
-                    "datasetId", result.datasetId()
-            ));
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("success", result.success());
+            body.put("message", result.message());
+            body.put("aeropuertosCount", result.aeropuertosCount());
+            body.put("vuelosCount", result.vuelosCount());
+            body.put("paquetesCount", result.paquetesCount());
+            if (result.datasetId() != null) {
+                body.put("datasetId", result.datasetId());
+            }
+            if (!result.success()) {
+                return ResponseEntity.badRequest().body(body);
+            }
+            return ResponseEntity.ok(body);
         }
 
         try {
