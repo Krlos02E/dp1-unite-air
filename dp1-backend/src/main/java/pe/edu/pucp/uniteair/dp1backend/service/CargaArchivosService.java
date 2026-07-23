@@ -51,6 +51,7 @@ public class CargaArchivosService {
     private static final long REPLAN_OPERACION_INTERVAL_MS = 15_000L;
 
     private Dataset lastDataset;
+    private Dataset datasetBaseOperacion;
     private volatile EstadoOperacional estadoOperacional;
     private volatile Map<String, Integer> cargaVueloCache;
     private volatile Map<String, Ruta> rutasAsignadas = new HashMap<>();
@@ -97,6 +98,7 @@ public class CargaArchivosService {
             Files.createDirectories(tempDir.resolve("input/envios"));
             Dataset dataset = cargarDatasetEnTemp(tempDir, LocalDate.now(), 3);
             this.lastDataset = dataset;
+            this.datasetBaseOperacion = clonarDataset(dataset);
             this.estadoOperacional = null;
             this.cargaVueloCache = null;
             this.rutasAsignadas = new HashMap<>();
@@ -349,6 +351,17 @@ public class CargaArchivosService {
         );
     }
 
+    private Dataset clonarDataset(Dataset dataset) {
+        if (dataset == null) {
+            return null;
+        }
+        return new Dataset(
+                dataset.getAeropuertos(),
+                dataset.getVuelos(),
+                dataset.getPaquetes()
+        );
+    }
+
     private List<Paquete> parsearPaquetesCargaCompleta(
             MultipartFile archivo,
             String origenOaci,
@@ -411,6 +424,24 @@ public class CargaArchivosService {
 
     public synchronized Dataset obtenerUltimoDataset() {
         return lastDataset;
+    }
+
+    public synchronized void restaurarDatasetBaseOperacion() {
+        if (datasetBaseOperacion == null) {
+            return;
+        }
+        this.lastDataset = clonarDataset(datasetBaseOperacion);
+        this.paquetesIncrementales = new ArrayList<>();
+        this.contadorPaquetesIncrementales = 0;
+        this.usarPaquetesBaseEnOperacion = false;
+        this.rutasAsignadas = new HashMap<>();
+        this.rutasAnteriores = new HashMap<>();
+        this.asignacionesSplit = new HashMap<>();
+        this.estadoOperacional = null;
+        this.cargaVueloCache = null;
+        this.planificando = false;
+        this.replanificacionPendiente = false;
+        contextSyncStateService.touch(AlmacenContexto.OPERACION, "operacion-base-restaurada");
     }
 
     public synchronized void replanificarOperacionActual() {

@@ -24,7 +24,7 @@ public class OperacionContextService {
         programacionVueloService.limpiarContexto(AlmacenContexto.OPERACION);
         almacenService.limpiarContexto(AlmacenContexto.OPERACION);
         cargaArchivosService.limpiarVuelosCancelados(AlmacenContexto.OPERACION);
-        cargaArchivosService.limpiarOperacionDiaria();
+        cargaArchivosService.restaurarDatasetBaseOperacion();
         cargaArchivosService.replanificarOperacionActual();
     }
 }

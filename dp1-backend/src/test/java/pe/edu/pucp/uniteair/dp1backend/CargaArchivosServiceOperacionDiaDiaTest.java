@@ -111,6 +111,40 @@ class CargaArchivosServiceOperacionDiaDiaTest {
     }
 
     @Test
+    void restaurarDatasetBaseOperacionDebeEliminarSoloVuelosExtraCargadosPorTxt() throws Exception {
+        Dataset base = datasetOperacionDiaDia();
+        Vuelo vueloExtra = new Vuelo(
+                "TXT-LIM-BOG-999",
+                base.getAeropuerto("SPIM"),
+                base.getAeropuerto("SKBO"),
+                LocalDate.of(2026, 7, 23),
+                LocalTime.of(9, 0),
+                LocalTime.of(12, 0),
+                300
+        );
+        List<Vuelo> vuelosConExtra = new ArrayList<>(base.getVuelos());
+        vuelosConExtra.add(vueloExtra);
+        Dataset conExtra = new Dataset(base.getAeropuertos(), vuelosConExtra, base.getPaquetes());
+
+        CargaArchivosService service = crearService(conExtra);
+        setField(service, "datasetBaseOperacion", base);
+
+        service.restaurarDatasetBaseOperacion();
+
+        Dataset restaurado = service.obtenerUltimoDataset();
+        assertNotNull(restaurado);
+        assertEquals(
+                base.getVuelos().stream().map(Vuelo::getId).toList(),
+                restaurado.getVuelos().stream().map(Vuelo::getId).toList(),
+                "Al reiniciar operacion deben permanecer solo los vuelos base"
+        );
+        assertFalse(
+                restaurado.getVuelos().stream().anyMatch(v -> "TXT-LIM-BOG-999".equals(v.getId())),
+                "Los vuelos agregados por TXT deben eliminarse al reiniciar"
+        );
+    }
+
+    @Test
     void agregarEnviosManualDebeDispararReplanificacionOperativa() throws Exception {
         Dataset dataset = datasetOperacionDiaDia();
         CargaArchivosService service = crearService(dataset);
