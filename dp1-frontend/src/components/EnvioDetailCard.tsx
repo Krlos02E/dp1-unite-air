@@ -94,6 +94,14 @@ export default function EnvioDetailCard({
           <span className="text-gray-400">Cantidad</span>
           <span className="font-medium text-amber-300">{envio.cantidad}</span>
         </div>
+        {(envio.fechaRegistroLocal || envio.horaRegistroLocal) && (
+          <div className="flex justify-between gap-2">
+            <span className="text-gray-400">Registrado</span>
+            <span className="text-right font-medium text-gray-200">
+              {envio.fechaRegistroLocal || '--'} {envio.horaRegistroLocal?.slice(0, 5) || '--:--'}
+            </span>
+          </div>
+        )}
         {envio.clienteId && (
           <div className="flex justify-between gap-2">
             <span className="text-gray-400">Cliente</span>

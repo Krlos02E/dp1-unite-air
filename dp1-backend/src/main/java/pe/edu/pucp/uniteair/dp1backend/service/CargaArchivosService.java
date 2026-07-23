@@ -1335,11 +1335,14 @@ public class CargaArchivosService {
         Ruta ruta = rutasAsignadas.get(paquete.getId());
         Ruta rutaAnterior = rutasAnteriores.get(paquete.getId());
         EstadoEnvio e = computarEstado(paquete, ruta, ahoraUtc);
+        Map<String, String> registroLocal = construirRegistroLocal(paquete);
 
         Map<String, Object> result = new HashMap<>();
         result.put("id", paquete.getId());
         result.put("origen", paquete.getOrigenOACI());
         result.put("destino", paquete.getDestinoOACI());
+        result.put("fechaRegistroLocal", registroLocal.get("fecha"));
+        result.put("horaRegistroLocal", registroLocal.get("hora"));
         result.put("estado", e.estado());
         result.put("aeropuertoActual", e.aeropuertoActual());
         result.put("vueloEsperado", e.vueloEsperado());
@@ -1427,6 +1430,7 @@ public class CargaArchivosService {
             Ruta ruta = rutasAsignadas.get(p.getId());
             Ruta rutaAnterior = rutasAnteriores.get(p.getId());
             EstadoEnvio e = computarEstado(p, ruta, ahoraUtc);
+            Map<String, String> registroLocal = construirRegistroLocal(p);
 
             if (!estadosSet.contains(e.estado())) continue;
 
@@ -1439,6 +1443,8 @@ public class CargaArchivosService {
             envio.put("id", p.getId());
             envio.put("origen", p.getOrigenOACI());
             envio.put("destino", p.getDestinoOACI());
+            envio.put("fechaRegistroLocal", registroLocal.get("fecha"));
+            envio.put("horaRegistroLocal", registroLocal.get("hora"));
             envio.put("estado", e.estado());
             envio.put("aeropuertoActual", e.aeropuertoActual());
             envio.put("vueloEsperado", e.vueloEsperado());
@@ -1453,6 +1459,19 @@ public class CargaArchivosService {
         }
 
         return resultados;
+    }
+
+    private Map<String, String> construirRegistroLocal(Paquete paquete) {
+        Aeropuerto aeropuertoOrigen = lastDataset != null ? lastDataset.getAeropuerto(paquete.getOrigenOACI()) : null;
+        LocalDateTime registroUtc = LocalDateTime.of(paquete.getFecha(), paquete.getHora());
+        LocalDateTime registroLocal = aeropuertoOrigen != null
+                ? registroUtc.plusMinutes(aeropuertoOrigen.getGmtOffsetMinutos())
+                : registroUtc;
+
+        Map<String, String> registro = new HashMap<>();
+        registro.put("fecha", registroLocal.toLocalDate().toString());
+        registro.put("hora", registroLocal.toLocalTime().toString());
+        return registro;
     }
 
     public record EnvioEntrada(

@@ -199,6 +199,8 @@ export interface EnvioEstado {
   id: string;
   origen: string;
   destino: string;
+  fechaRegistroLocal?: string;
+  horaRegistroLocal?: string;
   clienteId?: string;
   estado: 'EN_ESPERA' | 'EMBARCADO' | 'EN_VUELO' | 'ENTREGADO';
   aeropuertoActual: string;

@@ -26,6 +26,10 @@ import java.util.Set;
 
 @Service
 public class AlmacenService {
+    private static final Map<String, Integer> OFFSETS_MINUTOS_CORREGIDOS = Map.of(
+            "VIDP", 330,
+            "OAKB", 270
+    );
 
     private final AlmacenRepository almacenRepository;
     private final AlmacenConfiguracionRepository almacenConfiguracionRepository;
@@ -67,7 +71,7 @@ public class AlmacenService {
                             String ciudad = linea.substring(8, 24).trim();
                             String pais = linea.substring(24, 40).trim();
                             String gmtStr = linea.substring(40, 48).trim();
-                            int gmtOffset = parseGmtOffset(gmtStr);
+                            int gmtOffset = parseGmtOffset(codigo, gmtStr);
                             String capStr = linea.substring(48, 60).trim();
                             int capacidad = Integer.parseInt(capStr);
                             double[] coord = AeropuertoCoordenadas.get(codigo);
@@ -118,15 +122,30 @@ public class AlmacenService {
         }
     }
 
-    private int parseGmtOffset(String gmtStr) {
+    private int parseGmtOffset(String codigoOaci, String gmtStr) {
         try {
             gmtStr = gmtStr.trim();
             if (gmtStr.isEmpty()) return 0;
             boolean negativo = gmtStr.startsWith("-");
             String num = gmtStr.replaceAll("[^\\d]", "");
             if (num.isEmpty()) return 0;
+            int sign = negativo ? -1 : 1;
+
+            if (num.length() <= 2) {
+                Integer corregido = OFFSETS_MINUTOS_CORREGIDOS.get(codigoOaci);
+                if (corregido != null) {
+                    return corregido;
+                }
+                return sign * Integer.parseInt(num) * 60;
+            }
+
             int val = Integer.parseInt(num);
-            return negativo ? -val : val;
+            int horas = val / 100;
+            int minutos = val % 100;
+            if (minutos >= 60) {
+                return 0;
+            }
+            return sign * (horas * 60 + minutos);
         } catch (Exception e) {
             return 0;
         }

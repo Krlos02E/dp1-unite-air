@@ -473,6 +473,11 @@ export default function EnvioListPanel({
                     <div className="text-[10px] text-violet-300/80">
                       {envio.cantidad} maleta{envio.cantidad !== 1 ? 's' : ''}
                     </div>
+                    {(envio.fechaRegistroLocal || envio.horaRegistroLocal) && (
+                      <div className="text-[10px] text-gray-500">
+                        Registrado: {envio.fechaRegistroLocal || '--'} {envio.horaRegistroLocal?.slice(0, 5) || '--:--'}
+                      </div>
+                    )}
                   </div>
                   <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap ${estadoColor[envio.estado] || 'text-gray-500'}`}>
                     {estadoLabel[envio.estado] || envio.estado}
