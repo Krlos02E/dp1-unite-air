@@ -63,12 +63,19 @@ public class CargaArchivosController {
             @RequestParam("timezone") String timezone,
             @RequestParam("envios") MultipartFile envios) {
         String origenDetectado = inferirOrigenPorTimezone(timezone);
+        String timezoneCanonica = TimezoneSedeResolver.normalizarTimezoneCanonica(timezone);
 
         boolean tieneDatasetCompleto = (planesVuelo != null && !planesVuelo.isEmpty())
                 || (aeropuertos != null && !aeropuertos.isEmpty());
 
         if (tieneDatasetCompleto) {
-            var result = cargaArchivosService.cargarArchivos(planesVuelo, aeropuertos, envios, origenDetectado);
+            var result = cargaArchivosService.cargarArchivos(
+                    planesVuelo,
+                    aeropuertos,
+                    envios,
+                    origenDetectado,
+                    timezoneCanonica
+            );
             return ResponseEntity.ok(Map.of(
                     "success", result.success(),
                     "message", result.message(),

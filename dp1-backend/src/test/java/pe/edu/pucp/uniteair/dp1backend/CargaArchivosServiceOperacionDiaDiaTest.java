@@ -106,7 +106,8 @@ class CargaArchivosServiceOperacionDiaDiaTest {
                 multipart("planes_vuelo.txt", "SPIM-SKBO-09:00-12:00-0005\n"),
                 null,
                 multipart("_envios_SPIM_.txt", "MANUAL-%s-08-35-SKBO-001-0007729\n".formatted(fecha)),
-                "SPIM"
+                "SPIM",
+                "America/Lima"
         );
 
         assertTrue(result.success(), "La carga con planes de vuelo debe completarse correctamente");

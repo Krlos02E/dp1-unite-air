@@ -38,6 +38,7 @@ import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -210,7 +211,8 @@ public class CargaArchivosService {
             MultipartFile planesVuelo,
             MultipartFile aeropuertosFile,
             MultipartFile envios,
-            String origenEnviosOaci
+            String origenEnviosOaci,
+            String timezoneCanonica
     ) {
         try {
             Path tempDir = Files.createTempDirectory("carga_");
@@ -226,7 +228,8 @@ public class CargaArchivosService {
                 saveToTemp(tempDir.resolve("input").resolve("envios"), envios, "_envios_" + origenNormalizado + "_.txt");
             }
 
-            LocalDate fechaInicio = LocalDate.now();
+            ZoneId zonaOperacion = resolverZonaOperacion(timezoneCanonica);
+            LocalDate fechaInicio = LocalDate.now(zonaOperacion);
             Set<LocalDate> fechasFiltro = generarFechasSimulacion(fechaInicio, 3);
             Dataset dataset = DatasetTextoLoader.cargarDataset(tempDir, fechaInicio, 3, 50000, fechasFiltro);
 
@@ -255,6 +258,13 @@ public class CargaArchivosService {
         } catch (Exception e) {
             return new CargaResult(false, "Error al cargar archivos: " + e.getMessage(), 0, 0, 0, null);
         }
+    }
+
+    private ZoneId resolverZonaOperacion(String timezoneCanonica) {
+        if (timezoneCanonica == null || timezoneCanonica.isBlank()) {
+            return ZoneId.of("UTC");
+        }
+        return ZoneId.of(timezoneCanonica);
     }
 
     public synchronized Dataset obtenerUltimoDataset() {
