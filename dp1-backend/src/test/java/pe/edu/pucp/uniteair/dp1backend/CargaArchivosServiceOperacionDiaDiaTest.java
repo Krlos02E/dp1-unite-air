@@ -97,6 +97,20 @@ class CargaArchivosServiceOperacionDiaDiaTest {
     }
 
     @Test
+    void cargarDatasetPorDefectoDebeIncluirVuelosBaseSinArrastrarEnvios() throws Exception {
+        CargaArchivosService service = crearService(null);
+
+        service.cargarDatasetPorDefecto();
+
+        Dataset dataset = service.obtenerUltimoDataset();
+        assertNotNull(dataset, "La carga por defecto debe inicializar un dataset operativo");
+        assertFalse(dataset.getVuelos().isEmpty(),
+                "Operacion Dia a Dia debe arrancar con los vuelos usuales base");
+        assertTrue(dataset.getPaquetes().isEmpty(),
+                "Operacion Dia a Dia no debe arrastrar envios historicos al inicializar el dataset base");
+    }
+
+    @Test
     void cargarPlanesDeVueloNoDebeArrastrarEnviosBaseDelDatasetHistorico() throws Exception {
         CargaArchivosService service = crearService(datasetOperacionDiaDia());
 

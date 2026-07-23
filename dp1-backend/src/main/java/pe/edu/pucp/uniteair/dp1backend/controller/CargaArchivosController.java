@@ -284,7 +284,6 @@ public class CargaArchivosController {
         }
 
         Set<String> vuelosCancelados = cargaArchivosService.obtenerVuelosCancelados(contexto);
-        boolean operacionSoloManual = contexto == AlmacenContexto.OPERACION && !cargaArchivosService.usaPaquetesBaseEnOperacion();
         LocalDateTime ahora = referenciaUtc != null ? referenciaUtc : relojOperativoService.obtenerTiempoActualUtc();
         Map<String, Almacen> almacenMap = almacenService.getMapaAlmacenes(contexto);
         List<VueloDTO> vuelos = new ArrayList<>();
@@ -313,10 +312,6 @@ public class CargaArchivosController {
             }
 
             boolean editable = v.getId() != null && v.getId().startsWith("USR-");
-            if (operacionSoloManual && carga <= 0 && !editable && !vuelosCancelados.contains(v.getId())) {
-                continue;
-            }
-
             vuelos.add(VueloDTO.builder()
                     .id(v.getId())
                     .origen(v.getOrigen().getCodigoOACI())

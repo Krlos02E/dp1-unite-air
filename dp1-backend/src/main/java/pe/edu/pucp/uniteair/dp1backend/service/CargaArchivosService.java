@@ -91,7 +91,8 @@ public class CargaArchivosService {
         if (this.lastDataset != null) return;
         try {
             Path tempDir = Files.createTempDirectory("default_carga_");
-            prepararDatasetOperacionVacio(tempDir);
+            copiarRecursosACarpeta(tempDir, true, false);
+            Files.createDirectories(tempDir.resolve("input/envios"));
             Dataset dataset = cargarDatasetEnTemp(tempDir, LocalDate.now(), 3);
             this.lastDataset = dataset;
             this.estadoOperacional = null;
