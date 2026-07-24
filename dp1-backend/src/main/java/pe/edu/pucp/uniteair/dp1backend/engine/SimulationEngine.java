@@ -48,6 +48,7 @@ public class SimulationEngine {
     private static final int ROLLING_LOOKAHEAD_MINUTES = 120;
     private static final int FLIGHT_WINDOW_LOOKBACK_HOURS = 24;
     private static final int FLIGHT_WINDOW_FORWARD_BUFFER_HOURS = 48;
+    private static final int DESTINATION_PICKUP_MINUTES = 15;
 
     private final SimulationCache simulationCache;
     private final SimulationSessionRepository sessionRepository;
@@ -335,7 +336,7 @@ public class SimulationEngine {
                     Ruta ruta = entry.getValue();
                     if (ruta == null || ruta.getVuelos().isEmpty()) continue;
                     Vuelo ultimo = ruta.getVuelos().get(ruta.getVuelos().size() - 1);
-                    if (simTimeActual.isAfter(ultimo.getLlegadaUtc().plusMinutes(15))) {
+                    if (simTimeActual.isAfter(ultimo.getLlegadaUtc().plusMinutes(DESTINATION_PICKUP_MINUTES))) {
                         rutasEntregadas.add(entry.getKey());
                     }
                 }
@@ -403,7 +404,7 @@ public class SimulationEngine {
                         Ruta ruta = entry.getValue();
                         if (!ruta.getVuelos().isEmpty()) {
                             Vuelo ultimo = ruta.getVuelos().get(ruta.getVuelos().size() - 1);
-                            LocalDateTime tiempoEntrega = ultimo.getLlegadaUtc().plusMinutes(15);
+                            LocalDateTime tiempoEntrega = ultimo.getLlegadaUtc().plusMinutes(DESTINATION_PICKUP_MINUTES);
                             if (simTime.isAfter(tiempoEntrega)) {
                                 maletasEntregadas += cantidad;
                                 maletasEnTransito -= cantidad;
@@ -827,9 +828,12 @@ public class SimulationEngine {
                 estado = "EN_VUELO";
                 vueloActual = vueloEnCurso.getId();
                 aeropuertoActual = vueloEnCurso.getOrigen().getCodigoOACI();
-            } else if (simTime.isAfter(vuelosRuta.get(vuelosRuta.size() - 1).getLlegadaUtc())) {
-                estado = "ENTREGADO";
+            } else if (!simTime.isBefore(vuelosRuta.get(vuelosRuta.size() - 1).getLlegadaUtc())) {
+                LocalDateTime tiempoEntrega = vuelosRuta.get(vuelosRuta.size() - 1)
+                        .getLlegadaUtc()
+                        .plusMinutes(DESTINATION_PICKUP_MINUTES);
                 aeropuertoActual = paquete.getDestinoOACI();
+                estado = simTime.isAfter(tiempoEntrega) ? "ENTREGADO" : "EN_ESPERA";
             } else if (proximoVuelo != null) {
                 estado = "EMBARCADO";
                 vueloEsperado = proximoVuelo.getId();
@@ -1080,7 +1084,13 @@ public class SimulationEngine {
             }
 
             Vuelo ultimo = vuelosRuta.get(vuelosRuta.size() - 1);
-            if (simTime.isAfter(ultimo.getLlegadaUtc())) {
+            LocalDateTime tiempoEntrega = ultimo.getLlegadaUtc().plusMinutes(DESTINATION_PICKUP_MINUTES);
+            if (!simTime.isBefore(ultimo.getLlegadaUtc()) && !simTime.isAfter(tiempoEntrega)) {
+                enTransito += cantidad;
+                continue;
+            }
+
+            if (simTime.isAfter(tiempoEntrega)) {
                 entregadas += cantidad;
             }
         }
@@ -1328,9 +1338,12 @@ public class SimulationEngine {
                         estado = "EN_VUELO";
                         vueloActual = vueloEnCurso.getId();
                         aeropuertoActual = vueloEnCurso.getOrigen().getCodigoOACI();
-                    } else if (simTime.isAfter(vuelosRuta.get(vuelosRuta.size() - 1).getLlegadaUtc())) {
-                        estado = "ENTREGADO";
+                    } else if (!simTime.isBefore(vuelosRuta.get(vuelosRuta.size() - 1).getLlegadaUtc())) {
+                        LocalDateTime tiempoEntrega = vuelosRuta.get(vuelosRuta.size() - 1)
+                                .getLlegadaUtc()
+                                .plusMinutes(DESTINATION_PICKUP_MINUTES);
                         aeropuertoActual = paquete.getDestinoOACI();
+                        estado = simTime.isAfter(tiempoEntrega) ? "ENTREGADO" : "EN_ESPERA";
                     } else if (proximoVuelo != null) {
                         estado = "EMBARCADO";
                         vueloEsperado = proximoVuelo.getId();

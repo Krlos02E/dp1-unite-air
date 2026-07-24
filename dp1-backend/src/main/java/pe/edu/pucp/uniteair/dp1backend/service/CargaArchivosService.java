@@ -49,6 +49,7 @@ import java.util.stream.IntStream;
 public class CargaArchivosService {
     public static final String CLIENTE_PRUEBA_OPERACION_DIARIA = "0007729";
     private static final long REPLAN_OPERACION_INTERVAL_MS = 15_000L;
+    private static final long TIEMPO_RECOGIDA_DESTINO_MINUTOS = 15L;
 
     private Dataset lastDataset;
     private Dataset datasetBaseOperacion;
@@ -567,7 +568,9 @@ public class CargaArchivosService {
             for (Paquete paquete : paquetes) {
                 Ruta rutaActual = rutasAsignadas.get(paquete.getId());
                 EstadoEnvio estadoActual = computarEstado(paquete, rutaActual, ahoraUtc);
-                if ("EN_VUELO".equals(estadoActual.estado()) || "ENTREGADO".equals(estadoActual.estado())) {
+                if ("EN_VUELO".equals(estadoActual.estado())
+                        || "ENTREGADO".equals(estadoActual.estado())
+                        || estaEsperandoRecogidaEnDestinoFinal(paquete, estadoActual)) {
                     if (rutaActual != null) {
                         rutasPreservadas.put(paquete.getId(), rutaActual);
                     }
@@ -671,11 +674,22 @@ public class CargaArchivosService {
         }
 
         LocalDateTime ultimaLlegada = vuelosRuta.get(vuelosRuta.size() - 1).getLlegadaUtc();
-        if (ahoraUtc.isAfter(ultimaLlegada)) {
+        LocalDateTime tiempoEntrega = ultimaLlegada.plusMinutes(TIEMPO_RECOGIDA_DESTINO_MINUTOS);
+        if (ahoraUtc.isAfter(tiempoEntrega)) {
             return new EstadoEnvio(
                 "ENTREGADO",
                 paquete.getDestinoOACI(),
                 null, null,
+                ultimaLlegada
+            );
+        }
+
+        if (!ahoraUtc.isBefore(ultimaLlegada)) {
+            return new EstadoEnvio(
+                "EN_ESPERA",
+                paquete.getDestinoOACI(),
+                null,
+                null,
                 ultimaLlegada
             );
         }
@@ -691,6 +705,15 @@ public class CargaArchivosService {
         }
 
         return new EstadoEnvio("EN_ESPERA", paquete.getOrigenOACI(), null, null, null);
+    }
+
+    private boolean estaEsperandoRecogidaEnDestinoFinal(Paquete paquete, EstadoEnvio estado) {
+        if (paquete == null || estado == null) {
+            return false;
+        }
+        return "EN_ESPERA".equals(estado.estado())
+                && paquete.getDestinoOACI().equals(estado.aeropuertoActual())
+                && estado.ultimaLlegada() != null;
     }
 
     private List<String> construirRutaAeropuertos(Paquete paquete, Ruta ruta) {
@@ -839,6 +862,9 @@ public class CargaArchivosService {
         for (Paquete p : paquetesPlanificables) {
             Ruta ruta = rutasAsignadas.get(p.getId());
             EstadoEnvio e = computarEstado(p, ruta, ahoraUtc);
+            if (estaEsperandoRecogidaEnDestinoFinal(p, e)) {
+                continue;
+            }
             if ("EN_ESPERA".equals(e.estado()) || "EMBARCADO".equals(e.estado())) {
                 pendientes.add(p);
             }
@@ -968,7 +994,8 @@ public class CargaArchivosService {
             String paqueteId = entry.getKey();
             Ruta ruta = entry.getValue();
             List<Vuelo> vuelos = ruta.getVuelos();
-            if (!vuelos.isEmpty() && !ahora.isBefore(vuelos.get(vuelos.size() - 1).getLlegadaUtc())) {
+            if (!vuelos.isEmpty()
+                    && ahora.isAfter(vuelos.get(vuelos.size() - 1).getLlegadaUtc().plusMinutes(TIEMPO_RECOGIDA_DESTINO_MINUTOS))) {
                 entregados.add(paqueteId);
             }
         }
