@@ -1,5 +1,9 @@
+import { useEffect, useMemo, useState } from 'react'
 import { getAirportCityCountry } from '../data/airportsData'
 import type { EnvioEstado, MaletaEstado } from '../types'
+
+const INITIAL_VISIBLE_BAGS = 50
+const VISIBLE_BAGS_STEP = 50
 
 interface Props {
   envio: EnvioEstado
@@ -38,6 +42,7 @@ export default function EnvioDetailCard({
   onMaletaSelect,
   compact = false,
 }: Props) {
+  const [visibleBagCount, setVisibleBagCount] = useState(INITIAL_VISIBLE_BAGS)
   const estadoInfo = estadoLabels[envio.estado] || { label: envio.estado, color: 'text-gray-400' }
   const origenInfo = getAirportCityCountry(envio.origen)
   const destinoInfo = getAirportCityCountry(envio.destino)
@@ -60,9 +65,18 @@ export default function EnvioDetailCard({
   const rutaVuelos = routeMode === 'anterior'
     ? (envio.rutaAnteriorVuelos || [])
     : (envio.rutaVuelos || [])
-  const maletasDelEnvio = maletas
-    .filter((maleta) => maleta.envioId === envio.id)
-    .sort((a, b) => a.indice - b.indice)
+  const maletasDelEnvio = useMemo(
+    () => maletas
+      .filter((maleta) => maleta.envioId === envio.id)
+      .sort((a, b) => a.indice - b.indice),
+    [envio.id, maletas],
+  )
+  const visibleMaletas = maletasDelEnvio.slice(0, visibleBagCount)
+  const hasMoreMaletas = visibleMaletas.length < maletasDelEnvio.length
+
+  useEffect(() => {
+    setVisibleBagCount(INITIAL_VISIBLE_BAGS)
+  }, [envio.id])
 
   return (
     <div className={`${compact ? 'rounded-none border-0 bg-transparent p-3' : 'mx-3 mt-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3'}`}>
@@ -230,36 +244,67 @@ export default function EnvioDetailCard({
               No hay maletas asociadas visibles para este envío.
             </p>
           ) : (
-            <div className="max-h-44 space-y-1 overflow-y-auto pr-1">
-              {maletasDelEnvio.map((maleta) => {
-                const isSelected = maleta.id === selectedMaletaId
-                return (
+            <div className="space-y-2">
+              {maletasDelEnvio.length > INITIAL_VISIBLE_BAGS && (
+                <div className="flex items-center justify-between gap-2 text-[10px] text-gray-500">
+                  <span>
+                    Mostrando {visibleMaletas.length} de {maletasDelEnvio.length} maletas
+                  </span>
                   <button
-                    key={maleta.id}
                     type="button"
-                    onClick={() => onMaletaSelect?.(maleta)}
-                    className={`w-full rounded-lg border px-2.5 py-2 text-left transition-colors ${
-                      isSelected
-                        ? 'border-sky-500/50 bg-sky-500/15'
-                        : 'border-gray-800 bg-gray-900/80 hover:bg-gray-800/80'
-                    }`}
+                    onClick={() => setVisibleBagCount(INITIAL_VISIBLE_BAGS)}
+                    disabled={visibleBagCount <= INITIAL_VISIBLE_BAGS}
+                    className="text-sky-400 transition-colors hover:text-sky-300 disabled:cursor-not-allowed disabled:text-gray-600"
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="truncate text-[11px] font-medium text-gray-200" title={maleta.id}>
-                          {maleta.id}
-                        </div>
-                        <div className="mt-0.5 text-[10px] text-gray-500">
-                          Subruta {maleta.subrutaIndex || 1} · Índice {maleta.indice}
-                        </div>
-                      </div>
-                      <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-medium whitespace-nowrap ${maletaEstadoColors[maleta.estado] || 'text-gray-500'}`}>
-                        {estadoLabels[maleta.estado]?.label || maleta.estado}
-                      </span>
-                    </div>
+                    Reiniciar vista
                   </button>
-                )
-              })}
+                </div>
+              )}
+              <div className="max-h-44 space-y-1 overflow-y-auto pr-1">
+                {visibleMaletas.map((maleta) => {
+                  const isSelected = maleta.id === selectedMaletaId
+                  return (
+                    <button
+                      key={maleta.id}
+                      type="button"
+                      onClick={() => onMaletaSelect?.(maleta)}
+                      className={`w-full rounded-lg border px-2.5 py-2 text-left transition-colors ${
+                        isSelected
+                          ? 'border-sky-500/50 bg-sky-500/15'
+                          : 'border-gray-800 bg-gray-900/80 hover:bg-gray-800/80'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="truncate text-[11px] font-medium text-gray-200" title={maleta.id}>
+                            {maleta.id}
+                          </div>
+                          <div className="mt-0.5 text-[10px] text-gray-500">
+                            Subruta {maleta.subrutaIndex || 1} · Índice {maleta.indice}
+                          </div>
+                        </div>
+                        <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-medium whitespace-nowrap ${maletaEstadoColors[maleta.estado] || 'text-gray-500'}`}>
+                          {estadoLabels[maleta.estado]?.label || maleta.estado}
+                        </span>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+              {hasMoreMaletas && (
+                <button
+                  type="button"
+                  onClick={() => setVisibleBagCount((current) => Math.min(current + VISIBLE_BAGS_STEP, maletasDelEnvio.length))}
+                  className="w-full rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-[11px] font-medium text-sky-300 transition-colors hover:bg-sky-500/15 hover:text-sky-200"
+                >
+                  Mostrar 50 más
+                </button>
+              )}
+              {!hasMoreMaletas && maletasDelEnvio.length > INITIAL_VISIBLE_BAGS && (
+                <p className="text-center text-[10px] text-gray-500">
+                  Se muestran todas las maletas del envío.
+                </p>
+              )}
             </div>
           )}
         </div>
