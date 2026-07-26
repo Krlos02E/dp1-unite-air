@@ -53,7 +53,6 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 
 function CargaArchivosTab() {
   const [planesVuelo, setPlanesVuelo] = useState<File | null>(null)
-  const [aeropuertos, setAeropuertos] = useState<File | null>(null)
   const [envios, setEnvios] = useState<File | null>(null)
   const [fileInputResetToken, setFileInputResetToken] = useState(0)
   const [uploading, setUploading] = useState(false)
@@ -64,12 +63,9 @@ function CargaArchivosTab() {
   const selectedStation = stationState.station
   const timezone = selectedStation?.canonicalTimezone ?? 'UTC'
   const origenDetectado = selectedStation?.airportCode ?? null
-  const tieneArchivos = Boolean(planesVuelo || aeropuertos || envios)
+  const tieneArchivos = Boolean(planesVuelo || envios)
   const requiereOrigenDetectado = Boolean(envios)
   const uploadDisabled = uploading || !tieneArchivos || (requiereOrigenDetectado && !origenDetectado)
-  const archivosSeleccionados = [planesVuelo, aeropuertos, envios].filter(Boolean).length
-  const puedeSubirSoloOperacion = Boolean(planesVuelo || aeropuertos)
-  const puedeSubirEnvios = Boolean(envios && origenDetectado)
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -99,7 +95,6 @@ function CargaArchivosTab() {
       const res = await cargaArchivosService.upload(
         {
           planes_vuelo: planesVuelo ?? undefined,
-          aeropuertos: aeropuertos ?? undefined,
           envios: envios ?? undefined,
         },
         timezone,
@@ -107,7 +102,6 @@ function CargaArchivosTab() {
       )
       setResult(res)
       setPlanesVuelo(null)
-      setAeropuertos(null)
       setEnvios(null)
       setFileInputResetToken((current) => current + 1)
     } catch (e: any) {
@@ -120,14 +114,6 @@ function CargaArchivosTab() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-sky-800/70 bg-sky-950/30 p-4 text-sm text-sky-100">
-        <p className="font-semibold text-sky-200">Puedes subir cualquier archivo por separado</p>
-        <p className="mt-1 text-sky-100/80">
-          `planes_vuelo.txt`, `aeropuerto.txt` y `envios.txt` son independientes. Solo el archivo de envíos
-          necesita detectar la sede de origen.
-        </p>
-      </div>
-
       <StationSelectorCard
         browserTimezone={stationState.browserTimezone}
         selectedStation={selectedStation}
@@ -136,75 +122,42 @@ function CargaArchivosTab() {
         airportLabel="Origen usado para la carga"
       />
 
-      <div className="rounded-xl border border-gray-800 bg-gray-950/50 p-4 space-y-3">
-        <div>
-          <h3 className="text-sm font-semibold text-gray-100">Carga operativa</h3>
-          <p className="text-sm text-gray-400">
-            Puedes subir vuelos, aeropuertos o ambos. No depende del archivo de envíos.
-          </p>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-xl border border-gray-800 bg-gray-950/50 p-4 space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-100">Subir vuelos</h3>
+            <p className="text-sm text-gray-400">Formato `.txt`</p>
+          </div>
+          <FileInput
+            label="Archivo de vuelos"
+            file={planesVuelo}
+            onChange={setPlanesVuelo}
+            resetToken={fileInputResetToken}
+          />
         </div>
-        <FileInput
-          label="Archivo de vuelos"
-          hint="`planes_vuelo.txt`"
-          file={planesVuelo}
-          onChange={setPlanesVuelo}
-          resetToken={fileInputResetToken}
-        />
-        <FileInput
-          label="Archivo de aeropuertos"
-          hint="`aeropuerto.txt`"
-          file={aeropuertos}
-          onChange={setAeropuertos}
-          resetToken={fileInputResetToken}
-        />
-      </div>
 
-      <div className="rounded-xl border border-gray-800 bg-gray-950/50 p-4 space-y-3">
-        <div>
-          <h3 className="text-sm font-semibold text-gray-100">Carga de envíos</h3>
-          <p className="text-sm text-gray-400">
-            Este archivo también se puede subir solo, pero usa el aeropuerto detectado para esta sede.
-          </p>
+        <div className="rounded-xl border border-gray-800 bg-gray-950/50 p-4 space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-100">Subir envíos</h3>
+            <p className="text-sm text-gray-400">Formato `.txt`</p>
+          </div>
+          <FileInput
+            label="Archivo de envíos"
+            file={envios}
+            onChange={setEnvios}
+            resetToken={fileInputResetToken}
+          />
+          {requiereOrigenDetectado && !origenDetectado && (
+            <p className="text-sm text-amber-300">
+              Falta detectar el origen de esta sede para cargar envíos.
+            </p>
+          )}
         </div>
-        <FileInput
-          label="Archivo de envíos"
-          hint="`.txt`"
-          file={envios}
-          onChange={setEnvios}
-          resetToken={fileInputResetToken}
-        />
-      </div>
-
-      <div className="rounded-xl border border-gray-800 bg-gray-950/50 p-4 space-y-2 text-sm">
-        <p className="font-semibold text-gray-100">Resumen de carga</p>
-        <p className="text-gray-300">
-          {archivosSeleccionados === 0
-            ? 'Aún no has seleccionado archivos.'
-            : `Has seleccionado ${archivosSeleccionados} archivo${archivosSeleccionados === 1 ? '' : 's'}.`}
-        </p>
-        <p className={puedeSubirSoloOperacion ? 'text-emerald-300' : 'text-gray-400'}>
-          {puedeSubirSoloOperacion
-            ? 'Carga operativa lista para subir.'
-            : 'Sin archivos operativos seleccionados todavía.'}
-        </p>
-        <p className={puedeSubirEnvios ? 'text-emerald-300' : requiereOrigenDetectado ? 'text-amber-300' : 'text-gray-400'}>
-          {puedeSubirEnvios
-            ? `Carga de envíos lista con origen ${origenDetectado}.`
-            : requiereOrigenDetectado
-              ? 'Seleccionaste envíos, pero falta confirmar el origen detectado.'
-              : 'No hay archivo de envíos seleccionado.'}
-        </p>
       </div>
 
       {!tieneArchivos && (
-        <div className="bg-amber-900/40 border border-amber-700 text-amber-200 p-3 rounded-lg text-sm">
-          Puedes subir solo uno si quieres. Solo necesitamos que selecciones al menos un archivo.
-        </div>
-      )}
-
-      {requiereOrigenDetectado && !origenDetectado && (
-        <div className="bg-amber-900/40 border border-amber-700 text-amber-200 p-3 rounded-lg text-sm">
-          Para subir envíos necesitamos identificar el aeropuerto de origen de esta sede.
+        <div className="text-sm text-gray-400">
+          Selecciona al menos un archivo para continuar.
         </div>
       )}
 
@@ -266,9 +219,7 @@ function FileInput({
         onChange={(e) => onChange(e.target.files?.[0] ?? null)}
         className="w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-gray-700 file:text-gray-200 hover:file:bg-gray-600 cursor-pointer"
       />
-      <p className={`mt-1 text-sm ${file ? 'text-emerald-300' : 'text-gray-500'}`}>
-        {file ? `Seleccionado: ${file.name}` : 'Ningún archivo seleccionado'}
-      </p>
+      {file ? <p className="mt-1 text-sm text-emerald-300">{file.name}</p> : null}
     </div>
   )
 }
