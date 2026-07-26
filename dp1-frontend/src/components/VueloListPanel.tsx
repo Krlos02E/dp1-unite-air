@@ -464,7 +464,9 @@ function VueloListPanel({
     }
     await refreshProgramaciones()
     setFlightMessage({ tipo: 'success', texto: 'UT guardada correctamente' })
-    await onDataChanged?.()
+    if (contexto === 'SIMULACION') {
+      await onDataChanged?.()
+    }
     if (contexto === 'SIMULACION' && includeProgrammed) {
       setFilterEstado('PROGRAMADO')
       setProgramacionesExpanded(true)
@@ -479,7 +481,9 @@ function VueloListPanel({
     await cargaArchivosService.eliminarProgramacionVuelo(id, contexto)
     await refreshProgramaciones()
     setFlightMessage({ tipo: 'success', texto: 'UT eliminada correctamente' })
-    await onDataChanged?.()
+    if (contexto === 'SIMULACION') {
+      await onDataChanged?.()
+    }
     if (contexto === 'OPERACION' && onDataChanged) {
       await scheduleOperationalRefresh('UT eliminada. Los vuelos operativos se actualizarán después de la próxima replanificación programada.')
     }
