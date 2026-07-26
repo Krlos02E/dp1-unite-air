@@ -9,17 +9,25 @@ import pe.edu.pucp.uniteair.dp1backend.entity.PlanificacionLog;
 import pe.edu.pucp.uniteair.dp1backend.entity.AlmacenContexto;
 import pe.edu.pucp.uniteair.dp1backend.repository.PlanificacionLogRepository;
 import tasf.config.Config_Simulacion;
+import tasf.core.AsignacionPaquete;
 import tasf.core.Dataset;
+import tasf.core.EstadoOperacional;
 import tasf.core.PlanificacionUtils;
+import tasf.core.RouteFinder;
 import tasf.core.Solucion;
-import tasf.strategy.TwoPhaseOrchestrator;
-import tasf.strategy.alns.ALNS_RutasPlanner;
+import tasf.core.RutaConCantidad;
+import tasf.model.Paquete;
+import tasf.model.Ruta;
+import tasf.strategy.alns.ALNS_Strategy;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -89,31 +97,36 @@ public class PlanificacionPeriodicaService {
 
             Config_Simulacion config = crearConfiguracion();
             PlanificacionUtils.limpiarCacheGlobal();
-            TwoPhaseOrchestrator orchestrator = new TwoPhaseOrchestrator(new ALNS_RutasPlanner());
-            Solucion solucion = orchestrator.ejecutarFlujoCompleto(datasetFiltrado, config);
+            Solucion solucion = new ALNS_Strategy().planificar(datasetFiltrado, config);
+
+            int paquetesConRuta = solucion.getRutasAsignadas().size();
+            int paquetesSinRuta = solucion.getPaquetesNoAsignados().size();
+            int maletasAsignadas = solucion.getMaletasAsignadas();
 
             long duracionMs = (System.nanoTime() - startTime) / 1_000_000;
 
             cargaArchivosService.actualizarEstadoOperacional(solucion, datasetFiltrado, config);
+            registrarDiagnosticoAsignacionesParciales(datasetFiltrado, config, solucion);
 
             String detallesJson = convertirMetricasJson(solucion.getMetricas());
             registrarLog(
                     ahora,
                     duracionMs,
                     datasetFiltrado.getPaquetes().size(),
-                    solucion.getRutasAsignadas().size(),
-                    solucion.getPaquetesNoAsignados().size(),
+                    paquetesConRuta,
+                    paquetesSinRuta,
                     solucion.getCostoTotal(),
                     "EXITOSO",
                     null,
                     detallesJson
             );
 
-            log.info("[PlanificacionPeriodica] Completada en {} ms. Asignados: {}/{}, No asignados: {}, Costo: {}",
+            log.info("[PlanificacionPeriodica] Completada en {} ms. Paquetes con ruta: {}/{}, No asignados: {}, Maletas asignadas: {}, Costo: {}",
                     duracionMs,
-                    solucion.getRutasAsignadas().size(),
+                    paquetesConRuta,
                     datasetFiltrado.getPaquetes().size(),
-                    solucion.getPaquetesNoAsignados().size(),
+                    paquetesSinRuta,
+                    maletasAsignadas,
                     String.format("%.2f", solucion.getCostoTotal()));
 
         } catch (Exception e) {
@@ -199,5 +212,89 @@ public class PlanificacionPeriodicaService {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
+    }
+
+    private void registrarDiagnosticoAsignacionesParciales(
+            Dataset dataset,
+            Config_Simulacion config,
+            Solucion solucion
+    ) {
+        List<Paquete> parciales = new ArrayList<>();
+        for (Paquete paquete : dataset.getPaquetes()) {
+            AsignacionPaquete asignacion = solucion.getAsignacionesSplit().get(paquete.getId());
+            int asignado = asignacion != null ? asignacion.cantidadAsignada() : 0;
+            if (asignado > 0 && asignado < paquete.getCantidad()) {
+                parciales.add(paquete);
+            }
+        }
+
+        if (parciales.isEmpty()) {
+            return;
+        }
+
+        RouteFinder finder = new RouteFinder(dataset);
+        Map<String, List<Ruta>> candidatos = PlanificacionUtils.construirCandidatosRutas(dataset, config, finder);
+        EstadoOperacional estadoFinal = PlanificacionUtils.construirEstadoConAsignacionesSplit(
+                solucion.getAsignacionesSplit(),
+                dataset,
+                config
+        );
+
+        for (Paquete paquete : parciales) {
+            AsignacionPaquete asignacion = solucion.getAsignacionesSplit().get(paquete.getId());
+            int asignado = asignacion != null ? asignacion.cantidadAsignada() : 0;
+            int faltante = paquete.getCantidad() - asignado;
+            List<Ruta> rutasCandidatas = candidatos.getOrDefault(paquete.getId(), List.of());
+            LocalDateTime creacionUtc = PlanificacionUtils.getCreacionUtc(paquete, dataset, config);
+
+            String rutasAsignadas = asignacion == null
+                    ? "-"
+                    : asignacion.getRutas().stream()
+                            .map(this::resumirRutaAsignada)
+                            .collect(Collectors.joining(" | "));
+
+            String topCandidatas = rutasCandidatas.stream()
+                    .limit(5)
+                    .map(ruta -> resumirRutaCandidata(paquete, ruta, creacionUtc, dataset, config, estadoFinal))
+                    .collect(Collectors.joining(" | "));
+
+            log.warn(
+                    "[PlanificacionPeriodica][Parcial] paquete={} {}->{} demanda={} asignado={} faltante={} candidatas={} asignadas=[{}] topCandidatas=[{}]",
+                    paquete.getId(),
+                    paquete.getOrigenOACI(),
+                    paquete.getDestinoOACI(),
+                    paquete.getCantidad(),
+                    asignado,
+                    faltante,
+                    rutasCandidatas.size(),
+                    rutasAsignadas,
+                    topCandidatas
+            );
+        }
+    }
+
+    private String resumirRutaAsignada(RutaConCantidad rutaConCantidad) {
+        return rutaConCantidad.getCantidad() + "@" + resumirRuta(rutaConCantidad.getRuta());
+    }
+
+    private String resumirRutaCandidata(
+            Paquete paquete,
+            Ruta ruta,
+            LocalDateTime creacionUtc,
+            Dataset dataset,
+            Config_Simulacion config,
+            EstadoOperacional estadoFinal
+    ) {
+        int residual = estadoFinal.capacidadResidualRuta(paquete, ruta, creacionUtc, dataset, config);
+        return resumirRuta(ruta) + "#residual=" + residual;
+    }
+
+    private String resumirRuta(Ruta ruta) {
+        if (ruta == null || ruta.getVuelos().isEmpty()) {
+            return "sin-vuelos";
+        }
+        return ruta.getVuelos().stream()
+                .map(vuelo -> vuelo.getId() + "(" + vuelo.getCapacidadCarga() + ")")
+                .collect(Collectors.joining("->"));
     }
 }

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import type { AeropuertoDTO, VueloDTO, EnvioEstado } from '../types'
+import type { AeropuertoDTO, VueloDTO, EnvioEstado, MaletaEstado } from '../types'
 import { buildAirportLookup, getAirportCityCountryResolved } from '../data/airportsData'
 import { formatTimeInTimezone, formatDateInTimezone } from '../utils/timezoneFormat'
 
@@ -8,6 +8,7 @@ interface Props {
   tzOffset: number | string
   aeropuertos?: AeropuertoDTO[]
   envios?: EnvioEstado[]
+  maletas?: MaletaEstado[]
   onEnvioSelect?: (envio: EnvioEstado) => void
   selectedEnvioId?: string | null
   onClear?: () => void
@@ -46,6 +47,7 @@ export default function VueloDetailCard({
   tzOffset,
   aeropuertos = [],
   envios = [],
+  maletas = [],
   onEnvioSelect,
   selectedEnvioId,
   onClear,
@@ -55,9 +57,31 @@ export default function VueloDetailCard({
   const destinoInfo = getAirportCityCountryResolved(vuelo.destino, airportLookup)
   const [enviosExpanded, setEnviosExpanded] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
-  const enviosDelVuelo = useMemo(() => {
+  const enviosPorRuta = useMemo(() => {
     return envios.filter((envio) => envioIncluyeVuelo(envio, vuelo.id))
   }, [envios, vuelo.id])
+  const maletasDelVuelo = useMemo(() => {
+    if (maletas.length === 0) return []
+
+    return maletas.filter((maleta) => (
+      maleta.vueloActual === vuelo.id
+      || maleta.vueloEsperado === vuelo.id
+      || maleta.ultimoVuelo === vuelo.id
+    ))
+  }, [maletas, vuelo.id])
+  const enviosDelVuelo = useMemo(() => {
+    if (maletasDelVuelo.length === 0) return enviosPorRuta
+
+    const enviosIndexados = new Map(envios.map((envio) => [envio.id, envio]))
+    const enviosUnicos = new Map<string, EnvioEstado>()
+
+    maletasDelVuelo.forEach((maleta) => {
+      const envio = enviosIndexados.get(maleta.envioId)
+      if (envio) enviosUnicos.set(envio.id, envio)
+    })
+
+    return Array.from(enviosUnicos.values())
+  }, [envios, enviosPorRuta, maletasDelVuelo])
   const enviosFiltrados = useMemo(() => {
     if (!searchTerm) return enviosDelVuelo
     const term = searchTerm.toLowerCase()
@@ -67,7 +91,19 @@ export default function VueloDetailCard({
       || getAirportCityCountryResolved(envio.destino, airportLookup).toLowerCase().includes(term)
     )
   }, [enviosDelVuelo, searchTerm, airportLookup])
-  const totalMaletas = enviosDelVuelo.reduce((sum, envio) => sum + envio.cantidad, 0)
+  const totalMaletas = maletasDelVuelo.length > 0
+    ? maletasDelVuelo.length
+    : enviosDelVuelo.reduce((sum, envio) => sum + envio.cantidad, 0)
+  const cargaMostrada = maletasDelVuelo.length > 0 ? maletasDelVuelo.length : vuelo.cargaActual
+  const maletasPorEnvio = useMemo(() => {
+    if (maletasDelVuelo.length === 0) return new Map<string, number>()
+
+    const counts = new Map<string, number>()
+    maletasDelVuelo.forEach((maleta) => {
+      counts.set(maleta.envioId, (counts.get(maleta.envioId) ?? 0) + 1)
+    })
+    return counts
+  }, [maletasDelVuelo])
 
   return (
     <div className="rounded-xl border border-violet-700/60 bg-violet-950/20 p-3">
@@ -125,7 +161,7 @@ export default function VueloDetailCard({
         </div>
         <div className="flex justify-between gap-3">
           <span className="text-gray-400">Maletas a bordo</span>
-          <span className="font-medium text-amber-400">{vuelo.cargaActual} / {vuelo.capacidad}</span>
+          <span className="font-medium text-amber-400">{cargaMostrada} / {vuelo.capacidad}</span>
         </div>
         <div className="flex justify-between gap-3 pt-1">
           <span className="text-gray-400">Progreso de vuelo</span>
@@ -172,7 +208,9 @@ export default function VueloDetailCard({
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1">
-                      <span className="whitespace-nowrap text-[10px] text-amber-400">{envio.cantidad} maleta{envio.cantidad !== 1 ? 's' : ''}</span>
+                      <span className="whitespace-nowrap text-[10px] text-amber-400">
+                        {maletasPorEnvio.get(envio.id) ?? envio.cantidad} maleta{(maletasPorEnvio.get(envio.id) ?? envio.cantidad) !== 1 ? 's' : ''}
+                      </span>
                       <span className={`whitespace-nowrap rounded-full px-1 py-0.5 text-[9px] font-medium ${estadoColor[envio.estado] || 'text-gray-500'}`}>
                         {estadoLabel[envio.estado] || envio.estado}
                       </span>

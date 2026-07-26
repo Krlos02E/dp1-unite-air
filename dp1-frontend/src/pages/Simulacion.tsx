@@ -1377,6 +1377,7 @@ export default function Simulacion() {
               contexto="SIMULACION"
               aeropuertosDisponibles={displayAirports}
               envios={enviosActivos}
+              maletas={maletasActivas}
               onEnvioSelect={handleEnvioSelect}
               selectedEnvioId={selectedEnvio?.id}
               onVueloSelect={handleVueloClick}

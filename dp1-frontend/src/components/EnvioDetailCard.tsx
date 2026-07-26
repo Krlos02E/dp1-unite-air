@@ -71,12 +71,57 @@ export default function EnvioDetailCard({
       .sort((a, b) => a.indice - b.indice),
     [envio.id, maletas],
   )
+  const vuelosActuales = useMemo(
+    () => Array.from(new Set(
+      maletasDelEnvio
+        .map((maleta) => maleta.vueloActual)
+        .filter((vueloId): vueloId is string => Boolean(vueloId)),
+    )),
+    [maletasDelEnvio],
+  )
+  const vuelosEsperados = useMemo(
+    () => Array.from(new Set(
+      maletasDelEnvio
+        .map((maleta) => maleta.vueloEsperado)
+        .filter((vueloId): vueloId is string => Boolean(vueloId)),
+    )),
+    [maletasDelEnvio],
+  )
+  const ultimosVuelos = useMemo(
+    () => Array.from(new Set(
+      maletasDelEnvio
+        .map((maleta) => maleta.ultimoVuelo)
+        .filter((vueloId): vueloId is string => Boolean(vueloId)),
+    )),
+    [maletasDelEnvio],
+  )
   const visibleMaletas = maletasDelEnvio.slice(0, visibleBagCount)
   const hasMoreMaletas = visibleMaletas.length < maletasDelEnvio.length
 
   useEffect(() => {
     setVisibleBagCount(INITIAL_VISIBLE_BAGS)
   }, [envio.id])
+
+  const renderFlightLinks = (label: string, flightIds: string[]) => (
+    <div className="border-t border-gray-700 pt-1">
+      <div className="flex items-start justify-between gap-3">
+        <span className="text-gray-400">{label}</span>
+        <div className="flex max-w-[13rem] flex-col items-end gap-1">
+          {flightIds.map((flightId) => (
+            <button
+              key={`${label}-${flightId}`}
+              type="button"
+              onClick={() => onIrAVuelo?.(flightId)}
+              className="truncate text-xs font-medium text-sky-400 hover:text-sky-300"
+              title={flightId}
+            >
+              {flightId} →
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
 
   return (
     <div className={`${compact ? 'rounded-none border-0 bg-transparent p-3' : 'mx-3 mt-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3'}`}>
@@ -185,50 +230,24 @@ export default function EnvioDetailCard({
           </div>
         )}
 
-        {envio.vueloActual && (
-          <div className="border-t border-gray-700 pt-1">
-            <div className="flex items-center justify-between">
-              <span className="text-gray-400">Vuelo actual</span>
-              <button
-                type="button"
-                onClick={() => onIrAVuelo?.(envio.vueloActual!)}
-                className="text-xs font-medium text-sky-400 hover:text-sky-300"
-              >
-                {envio.vueloActual} →
-              </button>
-            </div>
-          </div>
-        )}
+        {vuelosActuales.length > 0
+          ? renderFlightLinks(vuelosActuales.length > 1 ? 'Vuelos actuales' : 'Vuelo actual', vuelosActuales)
+          : envio.vueloActual
+            ? renderFlightLinks('Vuelo actual', [envio.vueloActual])
+            : null}
 
-        {envio.vueloEsperado && (
-          <div className="border-t border-gray-700 pt-1">
-            <div className="flex items-center justify-between">
-              <span className="text-gray-400">Vuelo esperado</span>
-              <button
-                type="button"
-                onClick={() => onIrAVuelo?.(envio.vueloEsperado!)}
-                className="text-xs font-medium text-sky-400 hover:text-sky-300"
-              >
-                {envio.vueloEsperado} →
-              </button>
-            </div>
-          </div>
-        )}
+        {vuelosEsperados.length > 0
+          ? renderFlightLinks(vuelosEsperados.length > 1 ? 'Vuelos esperados' : 'Vuelo esperado', vuelosEsperados)
+          : envio.vueloEsperado
+            ? renderFlightLinks('Vuelo esperado', [envio.vueloEsperado])
+            : null}
 
-        {envio.estado === 'ENTREGADO' && ultimoVuelo && (
-          <div className="border-t border-gray-700 pt-1">
-            <div className="flex items-center justify-between">
-              <span className="text-gray-400">Último vuelo</span>
-              <button
-                type="button"
-                onClick={() => onIrAVuelo?.(ultimoVuelo)}
-                className="max-w-[13rem] truncate text-xs font-medium text-sky-400 hover:text-sky-300"
-                title={ultimoVuelo}
-              >
-                {ultimoVuelo} →
-              </button>
-            </div>
-          </div>
+        {envio.estado === 'ENTREGADO' && (
+          ultimosVuelos.length > 0
+            ? renderFlightLinks(ultimosVuelos.length > 1 ? 'Últimos vuelos' : 'Último vuelo', ultimosVuelos)
+            : ultimoVuelo
+              ? renderFlightLinks('Último vuelo', [ultimoVuelo])
+              : null
         )}
 
         <div className="space-y-2 border-t border-gray-700 pt-2">

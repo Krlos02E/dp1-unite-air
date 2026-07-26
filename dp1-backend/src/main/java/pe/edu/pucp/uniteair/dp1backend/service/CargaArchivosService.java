@@ -451,6 +451,13 @@ public class CargaArchivosService {
         lanzarPlanificacionEnBackground(lastDataset);
     }
 
+    private void marcarReplanificacionOperacionPendiente() {
+        if (lastDataset == null) {
+            return;
+        }
+        replanificacionPendiente = true;
+    }
+
     public synchronized EstadoOperacional obtenerEstadoOperacional() {
         return estadoOperacional;
     }
@@ -651,6 +658,12 @@ public class CargaArchivosService {
         LocalDateTime ultimaLlegada
     ) {}
 
+    private record ResumenEnvioVista(
+        EstadoEnvio estado,
+        List<String> rutaAeropuertos,
+        List<String> rutaVuelos
+    ) {}
+
     private EstadoEnvio computarEstado(Paquete paquete, Ruta ruta, LocalDateTime ahoraUtc) {
         if (ruta == null || ruta.getVuelos().isEmpty()) {
             return new EstadoEnvio("EN_ESPERA", paquete.getOrigenOACI(), null, null, null);
@@ -721,6 +734,96 @@ public class CargaArchivosService {
         return "EN_ESPERA".equals(estado.estado())
                 && paquete.getDestinoOACI().equals(estado.aeropuertoActual())
                 && estado.ultimaLlegada() != null;
+    }
+
+    private ResumenEnvioVista construirResumenEnvioVista(Paquete paquete, LocalDateTime ahoraUtc) {
+        Ruta rutaPrincipal = rutasAsignadas.get(paquete.getId());
+        AsignacionPaquete asignacion = asignacionesSplit.get(paquete.getId());
+
+        if (asignacion == null || asignacion.isEmpty()) {
+            EstadoEnvio estado = computarEstado(paquete, rutaPrincipal, ahoraUtc);
+            return new ResumenEnvioVista(
+                    estado,
+                    construirRutaAeropuertos(paquete, rutaPrincipal),
+                    construirRutaVuelos(rutaPrincipal)
+            );
+        }
+
+        int cantidadAsignada = Math.min(paquete.getCantidad(), asignacion.cantidadAsignada());
+        int cantidadSinAsignar = Math.max(0, paquete.getCantidad() - cantidadAsignada);
+        int enVuelo = 0;
+        int embarcado = 0;
+        int entregado = 0;
+        int enEspera = cantidadSinAsignar;
+        LocalDateTime ultimaLlegada = null;
+        LinkedHashSet<String> vuelosRuta = new LinkedHashSet<>();
+        LinkedHashSet<String> aeropuertosRuta = new LinkedHashSet<>();
+        aeropuertosRuta.add(paquete.getOrigenOACI());
+        LinkedHashSet<String> vuelosActuales = new LinkedHashSet<>();
+        LinkedHashSet<String> vuelosEsperados = new LinkedHashSet<>();
+
+        for (RutaConCantidad rc : asignacion.getRutas()) {
+            EstadoEnvio estadoSubruta = computarEstado(paquete, rc.getRuta(), ahoraUtc);
+            int cantidad = rc.getCantidad();
+            if ("EN_VUELO".equals(estadoSubruta.estado())) {
+                enVuelo += cantidad;
+            } else if ("EMBARCADO".equals(estadoSubruta.estado())) {
+                embarcado += cantidad;
+            } else if ("ENTREGADO".equals(estadoSubruta.estado())) {
+                entregado += cantidad;
+            } else {
+                enEspera += cantidad;
+            }
+
+            if (estadoSubruta.vueloActual() != null) {
+                vuelosActuales.add(estadoSubruta.vueloActual());
+            }
+            if (estadoSubruta.vueloEsperado() != null) {
+                vuelosEsperados.add(estadoSubruta.vueloEsperado());
+            }
+            if (estadoSubruta.ultimaLlegada() != null
+                    && (ultimaLlegada == null || estadoSubruta.ultimaLlegada().isAfter(ultimaLlegada))) {
+                ultimaLlegada = estadoSubruta.ultimaLlegada();
+            }
+
+            Ruta ruta = rc.getRuta();
+            if (ruta != null) {
+                for (Vuelo vuelo : ruta.getVuelos()) {
+                    aeropuertosRuta.add(vuelo.getOrigen().getCodigoOACI());
+                    aeropuertosRuta.add(vuelo.getDestino().getCodigoOACI());
+                    vuelosRuta.add(vuelo.getId());
+                }
+            }
+        }
+        aeropuertosRuta.add(paquete.getDestinoOACI());
+
+        EstadoEnvio resumen;
+        if (entregado == paquete.getCantidad()) {
+            resumen = new EstadoEnvio("ENTREGADO", paquete.getDestinoOACI(), null, null, ultimaLlegada);
+        } else if (enVuelo > 0) {
+            String vueloActual = vuelosActuales.size() == 1 ? vuelosActuales.iterator().next() : null;
+            String aeropuertoActual = paquete.getOrigenOACI();
+            if (vueloActual != null) {
+                Vuelo vuelo = buscarVueloPorId(vueloActual, AlmacenContexto.OPERACION);
+                if (vuelo != null) {
+                    aeropuertoActual = vuelo.getOrigen().getCodigoOACI();
+                }
+            }
+            resumen = new EstadoEnvio("EN_VUELO", aeropuertoActual, vueloActual, null, null);
+        } else if (cantidadSinAsignar == 0 && embarcado == paquete.getCantidad() && vuelosEsperados.size() == 1) {
+            String vueloEsperado = vuelosEsperados.iterator().next();
+            Vuelo vuelo = buscarVueloPorId(vueloEsperado, AlmacenContexto.OPERACION);
+            String aeropuertoActual = vuelo != null ? vuelo.getOrigen().getCodigoOACI() : paquete.getOrigenOACI();
+            resumen = new EstadoEnvio("EMBARCADO", aeropuertoActual, null, vueloEsperado, null);
+        } else {
+            resumen = new EstadoEnvio("EN_ESPERA", paquete.getOrigenOACI(), null, null, ultimaLlegada);
+        }
+
+        return new ResumenEnvioVista(
+                resumen,
+                new ArrayList<>(aeropuertosRuta),
+                new ArrayList<>(vuelosRuta)
+        );
     }
 
     private List<String> construirRutaAeropuertos(Paquete paquete, Ruta ruta) {
@@ -817,9 +920,8 @@ public class CargaArchivosService {
         }
 
         while (indiceGlobal <= paquete.getCantidad()) {
-            Ruta ruta = rutasAsignadas.get(paquete.getId());
-            EstadoEnvio estado = computarEstado(paquete, ruta, ahoraUtc);
-            maletas.add(construirMaleta(paquete, indiceGlobal++, 1, ruta, rutaAnterior, estado));
+            EstadoEnvio estado = new EstadoEnvio("EN_ESPERA", paquete.getOrigenOACI(), null, null, null);
+            maletas.add(construirMaleta(paquete, indiceGlobal++, 1, null, rutaAnterior, estado));
         }
 
         return maletas;
@@ -1135,6 +1237,7 @@ public class CargaArchivosService {
             Config_Simulacion config
     ) {
         Map<String, Ruta> nuevasRutas = solucion.getRutasAsignadas();
+        Map<String, AsignacionPaquete> nuevasAsignaciones = solucion.getAsignacionesSplit();
         Set<String> paquetesReplanificados = dataset.getPaquetes().stream()
                 .map(Paquete::getId)
                 .collect(Collectors.toSet());
@@ -1145,11 +1248,29 @@ public class CargaArchivosService {
                 rutasPreservadas.put(entry.getKey(), entry.getValue());
             }
         }
+        Map<String, AsignacionPaquete> asignacionesPreservadas = new HashMap<>();
+        for (Paquete paquete : obtenerTodosLosPaquetes()) {
+            if (paquetesReplanificados.contains(paquete.getId())) {
+                continue;
+            }
+            AsignacionPaquete asignacionActual = this.asignacionesSplit.get(paquete.getId());
+            if (asignacionActual != null && !asignacionActual.isEmpty()) {
+                asignacionesPreservadas.put(paquete.getId(), asignacionActual.copia());
+                continue;
+            }
+            Ruta rutaPreservada = rutasPreservadas.get(paquete.getId());
+            if (rutaPreservada != null) {
+                asignacionesPreservadas.put(paquete.getId(), new AsignacionPaquete(rutaPreservada, paquete.getCantidad()));
+            }
+        }
 
         Map<String, Ruta> todasLasRutas = new HashMap<>(rutasPreservadas);
         todasLasRutas.putAll(nuevasRutas);
+        Map<String, AsignacionPaquete> todasLasAsignaciones = new HashMap<>(asignacionesPreservadas);
+        todasLasAsignaciones.putAll(nuevasAsignaciones);
         registrarRutasAnteriores(todasLasRutas);
         this.rutasAsignadas = todasLasRutas;
+        this.asignacionesSplit = todasLasAsignaciones;
 
         List<Paquete> paquetesCompletos = obtenerTodosLosPaquetes();
         Dataset datasetCompletoBase = new Dataset(
@@ -1161,8 +1282,8 @@ public class CargaArchivosService {
                 AlmacenContexto.OPERACION,
                 datasetCompletoBase
         );
-        this.estadoOperacional = PlanificacionUtils.construirEstadoConAsignaciones(
-                todasLasRutas, datasetCompleto, config);
+        this.estadoOperacional = PlanificacionUtils.construirEstadoConAsignacionesSplit(
+                todasLasAsignaciones, datasetCompleto, config);
 
         Map<String, Integer> nuevoCache = new HashMap<>();
         for (Vuelo v : datasetCompleto.getVuelos()) {
@@ -1360,9 +1481,7 @@ public class CargaArchivosService {
         System.out.println("[CargaArchivosService] Envios incrementales agregados: " + nuevos.size()
                 + ". Total acumulados: " + paquetesIncrementales.size());
 
-        if (lastDataset != null) {
-            lanzarPlanificacionEnBackground(lastDataset);
-        }
+        marcarReplanificacionOperacionPendiente();
 
         return nuevos;
     }
@@ -1426,9 +1545,7 @@ public class CargaArchivosService {
         System.out.println("[CargaArchivosService] Envios cargados desde archivo: " + nuevos.size()
                 + ". Total acumulados: " + paquetesIncrementales.size());
 
-        if (lastDataset != null) {
-            lanzarPlanificacionEnBackground(lastDataset);
-        }
+        marcarReplanificacionOperacionPendiente();
         return nuevos;
     }
 
@@ -1520,7 +1637,8 @@ public class CargaArchivosService {
         LocalDateTime ahoraUtc = obtenerTiempoOperativoActualUtc();
         Ruta ruta = rutasAsignadas.get(paquete.getId());
         Ruta rutaAnterior = rutasAnteriores.get(paquete.getId());
-        EstadoEnvio e = computarEstado(paquete, ruta, ahoraUtc);
+        ResumenEnvioVista resumen = construirResumenEnvioVista(paquete, ahoraUtc);
+        EstadoEnvio e = resumen.estado();
         Map<String, String> registroLocal = construirRegistroLocal(paquete);
 
         Map<String, Object> result = new HashMap<>();
@@ -1533,8 +1651,8 @@ public class CargaArchivosService {
         result.put("aeropuertoActual", e.aeropuertoActual());
         result.put("vueloEsperado", e.vueloEsperado());
         result.put("vueloActual", e.vueloActual());
-        result.put("rutaAeropuertos", construirRutaAeropuertos(paquete, ruta));
-        result.put("rutaVuelos", construirRutaVuelos(ruta));
+        result.put("rutaAeropuertos", resumen.rutaAeropuertos());
+        result.put("rutaVuelos", resumen.rutaVuelos());
         result.put("rutaAnteriorAeropuertos", rutaAnterior != null ? construirRutaAeropuertos(paquete, rutaAnterior) : null);
         result.put("rutaAnteriorVuelos", rutaAnterior != null ? construirRutaVuelos(rutaAnterior) : null);
         result.put("cantidad", paquete.getCantidad());
@@ -1615,7 +1733,8 @@ public class CargaArchivosService {
 
             Ruta ruta = rutasAsignadas.get(p.getId());
             Ruta rutaAnterior = rutasAnteriores.get(p.getId());
-            EstadoEnvio e = computarEstado(p, ruta, ahoraUtc);
+            ResumenEnvioVista resumen = construirResumenEnvioVista(p, ahoraUtc);
+            EstadoEnvio e = resumen.estado();
             Map<String, String> registroLocal = construirRegistroLocal(p);
 
             if (!estadosSet.contains(e.estado())) continue;
@@ -1635,8 +1754,8 @@ public class CargaArchivosService {
             envio.put("aeropuertoActual", e.aeropuertoActual());
             envio.put("vueloEsperado", e.vueloEsperado());
             envio.put("vueloActual", e.vueloActual());
-            envio.put("rutaAeropuertos", construirRutaAeropuertos(p, ruta));
-            envio.put("rutaVuelos", construirRutaVuelos(ruta));
+            envio.put("rutaAeropuertos", resumen.rutaAeropuertos());
+            envio.put("rutaVuelos", resumen.rutaVuelos());
             envio.put("rutaAnteriorAeropuertos", rutaAnterior != null ? construirRutaAeropuertos(p, rutaAnterior) : null);
             envio.put("rutaAnteriorVuelos", rutaAnterior != null ? construirRutaVuelos(rutaAnterior) : null);
             envio.put("cantidad", p.getCantidad());

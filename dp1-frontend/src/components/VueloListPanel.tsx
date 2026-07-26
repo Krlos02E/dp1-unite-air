@@ -16,7 +16,7 @@ import {
 import { getOffsetMinutesForTimezone } from '../utils/stationTimezone'
 import VueloProgramacionModal from './VueloProgramacionModal'
 import VueloDetailCard from './VueloDetailCard'
-import type { VueloDTO, EnvioEstado, AeropuertoDTO, AlmacenContexto, ProgramacionVueloDTO } from '../types'
+import type { VueloDTO, EnvioEstado, AeropuertoDTO, AlmacenContexto, ProgramacionVueloDTO, MaletaEstado } from '../types'
 import { shouldDisplayFlight } from '../utils/flightVisibility'
 
 interface Props {
@@ -24,6 +24,7 @@ interface Props {
   contexto?: AlmacenContexto
   aeropuertosDisponibles?: AeropuertoDTO[]
   envios?: EnvioEstado[]
+  maletas?: MaletaEstado[]
   onEnvioSelect?: (envio: EnvioEstado) => void
   selectedEnvioId?: string | null
   onVueloSelect?: (vuelo: VueloDTO) => void
@@ -153,6 +154,7 @@ function VueloListPanel({
   contexto,
   aeropuertosDisponibles = [],
   envios,
+  maletas,
   onEnvioSelect,
   selectedEnvioId,
   onVueloSelect,
@@ -296,6 +298,25 @@ function VueloListPanel({
     })
     return index
   }, [envios])
+  const maletasByFlight = useMemo(() => {
+    const index = new Map<string, MaletaEstado[]>()
+    if (!maletas) return index
+
+    maletas.forEach((maleta) => {
+      const flightIds = new Set<string>()
+      ;[maleta.vueloActual, maleta.vueloEsperado, maleta.ultimoVuelo].forEach((flightId) => {
+        if (flightId) flightIds.add(flightId)
+      })
+
+      flightIds.forEach((flightId) => {
+        const current = index.get(flightId)
+        if (current) current.push(maleta)
+        else index.set(flightId, [maleta])
+      })
+    })
+
+    return index
+  }, [maletas])
 
   const visibleFlights = useMemo(
     () => vuelos.filter((flight) => (
@@ -892,6 +913,7 @@ function VueloListPanel({
               tzOffset={tzOffset}
               aeropuertos={aeropuertosDisponibles}
               envios={envios}
+              maletas={maletas}
               onEnvioSelect={onEnvioSelect}
               selectedEnvioId={selectedEnvioId}
               onClear={onSelectedVueloClear}
@@ -908,10 +930,16 @@ function VueloListPanel({
 
         {filtrados.map((v) => {
           const isFlightSelected = selectedVueloId === v.id
-          const enviosEnEsteVuelo = enviosByFlight.get(v.id) ?? []
-          const totalMaletas = enviosEnEsteVuelo.reduce((sum, e) => sum + e.cantidad, 0)
-          const ocupPct = v.capacidad > 0 ? Math.round((v.cargaActual / v.capacidad) * 100) : 0
-          const ocupacion = occupationStatus(v.cargaActual, ocupPct)
+          const maletasEnEsteVuelo = maletasByFlight.get(v.id) ?? []
+          const enviosEnEsteVuelo = maletasEnEsteVuelo.length > 0
+            ? Array.from(new Set(maletasEnEsteVuelo.map((maleta) => maleta.envioId)))
+            : (enviosByFlight.get(v.id) ?? []).map((envio) => envio.id)
+          const totalMaletas = maletasEnEsteVuelo.length > 0
+            ? maletasEnEsteVuelo.length
+            : (enviosByFlight.get(v.id) ?? []).reduce((sum, e) => sum + e.cantidad, 0)
+          const cargaMostrada = maletasEnEsteVuelo.length > 0 ? maletasEnEsteVuelo.length : v.cargaActual
+          const ocupPct = v.capacidad > 0 ? Math.round((cargaMostrada / v.capacidad) * 100) : 0
+          const ocupacion = occupationStatus(cargaMostrada, ocupPct)
           const origenPais = getAirportCountryResolved(v.origen, airportLookup) || getAirportCityResolved(v.origen, airportLookup) || v.origen
           const destinoPais = getAirportCountryResolved(v.destino, airportLookup) || getAirportCityResolved(v.destino, airportLookup) || v.destino
 
@@ -990,7 +1018,7 @@ function VueloListPanel({
                     />
                   </div>
                   <span className="text-[10px] text-gray-400 whitespace-nowrap font-mono">
-                    {v.cargaActual}/{v.capacidad}
+                    {cargaMostrada}/{v.capacidad}
                   </span>
                   <span className={`inline-flex items-center gap-1 text-[10px] font-medium ${ocupacion.text}`}>
                     <span className={`w-1.5 h-1.5 rounded-full ${ocupacion.bar}`} />

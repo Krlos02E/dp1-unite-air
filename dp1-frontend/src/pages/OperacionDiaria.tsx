@@ -755,6 +755,7 @@ export default function OperacionDiaria() {
               contexto="OPERACION"
               aeropuertosDisponibles={aeropuertosVisuales}
               envios={todosEnvios}
+              maletas={todasMaletas}
               onEnvioSelect={handleEnvioSelect}
               selectedEnvioId={selectedEnvio?.id}
               onVueloSelect={handleVueloClick}
