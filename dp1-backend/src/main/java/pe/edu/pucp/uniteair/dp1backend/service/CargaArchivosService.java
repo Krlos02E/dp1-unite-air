@@ -268,6 +268,7 @@ public class CargaArchivosService {
                         origenNormalizado,
                         datasetCargado.getAeropuertos()
                 );
+                validarCapacidadDisponibleLote(paquetesArchivo);
                 datasetCargado = new Dataset(
                         datasetCargado.getAeropuertos(),
                         datasetCargado.getVuelos(),
@@ -1576,6 +1577,18 @@ public class CargaArchivosService {
                             + ", disponible antes de este registro: " + disponible
                             + ", exceso: " + exceso + ")"
             );
+        }
+    }
+
+    private void validarCapacidadDisponibleLote(List<Paquete> paquetes) {
+        if (paquetes == null || paquetes.isEmpty()) return;
+
+        Map<String, Integer> cantidadesAcumuladasPorOrigen = new HashMap<>();
+        for (Paquete paquete : paquetes) {
+            String origenOaci = paquete.getOrigenOACI();
+            int cantidadPendienteLote = cantidadesAcumuladasPorOrigen.getOrDefault(origenOaci, 0);
+            validarCapacidadDisponibleOrigen(origenOaci, paquete.getCantidad(), cantidadPendienteLote);
+            cantidadesAcumuladasPorOrigen.merge(origenOaci, paquete.getCantidad(), Integer::sum);
         }
     }
 
