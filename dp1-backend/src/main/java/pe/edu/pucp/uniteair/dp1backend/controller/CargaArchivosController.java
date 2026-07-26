@@ -61,12 +61,21 @@ public class CargaArchivosController {
             @RequestParam(value = "planes_vuelo", required = false) MultipartFile planesVuelo,
             @RequestParam(value = "aeropuertos", required = false) MultipartFile aeropuertos,
             @RequestParam("timezone") String timezone,
-            @RequestParam("envios") MultipartFile envios) {
+            @RequestParam(value = "envios", required = false) MultipartFile envios) {
         String origenDetectado = inferirOrigenPorTimezone(timezone);
         String timezoneCanonica = TimezoneSedeResolver.normalizarTimezoneCanonica(timezone);
+        boolean tienePlanesVuelo = planesVuelo != null && !planesVuelo.isEmpty();
+        boolean tieneAeropuertos = aeropuertos != null && !aeropuertos.isEmpty();
+        boolean tieneEnvios = envios != null && !envios.isEmpty();
 
-        boolean tieneDatasetCompleto = (planesVuelo != null && !planesVuelo.isEmpty())
-                || (aeropuertos != null && !aeropuertos.isEmpty());
+        if (!tienePlanesVuelo && !tieneAeropuertos && !tieneEnvios) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "Debe subir al menos un archivo: planes_vuelo, aeropuertos o envios."
+            ));
+        }
+
+        boolean tieneDatasetCompleto = tienePlanesVuelo || tieneAeropuertos;
 
         if (tieneDatasetCompleto) {
             var result = cargaArchivosService.cargarArchivos(
