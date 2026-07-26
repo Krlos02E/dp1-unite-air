@@ -20,8 +20,7 @@ import tasf.model.Aeropuerto;
 import tasf.model.Paquete;
 import tasf.model.Ruta;
 import tasf.model.Vuelo;
-import tasf.strategy.TwoPhaseOrchestrator;
-import tasf.strategy.alns.ALNS_RutasPlanner;
+import tasf.strategy.alns.ALNS_Strategy;
 
 import java.time.Duration;
 import java.io.BufferedReader;
@@ -580,6 +579,21 @@ public class CargaArchivosService {
             }
 
             Map<String, Ruta> rutasResultado = new HashMap<>(rutasPreservadas);
+            Map<String, AsignacionPaquete> asignacionesResultado = new HashMap<>();
+            for (Paquete paquete : paquetes) {
+                if (!rutasPreservadas.containsKey(paquete.getId())) {
+                    continue;
+                }
+                AsignacionPaquete asignacionActual = this.asignacionesSplit.get(paquete.getId());
+                if (asignacionActual != null && !asignacionActual.isEmpty()) {
+                    asignacionesResultado.put(paquete.getId(), asignacionActual.copia());
+                    continue;
+                }
+                Ruta rutaPreservada = rutasPreservadas.get(paquete.getId());
+                if (rutaPreservada != null) {
+                    asignacionesResultado.put(paquete.getId(), new AsignacionPaquete(rutaPreservada, paquete.getCantidad()));
+                }
+            }
             if (!pendientes.isEmpty()) {
                 Dataset datasetPendientes = new Dataset(
                         dataset.getAeropuertos(),
@@ -587,23 +601,16 @@ public class CargaArchivosService {
                         pendientes
                 );
                 PlanificacionUtils.limpiarCacheGlobal();
-                TwoPhaseOrchestrator orchestrator = new TwoPhaseOrchestrator(new ALNS_RutasPlanner());
-                var solucion = orchestrator.ejecutarFlujoCompleto(datasetPendientes, config);
+                Solucion solucion = new ALNS_Strategy().planificar(datasetPendientes, config);
+                asignacionesResultado.putAll(solucion.getAsignacionesSplit());
                 rutasResultado.putAll(solucion.getRutasAsignadas());
             }
 
             registrarRutasAnteriores(rutasResultado);
             this.rutasAsignadas = rutasResultado;
+            this.asignacionesSplit = asignacionesResultado;
 
-            Map<String, AsignacionPaquete> splitsPreservados = new HashMap<>();
-            for (Map.Entry<String, AsignacionPaquete> entry : this.asignacionesSplit.entrySet()) {
-                if (rutasPreservadas.containsKey(entry.getKey())) {
-                    splitsPreservados.put(entry.getKey(), entry.getValue());
-                }
-            }
-            this.asignacionesSplit = splitsPreservados;
-
-            this.estadoOperacional = PlanificacionUtils.construirEstadoConAsignaciones(rutasResultado, datasetGestion, config);
+            this.estadoOperacional = PlanificacionUtils.construirEstadoConAsignacionesSplit(asignacionesResultado, datasetGestion, config);
             Map<String, Integer> nuevoCache = new HashMap<>();
             for (Vuelo v : dataset.getVuelos()) {
                 int carga = this.estadoOperacional.getCargaVuelo(v.getId());
@@ -901,22 +908,32 @@ public class CargaArchivosService {
             );
 
             PlanificacionUtils.limpiarCacheGlobal();
-            TwoPhaseOrchestrator orchestrator = new TwoPhaseOrchestrator(new ALNS_RutasPlanner());
-            var solucion = orchestrator.ejecutarFlujoCompleto(datasetPendientes, config);
-            var nuevasRutas = solucion.getRutasAsignadas();
+            Solucion solucion = new ALNS_Strategy().planificar(datasetPendientes, config);
+            Map<String, AsignacionPaquete> nuevasAsignaciones = solucion.getAsignacionesSplit();
+            Map<String, Ruta> nuevasRutas = solucion.getRutasAsignadas();
 
             // 4. Merge: activos (intocables) + nuevos (re-planificados)
             Map<String, Ruta> todasLasRutas = new HashMap<>(rutasActivos);
             todasLasRutas.putAll(nuevasRutas);
-            registrarRutasAnteriores(todasLasRutas);
-            this.rutasAsignadas = todasLasRutas;
-            Map<String, AsignacionPaquete> splitsActivos = new HashMap<>();
-            for (Map.Entry<String, AsignacionPaquete> entry : this.asignacionesSplit.entrySet()) {
-                if (!pendientesIds.contains(entry.getKey())) {
-                    splitsActivos.put(entry.getKey(), entry.getValue());
+            Map<String, AsignacionPaquete> todasLasAsignaciones = new HashMap<>();
+            for (Paquete paquete : paquetesPlanificables) {
+                if (!rutasActivos.containsKey(paquete.getId())) {
+                    continue;
+                }
+                AsignacionPaquete asignacionActual = this.asignacionesSplit.get(paquete.getId());
+                if (asignacionActual != null && !asignacionActual.isEmpty()) {
+                    todasLasAsignaciones.put(paquete.getId(), asignacionActual.copia());
+                    continue;
+                }
+                Ruta rutaActiva = rutasActivos.get(paquete.getId());
+                if (rutaActiva != null) {
+                    todasLasAsignaciones.put(paquete.getId(), new AsignacionPaquete(rutaActiva, paquete.getCantidad()));
                 }
             }
-            this.asignacionesSplit = splitsActivos;
+            todasLasAsignaciones.putAll(nuevasAsignaciones);
+            registrarRutasAnteriores(todasLasRutas);
+            this.rutasAsignadas = todasLasRutas;
+            this.asignacionesSplit = todasLasAsignaciones;
 
             // 5. Reconstruir estado completo desde las rutas mergeadas
             Dataset datasetCompletoBase = new Dataset(
@@ -928,8 +945,8 @@ public class CargaArchivosService {
                     AlmacenContexto.OPERACION,
                     datasetCompletoBase
             );
-            this.estadoOperacional = PlanificacionUtils.construirEstadoConAsignaciones(
-                todasLasRutas, datasetCompleto, config);
+            this.estadoOperacional = PlanificacionUtils.construirEstadoConAsignacionesSplit(
+                todasLasAsignaciones, datasetCompleto, config);
 
             // 6. Reconstruir cache de carga de vuelos
             Map<String, Integer> nuevoCache = new HashMap<>();
