@@ -1,18 +1,35 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { AeropuertoDTO, ProgramacionVueloDTO } from '../types'
 
 interface Props {
   isOpen: boolean
   aeropuertos: AeropuertoDTO[]
   programacion?: ProgramacionVueloDTO | null
+  defaultOriginOACI?: string | null
+  defaultHoraSalidaLocal?: string | null
   onClose: () => void
   onSave: (data: ProgramacionVueloDTO) => Promise<void>
+}
+
+function addHoursToTime(baseTime: string, hoursToAdd: number): string {
+  const [hoursRaw, minutesRaw] = baseTime.split(':')
+  const hours = Number(hoursRaw)
+  const minutes = Number(minutesRaw)
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return '10:00'
+
+  const totalMinutes = (hours * 60 + minutes + hoursToAdd * 60) % (24 * 60)
+  const normalized = totalMinutes >= 0 ? totalMinutes : totalMinutes + 24 * 60
+  const nextHours = Math.floor(normalized / 60)
+  const nextMinutes = normalized % 60
+  return `${String(nextHours).padStart(2, '0')}:${String(nextMinutes).padStart(2, '0')}`
 }
 
 export default function VueloProgramacionModal({
   isOpen,
   aeropuertos,
   programacion,
+  defaultOriginOACI,
+  defaultHoraSalidaLocal,
   onClose,
   onSave,
 }: Props) {
@@ -24,9 +41,15 @@ export default function VueloProgramacionModal({
   const [capacidad, setCapacidad] = useState(120)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const initializedForOpenRef = useRef(false)
 
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen) {
+      initializedForOpenRef.current = false
+      return
+    }
+    if (initializedForOpenRef.current) return
+    initializedForOpenRef.current = true
 
     if (programacion) {
       setOrigenOACI(programacion.origenOACI)
@@ -35,14 +58,25 @@ export default function VueloProgramacionModal({
       setHoraLlegadaLocal(programacion.horaLlegadaLocal)
       setCapacidad(programacion.capacidad)
     } else {
-      setOrigenOACI((current) => current || aeropuertos[0]?.codigoOACI || '')
-      setDestinoOACI((current) => current || aeropuertos[1]?.codigoOACI || aeropuertos[0]?.codigoOACI || '')
-      setHoraSalidaLocal((current) => current || '08:00')
-      setHoraLlegadaLocal((current) => current || '10:00')
-      setCapacidad((current) => current || 120)
+      const suggestedOrigin = (
+        defaultOriginOACI
+        && aeropuertos.some((a) => a.codigoOACI === defaultOriginOACI)
+      )
+        ? defaultOriginOACI
+        : (aeropuertos[0]?.codigoOACI || '')
+      const suggestedDestination = aeropuertos.find((a) => a.codigoOACI !== suggestedOrigin)?.codigoOACI
+        || aeropuertos[0]?.codigoOACI
+        || ''
+      const suggestedDeparture = defaultHoraSalidaLocal || '08:00'
+
+      setOrigenOACI(suggestedOrigin)
+      setDestinoOACI(suggestedDestination)
+      setHoraSalidaLocal(suggestedDeparture)
+      setHoraLlegadaLocal(addHoursToTime(suggestedDeparture, 2))
+      setCapacidad(120)
     }
     setError(null)
-  }, [programacion, isOpen])
+  }, [programacion, isOpen, aeropuertos, defaultOriginOACI, defaultHoraSalidaLocal])
 
   if (!isOpen) return null
 

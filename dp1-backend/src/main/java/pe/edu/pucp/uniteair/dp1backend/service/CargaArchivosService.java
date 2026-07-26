@@ -643,7 +643,7 @@ public class CargaArchivosService {
         config.setAeropuertoHub("SKBO");
         config.setMinimaConexion(java.time.Duration.ofMinutes(10));
         config.setIteracionesALNS(20);
-        config.setMaxRutasPorPaquete(4);
+        config.setMaxRutasPorPaquete(12);
         config.setMaxEscalas(2);
         config.setVentanaActualizacionPesos(5);
         config.setEvaporacionFeromona(0.4);
@@ -996,7 +996,7 @@ public class CargaArchivosService {
             config.setAeropuertoHub("SKBO");
             config.setMinimaConexion(java.time.Duration.ofMinutes(10));
             config.setIteracionesALNS(20);
-            config.setMaxRutasPorPaquete(4);
+            config.setMaxRutasPorPaquete(12);
             config.setMaxEscalas(2);
 
             Dataset datasetPendientesBase = new Dataset(

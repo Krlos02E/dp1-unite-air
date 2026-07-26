@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { AeropuertoDTO, VueloDTO, EnvioEstado, MaletaEstado } from '../types'
 import { buildAirportLookup, getAirportCityCountryResolved } from '../data/airportsData'
 import { formatTimeInTimezone, formatDateInTimezone } from '../utils/timezoneFormat'
+import { getDisplayedFlightLoad, getMaletasForVuelo } from '../utils/flightLoad'
 
 interface Props {
   vuelo: VueloDTO
@@ -61,14 +62,8 @@ export default function VueloDetailCard({
     return envios.filter((envio) => envioIncluyeVuelo(envio, vuelo.id))
   }, [envios, vuelo.id])
   const maletasDelVuelo = useMemo(() => {
-    if (maletas.length === 0) return []
-
-    return maletas.filter((maleta) => (
-      maleta.vueloActual === vuelo.id
-      || maleta.vueloEsperado === vuelo.id
-      || maleta.ultimoVuelo === vuelo.id
-    ))
-  }, [maletas, vuelo.id])
+    return getMaletasForVuelo(vuelo, maletas)
+  }, [maletas, vuelo])
   const enviosDelVuelo = useMemo(() => {
     if (maletasDelVuelo.length === 0) return enviosPorRuta
 
@@ -94,7 +89,7 @@ export default function VueloDetailCard({
   const totalMaletas = maletasDelVuelo.length > 0
     ? maletasDelVuelo.length
     : enviosDelVuelo.reduce((sum, envio) => sum + envio.cantidad, 0)
-  const cargaMostrada = maletasDelVuelo.length > 0 ? maletasDelVuelo.length : vuelo.cargaActual
+  const cargaMostrada = getDisplayedFlightLoad(vuelo, maletas)
   const maletasPorEnvio = useMemo(() => {
     if (maletasDelVuelo.length === 0) return new Map<string, number>()
 

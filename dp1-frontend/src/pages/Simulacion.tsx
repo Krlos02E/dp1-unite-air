@@ -4,6 +4,7 @@ import { simulationService } from '../services/SimulationService'
 import { cargaArchivosService } from '../services/CargaArchivosService'
 import { simulationSocketService } from '../services/SimulationSocketService'
 import MapaAeropuertos from '../components/MapaAeropuertos'
+import { getDisplayedFlightLoad } from '../utils/flightLoad'
 import EnvioListPanel from '../components/EnvioListPanel'
 import MaletaListPanel from '../components/MaletaListPanel'
 import AlmacenListPanel from '../components/AlmacenListPanel'
@@ -1049,9 +1050,9 @@ export default function Simulacion() {
   const rawSimulationAirports = hasSimulationStarted ? (simulationState?.aeropuertos ?? EMPTY_AIRPORTS) : EMPTY_AIRPORTS
 
   const flightStats = useMemo(() => rawSimulationFlights.reduce((stats, vuelo) => {
-    if (vuelo.estado === 'ACTIVO' && vuelo.cargaActual <= 0) stats.vaciosEnTransito++
+    if (vuelo.estado === 'ACTIVO' && getDisplayedFlightLoad(vuelo, maletasActivas) <= 0) stats.vaciosEnTransito++
     return stats
-  }, { vaciosEnTransito: 0 }), [rawSimulationFlights])
+  }, { vaciosEnTransito: 0 }), [rawSimulationFlights, maletasActivas])
 
   const vuelosCulminados = simulationState?.vuelosCulminados ?? 0
   const vuelosEnTransitoCount = simulationState?.vuelosEnTransito ?? 0
@@ -1063,7 +1064,7 @@ export default function Simulacion() {
 
   const occupancy = useMemo(() => {
     const flota = rawSimulationFlights.reduce((acc, v) => ({
-      carga: acc.carga + v.cargaActual,
+      carga: acc.carga + getDisplayedFlightLoad(v, maletasActivas),
       capacidad: acc.capacidad + v.capacidad,
     }), { carga: 0, capacidad: 0 })
     const aeropuertosOcu = rawSimulationAirports.reduce((acc, a) => ({
@@ -1088,6 +1089,7 @@ export default function Simulacion() {
           <MapaAeropuertos
             aeropuertos={displayAirports}
             vuelos={displayFlights}
+            maletas={maletasActivas}
             selectedVueloId={selectedVuelo?.id || null}
             selectedAeropuertoId={selectedAeropuerto?.codigoOACI || null}
             selectedEnvio={selectedMaleta ?? selectedEnvio}

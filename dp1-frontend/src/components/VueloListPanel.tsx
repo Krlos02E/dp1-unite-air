@@ -18,6 +18,7 @@ import VueloProgramacionModal from './VueloProgramacionModal'
 import VueloDetailCard from './VueloDetailCard'
 import type { VueloDTO, EnvioEstado, AeropuertoDTO, AlmacenContexto, ProgramacionVueloDTO, MaletaEstado } from '../types'
 import { shouldDisplayFlight } from '../utils/flightVisibility'
+import { getDisplayedFlightLoad, getMaletasForVuelo } from '../utils/flightLoad'
 
 interface Props {
   vuelos: VueloDTO[]
@@ -25,6 +26,8 @@ interface Props {
   aeropuertosDisponibles?: AeropuertoDTO[]
   envios?: EnvioEstado[]
   maletas?: MaletaEstado[]
+  defaultOriginOACI?: string | null
+  defaultHoraSalidaLocal?: string | null
   onEnvioSelect?: (envio: EnvioEstado) => void
   selectedEnvioId?: string | null
   onVueloSelect?: (vuelo: VueloDTO) => void
@@ -155,6 +158,8 @@ function VueloListPanel({
   aeropuertosDisponibles = [],
   envios,
   maletas,
+  defaultOriginOACI,
+  defaultHoraSalidaLocal,
   onEnvioSelect,
   selectedEnvioId,
   onVueloSelect,
@@ -302,21 +307,15 @@ function VueloListPanel({
     const index = new Map<string, MaletaEstado[]>()
     if (!maletas) return index
 
-    maletas.forEach((maleta) => {
-      const flightIds = new Set<string>()
-      ;[maleta.vueloActual, maleta.vueloEsperado, maleta.ultimoVuelo].forEach((flightId) => {
-        if (flightId) flightIds.add(flightId)
-      })
-
-      flightIds.forEach((flightId) => {
-        const current = index.get(flightId)
-        if (current) current.push(maleta)
-        else index.set(flightId, [maleta])
-      })
+    vuelos.forEach((vuelo) => {
+      const maletasDelVuelo = getMaletasForVuelo(vuelo, maletas)
+      if (maletasDelVuelo.length > 0) {
+        index.set(vuelo.id, maletasDelVuelo)
+      }
     })
 
     return index
-  }, [maletas])
+  }, [maletas, vuelos])
 
   const visibleFlights = useMemo(
     () => vuelos.filter((flight) => (
@@ -338,21 +337,22 @@ function VueloListPanel({
   )
 
   const indexedFlights = useMemo(() => visibleFlights.map((flight) => {
+    const cargaMostrada = getDisplayedFlightLoad(flight, maletas)
     const codigo = normalizeSearch(flight.id)
     return {
       flight,
       codigo,
-      ocupacion: flight.capacidad > 0 ? flight.cargaActual / flight.capacidad : 0,
+      ocupacion: flight.capacidad > 0 ? cargaMostrada / flight.capacidad : 0,
       ocupacionCategoria: occupationCategory(
-        flight.cargaActual,
-        flight.capacidad > 0 ? Math.round((flight.cargaActual / flight.capacidad) * 100) : 0,
+        cargaMostrada,
+        flight.capacidad > 0 ? Math.round((cargaMostrada / flight.capacidad) * 100) : 0,
       ),
       salida: utcTimestamp(flight.salidaUtc),
       llegada: utcTimestamp(flight.llegadaUtc),
       origenOrden: normalizeSearch(getAirportCountryResolved(flight.origen, airportLookup) || getAirportCityResolved(flight.origen, airportLookup) || flight.origen),
       destinoOrden: normalizeSearch(getAirportCountryResolved(flight.destino, airportLookup) || getAirportCityResolved(flight.destino, airportLookup) || flight.destino),
     }
-  }), [visibleFlights, airportLookup])
+  }), [visibleFlights, airportLookup, maletas])
 
   const filtradosPersistentes = useMemo(() => {
     return indexedFlights.filter(({ flight: v, codigo, ocupacionCategoria }) => {
@@ -931,13 +931,11 @@ function VueloListPanel({
         {filtrados.map((v) => {
           const isFlightSelected = selectedVueloId === v.id
           const maletasEnEsteVuelo = maletasByFlight.get(v.id) ?? []
+          const cargaMostrada = getDisplayedFlightLoad(v, maletas)
           const enviosEnEsteVuelo = maletasEnEsteVuelo.length > 0
             ? Array.from(new Set(maletasEnEsteVuelo.map((maleta) => maleta.envioId)))
             : (enviosByFlight.get(v.id) ?? []).map((envio) => envio.id)
-          const totalMaletas = maletasEnEsteVuelo.length > 0
-            ? maletasEnEsteVuelo.length
-            : (enviosByFlight.get(v.id) ?? []).reduce((sum, e) => sum + e.cantidad, 0)
-          const cargaMostrada = maletasEnEsteVuelo.length > 0 ? maletasEnEsteVuelo.length : v.cargaActual
+          const totalMaletas = cargaMostrada
           const ocupPct = v.capacidad > 0 ? Math.round((cargaMostrada / v.capacidad) * 100) : 0
           const ocupacion = occupationStatus(cargaMostrada, ocupPct)
           const origenPais = getAirportCountryResolved(v.origen, airportLookup) || getAirportCityResolved(v.origen, airportLookup) || v.origen
@@ -1054,6 +1052,8 @@ function VueloListPanel({
         isOpen={showProgramacionForm}
         aeropuertos={aeropuertosDisponibles}
         programacion={editingProgramacion}
+        defaultOriginOACI={defaultOriginOACI}
+        defaultHoraSalidaLocal={defaultHoraSalidaLocal}
         onClose={() => {
           setShowProgramacionForm(false)
           setEditingProgramacion(null)

@@ -1,13 +1,15 @@
 import {useEffect, useRef, useState, memo, useMemo} from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import type { AeropuertoDTO, VueloDTO, EnvioEstado } from '../types'
+import type { AeropuertoDTO, VueloDTO, EnvioEstado, MaletaEstado } from '../types'
 import { buildAirportLookup, getAirportCityResolved, getAirportCountryResolved, AIRPORTS_DATA, type AirportLookupData } from '../data/airportsData'
 import { TIMEZONE_OPTIONS } from '../utils/timezoneFormat'
 import { shouldDisplayFlight } from '../utils/flightVisibility'
+import { getDisplayedFlightLoad } from '../utils/flightLoad'
 
 function tooltipForFlight(
   v: VueloDTO,
+  cargaMostrada: number,
   airportLookup: Map<string, AirportLookupData>,
   simulationMode: boolean,
   referenceTime?: Date,
@@ -17,7 +19,7 @@ function tooltipForFlight(
   const progreso = simulationMode
     ? (referenceTime ? calcularProgresoEnSimulacion(v, referenceTime) : v.progresoVuelo)
     : v.progresoVuelo
-  return `<b>${v.id}</b><br>${origen} → ${destino}<br>Progreso: ${Math.round(progreso)}%<br>Maletas: ${v.cargaActual}/${v.capacidad}`
+  return `<b>${v.id}</b><br>${origen} → ${destino}<br>Progreso: ${Math.round(progreso)}%<br>Maletas: ${cargaMostrada}/${v.capacidad}`
 }
 
 interface Props {
@@ -27,6 +29,7 @@ interface Props {
   selectedAeropuertoId?: string | null
   selectedEnvio?: EnvioEstado | null
   selectedEnvioRouteMode?: 'actual' | 'anterior'
+  maletas?: MaletaEstado[]
   velocidad?: number
   onAeropuertoClick?: (a: AeropuertoDTO) => void
   onVueloClick?: (v: VueloDTO) => void
@@ -335,7 +338,7 @@ function shouldKeepFlightVisibleOnMap(
   return vuelo.estado === 'ACTIVO' || Boolean(vuelo.editable)
 }
 
-function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropuertoId, selectedEnvio = null, selectedEnvioRouteMode = 'actual', velocidad = 1, onAeropuertoClick, onVueloClick, mapTz, onMapTzChange, simulationMode = false, simulationTime = null, filteredFlightIds = null, filteredAirportIds = null }: Props) {
+function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropuertoId, selectedEnvio = null, selectedEnvioRouteMode = 'actual', maletas = [], velocidad = 1, onAeropuertoClick, onVueloClick, mapTz, onMapTzChange, simulationMode = false, simulationTime = null, filteredFlightIds = null, filteredAirportIds = null }: Props) {
   const mapRef = useRef<L.Map | null>(null)
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const circleLayerRef = useRef<L.LayerGroup | null>(null)
@@ -971,7 +974,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
     flightMarkersRef.current.forEach((mk, id) => {
       const isSelected = id === selectedVueloId
       const v = vueloMap.get(id) || persistentFlightsRef.current.get(id)
-      const carga = v?.cargaActual ?? 0
+      const carga = v ? getDisplayedFlightLoad(v, maletas) : 0
       const cap = v?.capacidad ?? 1
       const nextSignature = getFlightIconSignature(isSelected, carga, cap)
       if (flightIconSignatureRef.current.get(id) !== nextSignature) {
@@ -1040,7 +1043,8 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       const from: [number, number] = [v.latOrigen, v.lonOrigen]
       const to: [number, number] = [v.latDestino, v.lonDestino]
       const isSelected = v.id === selectedVueloIdRef.current
-      const tooltipText = tooltipForFlight(v, airportLookup, simulationMode, referenceTime ?? undefined)
+      const cargaMostrada = getDisplayedFlightLoad(v, maletas)
+      const tooltipText = tooltipForFlight(v, cargaMostrada, airportLookup, simulationMode, referenceTime ?? undefined)
       const pts = bezierPoints(from, to, ROUTE_POINT_COUNT)
       const serverProgreso = getFlightProgress(v, simulationMode, referenceTime)
       const shouldShowScheduled = simulationMode && shouldShowProgrammedFlightAtOrigin(v, referenceTime)
@@ -1098,7 +1102,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
       if (!mk) {
         const initialProgress = shouldShowScheduled ? 0 : serverProgreso
         const startPos = interpolatePosition(from, to, initialProgress / 100)
-        mk = L.marker(startPos, { icon: getAirplaneIcon(isSelected, v.cargaActual, v.capacidad) })
+        mk = L.marker(startPos, { icon: getAirplaneIcon(isSelected, cargaMostrada, v.capacidad) })
         mk.bindTooltip(tooltipText, {
           direction: 'top',
           offset: L.point(0, -14),
@@ -1115,7 +1119,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         })
         markerLayerRef.current?.addLayer(mk)
         flightMarkersRef.current.set(v.id, mk)
-        flightIconSignatureRef.current.set(v.id, getFlightIconSignature(isSelected, v.cargaActual, v.capacidad))
+        flightIconSignatureRef.current.set(v.id, getFlightIconSignature(isSelected, cargaMostrada, v.capacidad))
         const directAngle = bearing(from, to)
         const angle = resolveFlightAngle(
           interpolatePosition(from, to, Math.max(0, (initialProgress / 100) - 0.01)),
@@ -1128,9 +1132,9 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
         mk.setOpacity(1)
         const element = mk.getElement()
         if (element) element.style.pointerEvents = 'auto'
-        const nextSignature = getFlightIconSignature(isSelected, v.cargaActual, v.capacidad)
+        const nextSignature = getFlightIconSignature(isSelected, cargaMostrada, v.capacidad)
         if (flightIconSignatureRef.current.get(v.id) !== nextSignature) {
-          mk.setIcon(getAirplaneIcon(isSelected, v.cargaActual, v.capacidad))
+          mk.setIcon(getAirplaneIcon(isSelected, cargaMostrada, v.capacidad))
           flightIconSignatureRef.current.set(v.id, nextSignature)
         }
         mk.setTooltipContent(tooltipText)
@@ -1144,7 +1148,7 @@ function MapaAeropuertos({ aeropuertos, vuelos, selectedVueloId, selectedAeropue
 
 
     })
-  }, [vuelos, selectedVueloId, simulationMode, filteredFlightIds])
+  }, [vuelos, selectedVueloId, simulationMode, filteredFlightIds, maletas])
 
   useEffect(() => {
     routeLinesRef.current.forEach((pair, id) => {

@@ -71,6 +71,28 @@ export default function EnvioDetailCard({
       .sort((a, b) => a.indice - b.indice),
     [envio.id, maletas],
   )
+  const resumenMaletas = useMemo(() => {
+    const totals = {
+      enVuelo: 0,
+      esperadas: 0,
+      entregadas: 0,
+      pendientes: 0,
+    }
+
+    maletasDelEnvio.forEach((maleta) => {
+      if (maleta.estado === 'EN_VUELO') {
+        totals.enVuelo += 1
+      } else if (maleta.estado === 'ENTREGADO') {
+        totals.entregadas += 1
+      } else if (maleta.vueloEsperado || maleta.vueloActual || maleta.ultimoVuelo) {
+        totals.esperadas += 1
+      } else {
+        totals.pendientes += 1
+      }
+    })
+
+    return totals
+  }, [maletasDelEnvio])
   const vuelosActuales = useMemo(
     () => Array.from(new Set(
       maletasDelEnvio
@@ -257,6 +279,30 @@ export default function EnvioDetailCard({
               {maletasDelEnvio.length}
             </span>
           </div>
+          {maletasDelEnvio.length > 0 && (
+            <div className="flex flex-wrap gap-1 text-[10px] text-gray-400">
+              {resumenMaletas.enVuelo > 0 && (
+                <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-emerald-300">
+                  En vuelo: {resumenMaletas.enVuelo}
+                </span>
+              )}
+              {resumenMaletas.esperadas > 0 && (
+                <span className="rounded-full bg-sky-500/10 px-2 py-0.5 text-sky-300">
+                  Asignadas: {resumenMaletas.esperadas}
+                </span>
+              )}
+              {resumenMaletas.pendientes > 0 && (
+                <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-amber-300">
+                  Pendientes: {resumenMaletas.pendientes}
+                </span>
+              )}
+              {resumenMaletas.entregadas > 0 && (
+                <span className="rounded-full bg-gray-500/10 px-2 py-0.5 text-gray-300">
+                  Entregadas: {resumenMaletas.entregadas}
+                </span>
+              )}
+            </div>
+          )}
 
           {maletasDelEnvio.length === 0 ? (
             <p className="text-[10px] text-gray-500">

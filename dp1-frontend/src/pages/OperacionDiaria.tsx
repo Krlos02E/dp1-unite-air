@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { cargaArchivosService } from '../services/CargaArchivosService'
 import { simulationSocketService } from '../services/SimulationSocketService'
 import MapaAeropuertos from '../components/MapaAeropuertos'
+import { getDisplayedFlightLoad } from '../utils/flightLoad'
 import EnvioListPanel from '../components/EnvioListPanel'
 import MaletaListPanel from '../components/MaletaListPanel'
 import AlmacenListPanel from '../components/AlmacenListPanel'
@@ -137,9 +138,10 @@ export default function OperacionDiaria() {
 
   const flightStats = vuelos.reduce((stats, vuelo) => {
     const enVuelo = vuelo.estado !== 'CANCELADO' && vuelo.progresoVuelo > 0 && vuelo.progresoVuelo < 100
+    const cargaMostrada = getDisplayedFlightLoad(vuelo, todasMaletas)
     if (enVuelo) {
       stats.enVuelo++
-      if (vuelo.cargaActual <= 0) stats.vaciosEnVuelo++
+      if (cargaMostrada <= 0) stats.vaciosEnVuelo++
     }
     if (vuelo.estado === 'CULMINADO') stats.culminados++
     else if (vuelo.estado === 'CANCELADO') stats.cancelados++
@@ -148,7 +150,7 @@ export default function OperacionDiaria() {
 
   const occupancy = {
     flota: vuelos.reduce((acc, v) => ({
-      carga: acc.carga + v.cargaActual,
+      carga: acc.carga + getDisplayedFlightLoad(v, todasMaletas),
       capacidad: acc.capacidad + v.capacidad,
     }), { carga: 0, capacidad: 0 }),
     aeropuertos: aeropuertosVisuales.reduce((acc, a) => ({
@@ -500,6 +502,7 @@ export default function OperacionDiaria() {
           <MapaAeropuertos
             aeropuertos={aeropuertosVisuales}
             vuelos={vuelos}
+            maletas={todasMaletas}
             selectedVueloId={selectedVuelo?.id || null}
             selectedAeropuertoId={selectedAeropuerto?.codigoOACI || null}
             selectedEnvio={selectedMaleta ?? selectedEnvio}
@@ -756,6 +759,8 @@ export default function OperacionDiaria() {
               aeropuertosDisponibles={aeropuertosVisuales}
               envios={todosEnvios}
               maletas={todasMaletas}
+              defaultOriginOACI={selectedStation?.airportCode || null}
+              defaultHoraSalidaLocal={hora}
               onEnvioSelect={handleEnvioSelect}
               selectedEnvioId={selectedEnvio?.id}
               onVueloSelect={handleVueloClick}

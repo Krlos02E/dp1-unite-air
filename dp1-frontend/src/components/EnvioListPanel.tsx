@@ -147,6 +147,34 @@ export default function EnvioListPanel({
   const config = TAB_CONFIG.find((c) => c.key === tab)!
   const currentMainTab: MainTab = tab === 'pendientes' ? 'almacen' : tab
   const enviosBase = enviosExternos ?? envios
+  const resumenMaletasPorEnvio = new Map<string, {
+    asignadas: number
+    pendientes: number
+    enVuelo: number
+    entregadas: number
+  }>()
+  maletasExternas.forEach((maleta) => {
+    const current = resumenMaletasPorEnvio.get(maleta.envioId) ?? {
+      asignadas: 0,
+      pendientes: 0,
+      enVuelo: 0,
+      entregadas: 0,
+    }
+
+    if (maleta.estado === 'EN_VUELO') {
+      current.enVuelo += 1
+      current.asignadas += 1
+    } else if (maleta.estado === 'ENTREGADO') {
+      current.entregadas += 1
+      current.asignadas += 1
+    } else if (maleta.vueloEsperado || maleta.vueloActual || maleta.ultimoVuelo) {
+      current.asignadas += 1
+    } else {
+      current.pendientes += 1
+    }
+
+    resumenMaletasPorEnvio.set(maleta.envioId, current)
+  })
   const deferredSearchOrigin = useDeferredValue(searchOrigin)
   const deferredSearchDestination = useDeferredValue(searchDestination)
   const deferredSearchId = useDeferredValue(searchId)
@@ -450,6 +478,7 @@ export default function EnvioListPanel({
         {filtrados.map((envio) => {
           const isSelected = envio.id === selectedEnvioId
           const ut = envio.vueloActual || envio.vueloEsperado || envio.ultimoVuelo
+          const resumenMaletas = resumenMaletasPorEnvio.get(envio.id)
           return (
             <div key={envio.id} className="border-b border-gray-800/50">
               <button
@@ -473,6 +502,11 @@ export default function EnvioListPanel({
                     <div className="text-[10px] text-violet-300/80">
                       {envio.cantidad} maleta{envio.cantidad !== 1 ? 's' : ''}
                     </div>
+                    {resumenMaletas && (
+                      <div className="text-[10px] text-gray-500">
+                        Asignadas: {resumenMaletas.asignadas} · Pendientes: {resumenMaletas.pendientes}
+                      </div>
+                    )}
                     {(envio.fechaRegistroLocal || envio.horaRegistroLocal) && (
                       <div className="text-[10px] text-gray-500">
                         Registrado: {envio.fechaRegistroLocal || '--'} {envio.horaRegistroLocal?.slice(0, 5) || '--:--'}
