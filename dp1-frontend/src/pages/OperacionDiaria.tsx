@@ -479,14 +479,6 @@ export default function OperacionDiaria() {
   }, [panelCollapsed])
 
   const { fecha, hora, horaConSegundos } = clockInfo
-  const selectedOperationEntityCount = panelMode === 'envios'
-    ? todosEnvios.length
-    : panelMode === 'maletas'
-      ? todasMaletas.length
-      : panelMode === 'almacenes'
-        ? aeropuertosVisuales.length
-        : vuelos.length
-
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)]">
       <div className="flex gap-2 flex-1 min-h-0">
@@ -563,22 +555,6 @@ export default function OperacionDiaria() {
                       {loading ? 'Sincronizando' : error ? 'Con incidencias' : 'Sincronizado'}
                     </span>
                   </div>
-                  <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
-                    <span className="block text-[9px] uppercase tracking-wide text-gray-500">Vuelos Activos</span>
-                    <span className="block font-mono text-base font-semibold text-gray-100">{flightStats.enVuelo}</span>
-                  </div>
-                  <div className="rounded-lg border border-gray-700/55 bg-gray-950/65 px-2.5 py-2">
-                    <span className="block text-[9px] uppercase tracking-wide text-gray-500">Vista</span>
-                    <span className="block font-medium text-gray-100">
-                      {panelMode === 'envios'
-                        ? `Envíos (${selectedOperationEntityCount})`
-                        : panelMode === 'maletas'
-                          ? `Maletas (${selectedOperationEntityCount})`
-                          : panelMode === 'almacenes'
-                            ? `Almacenes (${selectedOperationEntityCount})`
-                            : `Aviones (${selectedOperationEntityCount})`}
-                    </span>
-                  </div>
                 </div>
                 {error && <p className="text-xs font-medium text-red-400">{error}</p>}
                 <StationSelectorCard
@@ -590,15 +566,6 @@ export default function OperacionDiaria() {
                   airportLabel="Sede operativa"
                   compact
                 />
-                {loading ? (
-                  <div className="rounded-lg border border-sky-800/70 bg-sky-950/35 px-3 py-2 text-[11px] text-sky-200">
-                    Actualizando vuelos, envios y almacenes del contexto operativo...
-                  </div>
-                ) : (
-                  <div className="rounded-lg border border-emerald-800/70 bg-emerald-950/30 px-3 py-2 text-[11px] text-emerald-200">
-                    Vista sincronizada con la operacion actual y refresco automatico cada {SHARED_OPERATION_POLL_MS / 1000}s.
-                  </div>
-                )}
               </div>
             )}
           </div>

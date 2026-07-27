@@ -586,7 +586,7 @@ public class CargaArchivosService {
             List<Paquete> pendientes = new ArrayList<>();
             for (Paquete paquete : paquetes) {
                 Ruta rutaActual = rutasAsignadas.get(paquete.getId());
-                EstadoEnvio estadoActual = computarEstado(paquete, rutaActual, ahoraUtc);
+                EstadoEnvio estadoActual = computarEstadoEfectivoPaquete(paquete, ahoraUtc);
                 if ("EN_VUELO".equals(estadoActual.estado())
                         || "ENTREGADO".equals(estadoActual.estado())
                         || estaEsperandoRecogidaEnDestinoFinal(paquete, estadoActual)) {
@@ -754,6 +754,10 @@ public class CargaArchivosService {
 
     private ResumenEnvioVista construirResumenEnvioVista(Paquete paquete, LocalDateTime ahoraUtc) {
         return construirResumenEnvioVista(paquete, ahoraUtc, null);
+    }
+
+    private EstadoEnvio computarEstadoEfectivoPaquete(Paquete paquete, LocalDateTime ahoraUtc) {
+        return construirResumenEnvioVista(paquete, ahoraUtc).estado();
     }
 
     private ResumenEnvioVista construirResumenEnvioVista(
@@ -1063,8 +1067,7 @@ public class CargaArchivosService {
         // 1. Filtrar pendientes: EN_ESPERA o EMBARCADO
         List<Paquete> pendientes = new ArrayList<>();
         for (Paquete p : paquetesPlanificables) {
-            Ruta ruta = rutasAsignadas.get(p.getId());
-            EstadoEnvio e = computarEstado(p, ruta, ahoraUtc);
+            EstadoEnvio e = computarEstadoEfectivoPaquete(p, ahoraUtc);
             if (estaEsperandoRecogidaEnDestinoFinal(p, e)) {
                 continue;
             }
