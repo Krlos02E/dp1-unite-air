@@ -16,6 +16,6 @@ export function getMaletasForVuelo(vuelo: VueloDTO, maletas: MaletaEstado[] = []
 }
 
 export function getDisplayedFlightLoad(vuelo: VueloDTO, maletas: MaletaEstado[] = []): number {
-  const maletasDelVuelo = getMaletasForVuelo(vuelo, maletas)
-  return maletasDelVuelo.length > 0 ? maletasDelVuelo.length : vuelo.cargaActual
+  void maletas
+  return vuelo.cargaActual
 }

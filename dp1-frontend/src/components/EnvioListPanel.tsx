@@ -148,6 +148,7 @@ export default function EnvioListPanel({
   const currentMainTab: MainTab = tab === 'pendientes' ? 'almacen' : tab
   const enviosBase = enviosExternos ?? envios
   const resumenMaletasPorEnvio = new Map<string, {
+    total: number
     asignadas: number
     pendientes: number
     enVuelo: number
@@ -155,11 +156,13 @@ export default function EnvioListPanel({
   }>()
   maletasExternas.forEach((maleta) => {
     const current = resumenMaletasPorEnvio.get(maleta.envioId) ?? {
+      total: 0,
       asignadas: 0,
       pendientes: 0,
       enVuelo: 0,
       entregadas: 0,
     }
+    current.total += 1
 
     if (maleta.estado === 'EN_VUELO') {
       current.enVuelo += 1
@@ -479,6 +482,10 @@ export default function EnvioListPanel({
           const isSelected = envio.id === selectedEnvioId
           const ut = envio.vueloActual || envio.vueloEsperado || envio.ultimoVuelo
           const resumenMaletas = resumenMaletasPorEnvio.get(envio.id)
+          const totalMaletas = resumenMaletas?.total ?? envio.cantidad
+          const cantidadVisible = envio.estado === 'EN_VUELO'
+            ? (resumenMaletas?.enVuelo || envio.cantidad)
+            : totalMaletas
           return (
             <div key={envio.id} className="border-b border-gray-800/50">
               <button
@@ -500,8 +507,13 @@ export default function EnvioListPanel({
                       </div>
                     )}
                     <div className="text-[10px] text-violet-300/80">
-                      {envio.cantidad} maleta{envio.cantidad !== 1 ? 's' : ''}
+                      {cantidadVisible} maleta{cantidadVisible !== 1 ? 's' : ''}
                     </div>
+                    {envio.estado === 'EN_VUELO' && totalMaletas !== cantidadVisible && (
+                      <div className="text-[10px] text-gray-500">
+                        Total del envío: {totalMaletas}
+                      </div>
+                    )}
                     {resumenMaletas && (
                       <div className="text-[10px] text-gray-500">
                         Asignadas: {resumenMaletas.asignadas} · Pendientes: {resumenMaletas.pendientes}
@@ -524,7 +536,7 @@ export default function EnvioListPanel({
                   onClick={() => onViewMaletasForEnvio?.(envio.id)}
                   className="text-[10px] text-violet-300 hover:text-violet-200"
                 >
-                  Ver maletas del envio ({envio.cantidad})
+                  Ver maletas del envio ({totalMaletas})
                 </button>
               </div>
             </div>

@@ -71,6 +71,7 @@ export default function EnvioDetailCard({
       .sort((a, b) => a.indice - b.indice),
     [envio.id, maletas],
   )
+  const totalMaletas = maletasDelEnvio.length > 0 ? maletasDelEnvio.length : envio.cantidad
   const resumenMaletas = useMemo(() => {
     const totals = {
       enVuelo: 0,
@@ -182,9 +183,15 @@ export default function EnvioDetailCard({
           <span className="text-right font-medium text-gray-200">{ubicacionActualLabel}</span>
         </div>
         <div className="flex justify-between gap-2">
-          <span className="text-gray-400">Cantidad</span>
-          <span className="font-medium text-amber-300">{envio.cantidad}</span>
+          <span className="text-gray-400">Total del envío</span>
+          <span className="font-medium text-amber-300">{totalMaletas}</span>
         </div>
+        {envio.estado === 'EN_VUELO' && resumenMaletas.enVuelo > 0 && resumenMaletas.enVuelo !== totalMaletas && (
+          <div className="flex justify-between gap-2">
+            <span className="text-gray-400">En vuelo ahora</span>
+            <span className="font-medium text-emerald-300">{resumenMaletas.enVuelo}</span>
+          </div>
+        )}
         {(envio.fechaRegistroLocal || envio.horaRegistroLocal) && (
           <div className="flex justify-between gap-2">
             <span className="text-gray-400">Registrado</span>
@@ -273,12 +280,12 @@ export default function EnvioDetailCard({
         )}
 
         <div className="space-y-2 border-t border-gray-700 pt-2">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] font-semibold text-gray-300">Maletas del envío</span>
-            <span className="rounded-full bg-gray-800 px-2 py-0.5 text-[10px] text-gray-400">
-              {maletasDelEnvio.length}
-            </span>
-          </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-semibold text-gray-300">Maletas del envío</span>
+              <span className="rounded-full bg-gray-800 px-2 py-0.5 text-[10px] text-gray-400">
+              {totalMaletas}
+              </span>
+            </div>
           {maletasDelEnvio.length > 0 && (
             <div className="flex flex-wrap gap-1 text-[10px] text-gray-400">
               {resumenMaletas.enVuelo > 0 && (
