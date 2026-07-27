@@ -93,10 +93,7 @@ public class CargaArchivosService {
     public synchronized void cargarDatasetPorDefecto() {
         if (this.lastDataset != null) return;
         try {
-            Path tempDir = Files.createTempDirectory("default_carga_");
-            copiarRecursosACarpeta(tempDir, true, false);
-            Files.createDirectories(tempDir.resolve("input/envios"));
-            Dataset dataset = cargarDatasetEnTemp(tempDir, LocalDate.now(), 3);
+            Dataset dataset = crearDatasetBaseOperacionActual();
             this.lastDataset = dataset;
             this.datasetBaseOperacion = clonarDataset(dataset);
             this.estadoOperacional = null;
@@ -108,7 +105,6 @@ public class CargaArchivosService {
             this.replanificacionPendiente = false;
             this.usarPaquetesBaseEnOperacion = false;
             fijarReferenciaOperativa(dataset);
-            deleteTempDir(tempDir);
             System.out.println("[CargaArchivosService] Dataset por defecto cargado. Paquetes: " + dataset.getPaquetes().size());
             lanzarPlanificacionEnBackground(dataset);
         } catch (Exception e) {
@@ -428,10 +424,14 @@ public class CargaArchivosService {
     }
 
     public synchronized void restaurarDatasetBaseOperacion() {
-        if (datasetBaseOperacion == null) {
+        try {
+            Dataset dataset = crearDatasetBaseOperacionActual();
+            this.datasetBaseOperacion = clonarDataset(dataset);
+            this.lastDataset = clonarDataset(datasetBaseOperacion);
+        } catch (Exception e) {
+            System.err.println("No se pudo restaurar dataset base de operacion: " + e.getMessage());
             return;
         }
-        this.lastDataset = clonarDataset(datasetBaseOperacion);
         this.paquetesIncrementales = new ArrayList<>();
         this.contadorPaquetesIncrementales = 0;
         this.usarPaquetesBaseEnOperacion = false;
@@ -443,6 +443,18 @@ public class CargaArchivosService {
         this.planificando = false;
         this.replanificacionPendiente = false;
         contextSyncStateService.touch(AlmacenContexto.OPERACION, "operacion-base-restaurada");
+    }
+
+    private Dataset crearDatasetBaseOperacionActual() throws IOException {
+        Path tempDir = Files.createTempDirectory("default_carga_");
+        try {
+            copiarRecursosACarpeta(tempDir, true, false);
+            Files.createDirectories(tempDir.resolve("input/envios"));
+            LocalDate fechaInicioUtc = relojOperativoService.obtenerTiempoActualUtc().toLocalDate();
+            return cargarDatasetEnTemp(tempDir, fechaInicioUtc, 3);
+        } finally {
+            deleteTempDir(tempDir);
+        }
     }
 
     public synchronized void replanificarOperacionActual() {
