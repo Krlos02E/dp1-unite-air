@@ -239,6 +239,7 @@ public class CargaArchivosService {
         try {
             Path tempDir = Files.createTempDirectory("carga_");
             copiarRecursosACarpeta(tempDir, true, false);
+            Files.createDirectories(tempDir.resolve("input").resolve("envios"));
             Path planesVueloPath = null;
             Path aeropuertosPath = null;
             Path enviosPath = null;
@@ -296,8 +297,20 @@ public class CargaArchivosService {
 
             return new CargaResult(true, "Archivos cargados exitosamente", aeropuertosCount, vuelosCount, paquetesCount, datasetId);
         } catch (Exception e) {
-            return new CargaResult(false, "Error al cargar archivos: " + e.getMessage(), 0, 0, 0, null);
+            return new CargaResult(false, construirMensajeErrorCarga(e), 0, 0, 0, null);
         }
+    }
+
+    private String construirMensajeErrorCarga(Exception error) {
+        String detalle = error != null && error.getMessage() != null ? error.getMessage().trim() : "";
+        if (detalle.contains("No se pudo detectar estructura de datos valida")) {
+            return "No se pudo procesar la carga. Si subes vuelos, usa un archivo .txt valido para planes_vuelo. "
+                    + "Si subes envios, usa un archivo .txt valido de envios.";
+        }
+        if (detalle.isBlank()) {
+            return "No se pudieron cargar los archivos. Revisa el formato e intentalo otra vez.";
+        }
+        return "No se pudieron cargar los archivos: " + detalle;
     }
 
     private ZoneId resolverZonaOperacion(String timezoneCanonica) {
