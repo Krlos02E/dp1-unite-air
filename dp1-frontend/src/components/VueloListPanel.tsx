@@ -186,7 +186,7 @@ function VueloListPanel({
   const [searchDestinationMode, setSearchDestinationMode] = useState<LocationMatchMode>('ciudad')
   const [searchCollapsed, setSearchCollapsed] = useState(false)
   const [filtersCollapsed, setFiltersCollapsed] = useState(false)
-  const [filterEstado, setFilterEstado] = useState<string>('ACTIVO')
+  const [filterEstado, setFilterEstado] = useState<string>('todos')
   const [originFilter, setOriginFilter] = useState('')
   const [destinationFilter, setDestinationFilter] = useState('')
   const [codeFilter, setCodeFilter] = useState('')
@@ -376,7 +376,7 @@ function VueloListPanel({
 
   const filtradosSinLimite = useMemo(() => {
     return filtradosPersistentes.filter(({ flight, codigo }) => {
-      if (showStatusFilters && flight.estado !== filterEstado) return false
+      if (showStatusFilters && filterEstado !== 'todos' && flight.estado !== filterEstado) return false
       if (searchOriginTerm && !locationMatches(flight.origen, searchOriginTerm, airportLookup, searchOriginMode)) return false
       if (searchDestinationTerm && !locationMatches(flight.destino, searchDestinationTerm, airportLookup, searchDestinationMode)) return false
       if (searchCodeTerm && !searchCodeMatcher(codigo)) return false
@@ -395,7 +395,7 @@ function VueloListPanel({
   }, [filtradosPersistentes, searchOriginTerm, searchDestinationTerm, searchCodeMatcher, searchCodeTerm, sortField, sortDirection, airportLookup, searchOriginMode, searchDestinationMode, showStatusFilters, filterEstado])
 
   const estadosDisponibles = useMemo(() => {
-    const states = includeProgrammed ? ['PROGRAMADO', 'ACTIVO'] : ['ACTIVO']
+    const states = ['todos', ...(includeProgrammed ? ['PROGRAMADO', 'ACTIVO'] : ['ACTIVO'])]
     if (includeCompleted) states.push('CULMINADO', 'CANCELADO')
     return states
   }, [includeCompleted, includeProgrammed])
@@ -420,7 +420,7 @@ function VueloListPanel({
     if (!selected) return
 
     const estadosValidos = new Set(estadosDisponibles)
-    if (selected.estado && estadosValidos.has(selected.estado) && selected.estado !== filterEstado) {
+    if (filterEstado !== 'todos' && selected.estado && estadosValidos.has(selected.estado) && selected.estado !== filterEstado) {
       setFilterEstado(selected.estado)
     }
 
@@ -458,6 +458,7 @@ function VueloListPanel({
   }, [programaciones, originFilter, destinationFilter, codeFilter, filterCodeMatcher, searchOriginTerm, searchDestinationTerm, searchCodeMatcher, searchCodeTerm, airportLookup, originFilterMode, destinationFilterMode, searchOriginMode, searchDestinationMode])
 
   const estadoVueloLabel: Record<string, string> = {
+    todos: 'Todos',
     ACTIVO: 'Activos',
     PROGRAMADO: 'Programados',
     CULMINADO: 'Culminados',
