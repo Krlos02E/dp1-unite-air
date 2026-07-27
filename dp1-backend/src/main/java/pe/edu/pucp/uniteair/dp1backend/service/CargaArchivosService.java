@@ -773,6 +773,13 @@ public class CargaArchivosService {
         return construirResumenEnvioVista(paquete, ahoraUtc).estado();
     }
 
+    private boolean debeCongelarPaquete(Paquete paquete, LocalDateTime ahoraUtc) {
+        EstadoEnvio estado = computarEstadoEfectivoPaquete(paquete, ahoraUtc);
+        return "EN_VUELO".equals(estado.estado())
+                || "ENTREGADO".equals(estado.estado())
+                || estaEsperandoRecogidaEnDestinoFinal(paquete, estado);
+    }
+
     private ResumenEnvioVista construirResumenEnvioVista(
             Paquete paquete,
             LocalDateTime ahoraUtc,
@@ -1343,19 +1350,24 @@ public class CargaArchivosService {
     ) {
         Map<String, Ruta> nuevasRutas = solucion.getRutasAsignadas();
         Map<String, AsignacionPaquete> nuevasAsignaciones = solucion.getAsignacionesSplit();
+        LocalDateTime ahoraUtc = obtenerTiempoOperativoActualUtc();
         Set<String> paquetesReplanificados = dataset.getPaquetes().stream()
+                .map(Paquete::getId)
+                .collect(Collectors.toSet());
+        Set<String> paquetesCongelados = obtenerTodosLosPaquetes().stream()
+                .filter(paquete -> paquetesReplanificados.contains(paquete.getId()) && debeCongelarPaquete(paquete, ahoraUtc))
                 .map(Paquete::getId)
                 .collect(Collectors.toSet());
 
         Map<String, Ruta> rutasPreservadas = new HashMap<>();
         for (Map.Entry<String, Ruta> entry : this.rutasAsignadas.entrySet()) {
-            if (!paquetesReplanificados.contains(entry.getKey())) {
+            if (!paquetesReplanificados.contains(entry.getKey()) || paquetesCongelados.contains(entry.getKey())) {
                 rutasPreservadas.put(entry.getKey(), entry.getValue());
             }
         }
         Map<String, AsignacionPaquete> asignacionesPreservadas = new HashMap<>();
         for (Paquete paquete : obtenerTodosLosPaquetes()) {
-            if (paquetesReplanificados.contains(paquete.getId())) {
+            if (paquetesReplanificados.contains(paquete.getId()) && !paquetesCongelados.contains(paquete.getId())) {
                 continue;
             }
             AsignacionPaquete asignacionActual = this.asignacionesSplit.get(paquete.getId());
@@ -1372,6 +1384,7 @@ public class CargaArchivosService {
         Map<String, Ruta> todasLasRutas = new HashMap<>(rutasPreservadas);
         todasLasRutas.putAll(nuevasRutas);
         Map<String, AsignacionPaquete> todasLasAsignaciones = new HashMap<>(asignacionesPreservadas);
+        paquetesCongelados.forEach(nuevasAsignaciones::remove);
         todasLasAsignaciones.putAll(nuevasAsignaciones);
 
         List<Paquete> paquetesCompletos = obtenerTodosLosPaquetes();
