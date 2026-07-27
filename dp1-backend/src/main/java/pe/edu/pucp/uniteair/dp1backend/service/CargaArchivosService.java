@@ -450,7 +450,7 @@ public class CargaArchivosService {
         try {
             copiarRecursosACarpeta(tempDir, true, false);
             Files.createDirectories(tempDir.resolve("input/envios"));
-            LocalDate fechaInicioUtc = relojOperativoService.obtenerTiempoActualUtc().toLocalDate();
+            LocalDate fechaInicioUtc = relojOperativoService.obtenerTiempoActualUtc().toLocalDate().minusDays(2);
             return cargarDatasetEnTemp(tempDir, fechaInicioUtc, 3);
         } finally {
             deleteTempDir(tempDir);
